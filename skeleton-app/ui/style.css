@@ -1,0 +1,12 @@
+:root { color-scheme: light dark; --bg: #f6f5f2; --fg: #1d1d22; --muted: #6b6b75; --accent: #4f5bd5; --card: #fff; }
+@media (prefers-color-scheme: dark) { :root { --bg: #17171c; --fg: #ececf1; --muted: #9a9aa6; --card: #22222a; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 40px 16px; }
+h1 { margin: 0 0 4px; font-size: 28px; }
+.muted { color: var(--muted); }
+form { display: flex; gap: 8px; margin: 24px 0 8px; }
+input { flex: 1; padding: 10px 12px; border: 1px solid #8884; border-radius: 8px; background: var(--card); color: var(--fg); font: inherit; }
+button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.answer { min-height: 1.5em; font-weight: 600; }

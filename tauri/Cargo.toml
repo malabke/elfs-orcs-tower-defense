@@ -1,0 +1,36 @@
+# JumPHP's Tauri runtime: the native window + WebView of desktop apps, as a C library driven by PHP (FFI).
+# PHP stays the main program: it calls jt_run() from its main thread, Tauri runs its event loop there and calls
+# PHP back at every frame (like the browser engine calls jumphp_frame()). See docs/tauri.md.
+[package]
+name = "jumphp-tauri"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+name = "jumphp_tauri"
+crate-type = ["cdylib"]
+
+[features]
+# window.create {devtools: true}: the WebView's inspector (right click > Inspect)
+default = ["devtools"]
+devtools = ["tauri/devtools"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# custom-protocol: the pages are served by the app (tauri://localhost), never by a development server
+tauri = { version = "2", features = ["custom-protocol", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"

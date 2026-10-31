@@ -4,5 +4,6 @@
 # publishes the micro binaries (release standalone-<key>). Run from the project's root.
 set -euo pipefail
 echo "${JUMPHP_STANDALONE_PHP:-8.5}"
-cat tools/standalone-extensions.txt
+# JUMPHP_STANDALONE_EXTENSIONS: another list (desktop apps: tools/app-extensions.txt); unset, the games' one
+cat "${JUMPHP_STANDALONE_EXTENSIONS:-tools/standalone-extensions.txt}"
 find docker/standalone docker/ext/php-opengl.patch -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum

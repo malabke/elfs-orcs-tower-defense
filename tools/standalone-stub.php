@@ -65,5 +65,7 @@ if (getenv('SSL_CERT_FILE') === false) {
 }
 chdir($root);
 require "$root/vendor/autoload.php";
-exit(JumPHP\Kernel\Application::boot($root)->run());
+// what starts it: the game (JumPHP\Kernel\Application), or a desktop app (JumPHP\Tauri\App, docs/tauri.md)
+$boot = '{{BOOT}}';
+exit($boot::boot($root)->run());
 __HALT_COMPILER();

@@ -1,5 +1,17 @@
 # TODO
 
+## Desktop apps (Tauri): the next targets
+
+Linux works (docs/tauri.md): PHP drives `libjumphp_tauri` (tauri/) from its main thread through FFI; one-file export.
+
+- Windows / macOS: build `tauri/` there (a GitHub workflow, as `standalone.yml` / `apple.yml`), the apps' micro
+  (`tools/app-extensions.txt`) for them, `app:export --windows / --macos`
+- a prebuilt runtime on the GitHub releases (`tauri:download`), so a project needs no Rust build
+- Android / iOS: Tauri's mobile loop is driven by the activity / UIKit; call PHP's frame from there (as the native
+  SDL apps do), `run_return` does not exist on iOS
+- hybrid: an SDL surface inside a WebView window (menus in HTML, the game in SDL)
+- more `JumPHP\Native` features (clipboard, tray icon, global shortcuts, auto-update) as Tauri plugins
+
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
 `bin/jumphp apple <game>` (docs/apple.md) builds the macOS app (.dmg, Apple silicon + Intel), the iPhone / iPad

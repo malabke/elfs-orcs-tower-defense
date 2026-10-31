@@ -1,0 +1,381 @@
+# Desktop apps (Tauri): HTML pages, PHP behind them
+
+[Français](tauri.fr.md)
+
+JumPHP makes games (SDL: desktop, browser, phones) and **desktop applications**: native windows whose
+content is **HTML / CSS / JavaScript**, shown by the system's own WebView, and whose logic is **PHP**. The window,
+the WebView, the dialogs and the notifications come from [Tauri 2](https://tauri.app); the program is PHP.
+
+```bash
+bin/jumphp app:new notes "Notes"      # games/notes from skeleton-app/
+bin/jumphp install notes
+bin/jumphp app:run notes              # a window on your screen
+bin/jumphp app:test notes             # php -l + phpstan + phpunit (no window) + the app on a virtual screen
+bin/jumphp app:shot notes             # games/notes/var/screenshots/app.png
+bin/jumphp app:export notes           # games/notes/dist/standalone/notes-linux-x86_64: one file to give
+```
+
+The example: [`games/hello-desktop`](../games/hello-desktop) (a notepad: open / save with the system's dialogs, a
+PHP clock pushed to the page, files dropped on the window, a question before quitting with unsaved text).
+
+**Native only.** Desktop apps do not run in the browser (there is no PHP-to-WebView bridge there, and a web page
+is already HTML). Linux today; Windows and macOS are planned (the runtime is portable, see [Roadmap](#roadmap)).
+**Nothing changes for games**: SDL games on the desktop, in the browser (WebAssembly), as standalone executables,
+Android and Apple apps work exactly as before; none of their code, images or commands use any of this.
+
+---
+
+## How it works
+
+PHP is the program, as in a game. Tauri is a *platform backend* that PHP drives:
+
+```
+   PHP main thread (the php process)                          libjumphp_tauri.so (Rust, tauri/)
+   ─────────────────────────────────                          ─────────────────────────────────
+   app.php -> App::boot() -> App::run()
+        └── FFI: jt_run(config, frame) ─────────────────────▶ builds the Tauri app, runs the native
+                                                              event loop ON THIS THREAD (GTK on Linux)
+                                                                       │ every frame (60/s, and at once
+   App::frame()  ◀──────────────────── frame() ────────────────────────┘  when something happens)
+     ├── jt_poll(): events (JSON) ─▶ dispatch: ready, invoke, page, window, dialog, exit-requested
+     ├── tasks, HTTP, $app->on('frame')
+     ├── one turn of the ReactPHP loop (timers, streams)
+     └── jt_send(command JSON)... ─────────────────────────▶ run on the main thread after the frame:
+                                                              window.*, webview.*, dialog.*, notification.*...
+   jt_run() returns the exit code  ◀────────────────────────── when PHP sent app.exit
+```
+
+- **The same model as the browser engine**: there, the page calls `jumphp_frame()` at every
+  `requestAnimationFrame`; here Tauri calls PHP's `frame()` at every tick. PHP never blocks: dialogs, file choosers,
+  page calls answer later (a `Task`, a JavaScript `Promise`).
+- **PHP decides**: closing a window or the app is an *event* PHP answers. Its default handlers close / quit;
+  a listener can `preventDefault()` (ask "save first?").
+- **ReactPHP** stays the app's loop for timers, streams and libraries: one turn per frame (`GameLoop::start(1)`),
+  any loop implementation (`Loop::get()`).
+- **One library for every app**: the pages are served from the app's folder at run time (`tauri://localhost/`,
+  through a custom Tauri `Assets`), not compiled into the library. `bin/jumphp tauri:build` builds it once.
+- **FFI**: PHP loads the library with `FFI::cdef()` (4 C functions, [`tauri/include/jumphp_tauri.h`](../tauri/include/jumphp_tauri.h)).
+  The development image (`jumphp/tauri`) has PHP's FFI; exported apps carry a PHP built with it.
+
+### The C API (tauri/src/lib.rs)
+
+| Function | |
+|---|---|
+| `int jt_run(const char *config_json, void (*frame)(void))` | runs the app until `app.exit`; returns the exit code (negative: could not start). Once per process. |
+| `const char *jt_poll(void)` | the events since the last call, a JSON array (valid until the next call) |
+| `void jt_send(const char *command_json)` | one command `{"cmd": "...", ...}`, run on the main thread after the current frame |
+| `const char *jt_version(void)` | the runtime's version |
+
+Config of `jt_run`: `identifier`, `product_name`, `version`, `root` (the pages' folder), `tick_hz`.
+
+Events: `ready`, `resumed`, `invoke {id, window, name, payload}`, `page {window, name, payload}`,
+`window {window, event: close-requested | destroyed | focus | blur | resized {width, height} | moved {x, y} | drop {paths}}`,
+`dialog {id, result}`, `exit-requested`, `error {cmd, message}`.
+
+Commands: `window.create {window, url, title, width, height, min_width, min_height, x, y, center, resizable,
+fullscreen, maximized, decorations, always_on_top, visible, devtools, icon, data_directory}`, `window.set_title`,
+`window.set_size`, `window.set_position`, `window.center`, `window.set_fullscreen`, `window.set_resizable`,
+`window.set_always_on_top`, `window.show` / `hide` / `focus` / `maximize` / `unmaximize` / `minimize` / `close`,
+`window.navigate {url}`, `webview.eval {js}`, `webview.emit {name, payload}` (no `window`: all),
+`invoke.resolve {window, id, ok, result}`, `dialog.message` / `dialog.confirm {id, message, title, kind, ok, cancel}`,
+`dialog.open {id, title, directory, filters, multiple, folder}`, `dialog.save {id, title, directory, file_name, filters}`,
+`notification.show {title, body}`, `opener.url {url}`, `opener.path {path}`, `opener.reveal {path}`,
+`app.emit {name, payload}` (Tauri events, for pages using `@tauri-apps/api`), `app.tick {hz}`, `app.exit {code}`.
+
+You never need them directly: `JumPHP\Tauri\App` and `Window` send them.
+
+---
+
+## An app
+
+```
+games/notes/
+  app.php                 exit(JumPHP\Tauri\App::boot(__DIR__)->run());
+  composer.json           requires jumphp/engine, autoload App\ -> src/
+  config/game.yaml        ui: webview, main: App\Main, app: {...}
+  src/Main.php            implements JumPHP\Tauri\AppMain: commands, listeners, timers
+  ui/                     the pages: index.html, CSS, JS, pictures (any front-end tool's build output works too)
+  assets/icon.png         the window's icon
+  tests/MainTest.php      extends JumPHP\Testing\AppTestCase
+  var/                    the user's files when run from the project (exported apps: ~/.local/share/<id>)
+```
+
+### config/game.yaml
+
+```yaml
+game:
+  id: notes                     # identifier net.jumphp.notes, data folder, executable name
+  title: "Notes"                # window title, product name
+  version: 0.1.0
+  lang: en
+  ui: webview                   # a desktop app: bin/jumphp app:* (run / test / shot hand over to them)
+  main: App\Main                # made with new, then boot(App $app) once before the window opens
+  app:
+    identifier: com.example.notes   # default net.jumphp.<id without dashes>
+    pages: ui                   # the pages' folder (default ui)
+    tick_hz: 60                 # frames a second when nothing happens
+    icon: assets/icon.png       # default: assets/icon.png when it exists
+    native_commands: true       # the built-in native.* commands for pages (below)
+    smoke_page: true            # app:test fails when the main page never loads
+    window:                     # the main window: every window.create option
+      url: index.html
+      width: 960
+      height: 640
+      min_width: 480
+      min_height: 320
+      resizable: true
+      devtools: false           # true: the WebView inspector opens with it
+```
+
+### The PHP side
+
+```php
+namespace App;
+
+use JumPHP\Native\Dialog;
+use JumPHP\Native\FilePicker;
+use JumPHP\Tauri\App;
+use JumPHP\Tauri\AppMain;
+use JumPHP\Tauri\NativeEvent;
+
+final class Main implements AppMain
+{
+    public function boot(App $app): void
+    {
+        // page -> PHP -> page: const r = await jumphp.invoke('greet', {name: 'Ada'})
+        $app->command('greet', fn (array $p) => "Hello {$p['name']}");
+
+        // an answer that comes later: return a Task
+        $app->command('pick', fn () => FilePicker::open(['filters' => ['Text' => ['txt', 'md']]]));
+
+        // PHP -> page: jumphp.on('clock', ...)
+        $app->gameLoop->addPeriodicTimer(1.0, fn () => $app->send('clock', ['time' => date('H:i:s')]));
+
+        // page -> PHP without an answer: jumphp.send('clicked', {...})
+        $app->on('page:clicked', fn (mixed $payload, string $window) => null);
+
+        // PHP decides what closing does
+        $app->window()->on('close-requested', function (NativeEvent $e) use ($app) {
+            $e->preventDefault();
+            Dialog::confirm('Quit?', 'Notes', 'Quit', 'Stay')->then(fn ($yes) => $yes && $app->quit());
+        });
+    }
+}
+```
+
+`JumPHP\Tauri\App`:
+
+| | |
+|---|---|
+| `App::boot($root, ?NativeRuntime $runtime = null)` | config, runtime (FFI), main window, `main` class |
+| `run(): int` | runs until the app quits; the exit code |
+| `command($name, fn (mixed $payload, Invocation $call) => mixed)` | what pages call; a returned `Task` answers when it ends; an exception rejects the page's promise with its message |
+| `send($name, $payload)` | to every page (`jumphp.on`) |
+| `window($label = 'main')`, `windows()`, `createWindow($label, $options)` | windows |
+| `on('ready' \| 'frame' \| 'loaded' \| 'exit-requested' \| 'page:<name>' \| 'error' \| 'quit' \| 'native', ...)` | events |
+| `quit($code = 0)` | closes everything after this frame |
+| `gameLoop`, `storage`, `options`, `lang`, `config`, `tasks()`, `http()` | as in games (`Storage`, `Options`, `Lang`, `Tasks`, `Http`) |
+| `time()`, `frameCount()`, `setTickRate($hz)`, `pagesDir()`, `isSmoke()` | |
+| `App::current()` | the running app (for code without access to it) |
+
+`JumPHP\Tauri\Window`: `setTitle()`, `setSize()`, `setPosition()`, `center()`, `setFullscreen()`, `setResizable()`,
+`setAlwaysOnTop()`, `show()`, `hide()`, `focus()`, `maximize()`, `unmaximize()`, `minimize()`, `close()`,
+`navigate($url)`, `eval($js)`, `send($name, $payload)`, `isOpen()`, `isLoaded()`, `geometry()`; events
+`close-requested` (NativeEvent), `closed`, `focus`, `blur`, `resized` (w, h), `moved` (x, y), `drop` (paths),
+`loaded`.
+
+### The page side: `window.jumphp`
+
+Injected in every page before its own scripts (it is there in `<script>` tags and modules alike):
+
+```js
+const r = await jumphp.invoke('greet', {name: 'Ada'});   // a Promise: resolves with PHP's answer, rejects with its exception's message
+jumphp.send('clicked', {x: 1});                          // PHP: $app->on('page:clicked', ...)
+const off = jumphp.on('clock', (p) => ...);              // PHP: $app->send('clock', ...) / $window->send(...)
+jumphp.native;                                           // true: running in a desktop app
+```
+
+The pages are ordinary web pages: any CSS, any framework, a bundler's output in `ui/` (`app.pages` can point at
+`dist/`). They are served from `tauri://localhost/` (a request for a folder serves its `index.html`); never from
+outside the pages' folder. A window can also show an `https://` page (`url`), without `window.jumphp`.
+
+### Built-in native commands
+
+Without PHP code of its own, a page can ask (they go through PHP, `JumPHP\Tauri\NativeCommands`; game.yaml
+`app.native_commands: false` removes them):
+
+```js
+await jumphp.invoke('native.message', {message: 'Saved', title: 'Notes', kind: 'info'});      // info | warning | error
+const yes = await jumphp.invoke('native.confirm', {message: 'Delete?', ok: 'Delete', cancel: 'Keep'});
+const file = await jumphp.invoke('native.open', {filters: {Images: ['png', 'jpg']}});         // null: cancelled
+const files = await jumphp.invoke('native.open', {multiple: true});
+const dir = await jumphp.invoke('native.open', {folder: true});
+const out = await jumphp.invoke('native.save', {file_name: 'notes.txt'});
+await jumphp.invoke('native.notify', {title: 'Done', body: 'Export finished'});
+await jumphp.invoke('native.openUrl', {url: 'https://jumphp.net'});
+```
+
+---
+
+## Native features from PHP: `JumPHP\Native`
+
+The same calls on every target; who does them depends on where the code runs:
+
+```php
+use JumPHP\Native\{Dialog, FilePicker, Notification, Shell, Native};
+
+Dialog::message('Saved.', 'Notes');                                    // Task: true once closed
+Dialog::confirm('Delete?', 'Notes', 'Delete', 'Keep')->then(fn (bool $yes) => ...);
+FilePicker::open(['filters' => ['Text' => ['txt']]])->then(fn (?string $file) => ...);
+FilePicker::open(['multiple' => true])->then(fn (?array $files) => ...);
+FilePicker::folder()->then(fn (?string $dir) => ...);
+FilePicker::save(['file_name' => 'out.txt'])->then(fn (?string $file) => ...);
+Notification::show('Done', 'Export finished');                        // bool
+Shell::openUrl('https://jumphp.net'); Shell::openPath($file); Shell::reveal($file);
+Native::supports('open'); Native::name();                              // 'tauri', 'sdl', 'browser', 'none'
+```
+
+| Target | `Native::name()` | Features |
+|---|---|---|
+| desktop app (`JumPHP\Tauri\App`) | `tauri` | all: message, confirm, open, save, folder, notify, openUrl, openPath, reveal |
+| SDL game on the desktop | `sdl` | message (SDL's own message box, modal) |
+| browser build | `browser` | openUrl (a new tab) |
+| headless runs (`test`, `shot`), elsewhere | `none` | nothing |
+
+What a target lacks fails the Task with `JumPHP\Native\UnsupportedFeature` (or returns `false`): check
+`Native::supports()` first. `Native::setProvider()` puts another one (tests, a custom provider implementing
+`JumPHP\Native\Provider`). Dialogs never block the frame (answers come back as Tasks), except SDL's message box,
+which is modal by nature.
+
+Lower levels stay available: PHP's **FFI** for any C library of the system (the desktop app's PHP has it), and
+PHP extensions.
+
+---
+
+## Tests
+
+`JumPHP\Testing\AppTestCase` plays the app **without a window** (a `FakeRuntime`: no FFI, no GTK, runs anywhere):
+the test is the page and the user.
+
+```php
+final class MainTest extends AppTestCase
+{
+    public function testThePageIsGreeted(): void
+    {
+        self::assertSame('Hello Ada', $this->invoke('greet', ['name' => 'Ada']));
+    }
+
+    public function testClosingAsks(): void
+    {
+        $this->requestClose();                       // the user clicks the window's close button
+        self::assertSame([], $this->sent('window.close'));
+        $this->answerDialog(true);                   // and answers the dialog PHP opened
+        self::assertNotNull($this->lastSent('app.exit'));
+    }
+}
+```
+
+`invoke($name, $payload)` (the answer; a rejection throws), `pageSend($name, $payload)`, `pageLoaded()`,
+`requestClose()`, `answerDialog($answer)`, `frames($n)`, `wait($seconds)` (real time: ReactPHP timers),
+`sent($cmd)`, `lastSent($cmd)`, `$this->runtime->push($event)` (any native event), `$this->app`.
+
+`bin/jumphp app:test <app>` runs them, then **the app for real** on a virtual screen (Xvfb, WebKitGTK, the
+library): it fails on a PHP warning, an exception, or when the main page never loaded (`JUMPHP_MAX_FRAMES`,
+default 240). `bin/jumphp app:shot <app> [frames] [out.png]` saves the main window's picture.
+
+---
+
+## Exporting: one executable
+
+`bin/jumphp app:export <app>` makes `games/<app>/dist/standalone/<app>-linux-x86_64`: one file, nothing to
+install but WebKitGTK (as every Tauri app on Linux). It reuses `export:standalone` ([standalone.md](standalone.md)):
+
+| Part | |
+|---|---|
+| PHP | StaticPHP's micro with `tools/app-extensions.txt` (FFI, OpenSSL, mbstring, sockets, pcntl...; no SDL): its own micro, built once in `~/.jumphp/standalone/spc-app` (~10 min), kept |
+| php.ini | `ffi.enable=1`, injected in the executable (micro's ini section) |
+| the app | `games/<app>` + its vendor/, as a PHAR, unpacked on the first launch into `~/.cache/jumphp/<id>-<build>` |
+| the runtime | `build/tauri/linux-x86_64/libjumphp_tauri.so`, unpacked with it into `native/linux-x86_64/` |
+| the user's files | `~/.local/share/<id>` (saves, options, the WebView's storage in `webview/`) |
+
+The computer needs **WebKitGTK 4.1** (`libwebkit2gtk-4.1-0`: Debian 12+, Ubuntu 22.04+, Fedora 39+, Arch
+`webkit2gtk-4.1`) and glibc 2.34 or newer. Checked on a bare Debian 13 with
+only `libwebkit2gtk-4.1-0` installed (no PHP).
+
+The game export is untouched: without the apps' variables, `export:standalone` builds and finds the same micro as
+before (same key).
+
+---
+
+## Commands
+
+| Command | |
+|---|---|
+| `app:new <app> [title]` | `games/<app>` from `skeleton-app/` |
+| `app:run <app>` | the app on your screen (X11, else Wayland; the session bus for notifications; the GPU) |
+| `app:test <app>` | php -l, phpstan, phpunit, then the app for real on Xvfb |
+| `app:shot <app> [frames] [out.png]` | the main window after N frames (default 120) |
+| `app:export <app> [--linux]` | one executable for Linux |
+| `tauri:setup` | the `jumphp/tauri` image: the desktop runtime + FFI + Rust + WebKitGTK headers (~5 min) |
+| `tauri:build` | `tauri/` -> `build/tauri/linux-x86_64/libjumphp_tauri.so` (~5 min the first time, Cargo caches in `~/.jumphp/tauri`); the app commands run it when the library is missing or older than its sources |
+
+`install <app>` and `composer <app> ...` are the games' commands (composer works the same).
+`run`, `test` and `shot` on an app's folder hand over to `app:run`, `app:test`, `app:shot`; `pages` skips apps
+(they have no browser build).
+
+Environment: `JUMPHP_TAURI_LIB` (another library file), `JUMPHP_TAURI_IMAGE`, `JUMPHP_SMOKE`, `JUMPHP_MAX_FRAMES`,
+`JUMPHP_SCREENSHOT`, `JUMPHP_VAR`.
+
+Where `TauriRuntime` looks for the library: `JUMPHP_TAURI_LIB`; `<app>/native/<platform>/libjumphp_tauri.so`
+(exported apps); `build/tauri/<platform>/` going up from the app (the project); `/usr/local/lib`, `/usr/lib`.
+
+---
+
+## Repository
+
+| Path | |
+|---|---|
+| `tauri/` | the runtime (Rust crate `jumphp-tauri`, a `cdylib`): `src/lib.rs` (C API, commands, events, assets), `src/bridge.js` (`window.jumphp`), `include/jumphp_tauri.h`, `tauri.conf.json` (a minimal config: windows are made by PHP), `Cargo.lock` |
+| `engine/src/Tauri/` | `App`, `Window`, `AppMain`, `Invocation`, `NativeEvent`, `NativeCommands`, `NativeRuntime`, `TauriRuntime` (FFI), `FakeRuntime` |
+| `engine/src/Native/` | `Native`, `Dialog`, `FilePicker`, `Notification`, `Shell`, providers (`TauriProvider`, `SdlProvider`, `BrowserProvider`, `NullProvider`), `UnsupportedFeature` |
+| `engine/src/Testing/AppTestCase.php` | tests without a window |
+| `skeleton-app/` | the app template (`app:new`) |
+| `games/hello-desktop/` | the example app |
+| `docker/tauri/Dockerfile` | the image (FROM the desktop image: same PHP 8.5 and extensions, + FFI, Rust, WebKitGTK, Xvfb tools) |
+| `tools/app-commands.sh` | the `app:*` / `tauri:*` commands (sourced by `bin/jumphp`) |
+| `tools/app-extensions.txt`, `tools/new-app.php` | the apps' micro extensions, `app:new`'s renaming |
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `No Tauri runtime (linux-x86_64/libjumphp_tauri.so)` | `bin/jumphp tauri:build`, or `JUMPHP_TAURI_LIB=<file>` |
+| `PHP's FFI extension is missing` | run it with `bin/jumphp app:run` (the `jumphp/tauri` image), or a PHP with `--with-ffi` and `ffi.enable=1` (or `preload`, CLI) |
+| `FFI API is restricted by "ffi.enable"` | `ffi.enable=1` (exported apps have it) |
+| A blank window in a screenshot | taken too early: more frames (`app:shot <app> 180`) |
+| `app:test`: the main page never loaded | `ui/index.html` missing (or `app.pages` / `window.url` wrong), or a JavaScript error before the page's end: open the inspector (`devtools: true`, `app:run`) |
+| `jumphp.invoke()` rejects `no command 'x'` | `$app->command('x', ...)` in `AppMain::boot()` |
+| The exported app does not start: `libwebkit2gtk-4.1.so.0: cannot open shared object file` | install WebKitGTK 4.1 (`sudo apt install libwebkit2gtk-4.1-0`) |
+| Nothing happens on a notification | no notification daemon / session bus (inside Docker: `app:run` mounts the session bus when it exists) |
+| `Overriding existing handler for signal 10` on stderr | WebKit's own message, harmless |
+
+A PHP *fatal* error (not an exception) during a frame cannot be caught: it ends the process (as in any PHP program).
+
+---
+
+## Roadmap
+
+Done (Linux): the runtime, PHP driving it from its main thread, windows, pages, page <-> PHP both ways, native
+dialogs / notifications / opener, drag and drop, closing decided by PHP, tests without a window, real-window tests
+on Xvfb, one-file export.
+
+Next:
+- **Windows, macOS**: the runtime builds there unchanged (Tauri); needs `tauri:build` on those systems (GitHub
+  Actions, like the Apple apps and the Windows micro) and the apps' micro for them.
+- **Android, iOS**: Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
+  does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do.
+- **Hybrid**: an SDL surface in a WebView window (menus in HTML, the game in SDL).
+- More native features as Tauri plugins + `JumPHP\Native` providers (clipboard, tray icon, global shortcuts,
+  auto-update).

@@ -40,6 +40,9 @@ engine/                 the framework: composer package jumphp/engine, namespace
   src/Gl/               OpenGl (raw PHP-OpenGL in SDL's context), WebGl (3D layer + post-processing), Mat4
   src/Http/             Http (async requests: fetch / curl / sockets), HttpResponse, HttpError
   src/Util/             Color, Math, Time, Lang, Vector
+  src/Tauri/            desktop apps (§16): App, Window, AppMain, TauriRuntime (FFI), FakeRuntime, NativeCommands
+  src/Native/           Dialog, FilePicker, Notification, Shell: the system's features, a provider per target (§16)
+  src/Testing/          GameTestCase (games), AppTestCase (desktop apps, no window)
   bootstrap/wasm.php    browser entry point
   web/                  the web page template (index.html, jumphp.js, jumphp-worker.js, jumphp-files.js (remote games), touch.js,
                         jumphp-device.js, jumphp-http.js, jumphp-pwa.js, jumphp-gamepad.js, sw.js)
@@ -48,6 +51,8 @@ engine/                 the framework: composer package jumphp/engine, namespace
   stubs/opengl.stub.php, openal.stub.php  every gl* / openal_* function and constant (tools/gl-stubs.php)
   tests/                engine unit tests
 skeleton/               template of a game, copied by `bin/jumphp new`
+skeleton-app/           template of a desktop app (Tauri), copied by `bin/jumphp app:new` (§16)
+tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C library PHP loads with FFI; §16)
 games/<id>/             the games (games/pong = the reference game: read it)
 docker/                 engine-wasm (WebAssembly build), desktop (runtime), desktop-async (PHP 8.6 ZTS + TrueAsync),
                         relay (network server), web (FrankenPHP), ext (php-opengl.patch, jumphp-xvfb: shared by them),
@@ -134,6 +139,8 @@ games/<id>/
 | `bin/jumphp relay up\|down\|logs` | multiplayer relay server on `ws://localhost:8090/ws` |
 | `bin/jumphp export:desktop <id>` | a Docker image that runs the game |
 | `bin/jumphp export:standalone <id> [--linux] [--windows]` | the game as one executable for players (dist/standalone/; docs/standalone.md) |
+| `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them |
+| `bin/jumphp tauri:setup` / `tauri:build` | the Tauri image / the runtime library `build/tauri/linux-x86_64/libjumphp_tauri.so` (done automatically when needed) |
 | `bin/jumphp apple <id>` (`ios <id>`, `macos <id>`) | the game as native Apple apps, built and tried on GitHub's Macs: .dmg (Mac), .ipa (iPhone / iPad), the simulator's app, screenshots (§14, "Apple apps") |
 | `bin/jumphp deploy [id...]` | to the project's server (`.env` `JUMPHP_SERVER`, set by `deploy:setup`): builds, rsync, `docker compose up` (FrankenPHP, or Traefik + FrankenPHP), a game with its own web site (`games/<id>/site/index.html`) gets it at the root and the game in `/play/` (`{{DOMAIN}}` replaced in its pages), then checks that `https://<domain>/` answers (shows the server logs if not). Behind a Traefik already on the server: `bin/jumphp server:traefik` prints its entry points and resolver (`JUMPHP_SERVER_MODE` `traefik-external`, or `traefik-passthrough` when it has no working resolver). Without a server: rsync `dist/web` to `$JUMPHP_DEPLOY_TARGET/<id>/`. Publishing: only when asked |
 | `bin/jumphp update` | merges the newest JumPHP (git remote `jumphp`) into the project |
@@ -952,7 +959,46 @@ background), then ~10.
 - `games/jumpball/` — a 3D runner on OpenGL / WebGL: procedural track (seeded), ball physics at a fixed step, a bot
   (title screen demo + smoke test), chunked vertex buffers, filled software 3D without GL, best score saved.
 - `skeleton/` — platformer: tiles, slopes, one-way platforms, camera, coins, sprite from pixel strings.
+- `games/hello-desktop/` — a desktop app (Tauri, §16): a notepad, HTML page + PHP (files, native dialogs, PHP clock,
+  drag and drop, quit confirmation), tested with `AppTestCase`.
 - `engine/stubs/sdl.stub.php` — every raw SDL / SDL_image / SDL_mixer / SDL_ttf function and constant.
 - `engine/tests/` — usage examples of CollisionSystem, TiledJsonLoader, SceneManager, Menu, Net.
 - `docs/` (French) — architecture, build, browser pitfalls, tiles, network, porting an existing game, remaking a CPC game (`docs/cpc.md`).
 - [dsk2jumphp](https://github.com/davidnurdin/dsk2jumphp) — remake an Amstrad CPC game from its disc (§12).
+
+## 16. Desktop apps (Tauri): HTML pages, PHP behind them
+
+Besides games, JumPHP makes **desktop applications**: native windows whose content is HTML / CSS / JS (the system's
+WebView), whose logic is PHP. **Native only** (not in the browser), Linux today. Full guide: `docs/tauri.md`
+(French: `docs/tauri.fr.md`). Example: `games/hello-desktop`. Nothing of this touches games.
+
+When the user wants "an app", "a desktop application", "a tool with a window", "an HTML interface" (not a game):
+
+```bash
+bin/jumphp app:new notes "Notes"     # games/notes from skeleton-app/ (config/game.yaml: ui: webview, main: App\Main)
+bin/jumphp install notes
+bin/jumphp app:test notes            # php -l + phpstan + phpunit (AppTestCase) + the app for real on Xvfb: must pass
+bin/jumphp app:shot notes            # var/screenshots/app.png: OPEN IT and look
+bin/jumphp app:export notes          # dist/standalone/notes-linux-x86_64 (the user's computer needs WebKitGTK 4.1)
+```
+
+- **PHP is the program**: `app.php` = `exit(JumPHP\Tauri\App::boot(__DIR__)->run());`. PHP starts the Tauri runtime
+  from its main thread (FFI, `libjumphp_tauri.so`), which calls PHP back at every frame (like the browser engine):
+  never block (rule 2 holds), answers come later as `Task`s.
+- **`src/Main.php`** implements `JumPHP\Tauri\AppMain::boot(App $app)`: `$app->command('name', fn (mixed $payload) =>
+  value | Task)` (what pages call), `$app->send('event', $payload)` / `$app->window()->send(...)` (PHP -> pages),
+  `$app->on('page:event', fn ($payload, $window) => ...)`, `$app->window()->on('close-requested', fn (NativeEvent $e)
+  => $e->preventDefault())`, timers with `$app->gameLoop->addPeriodicTimer()`, `$app->storage` / `options` / `http()` /
+  `tasks()` as in games.
+- **Pages** in `ui/` (game.yaml `app.pages`): plain HTML / CSS / JS. `window.jumphp` is injected:
+  `await jumphp.invoke('name', payload)`, `jumphp.send('event', payload)`, `jumphp.on('event', fn)`, and the built-in
+  `jumphp.invoke('native.open' | 'native.save' | 'native.message' | 'native.confirm' | 'native.notify' | 'native.openUrl', {...})`.
+- **Native features from PHP** (any target, `JumPHP\Native`): `Dialog::message()`, `Dialog::confirm()`,
+  `FilePicker::open() / folder() / save()` (Tasks), `Notification::show()`, `Shell::openUrl() / openPath() / reveal()`;
+  `Native::supports($feature)` first (SDL games: message only; browser: openUrl only; headless: none).
+- **Tests**: `tests/*Test.php` extending `JumPHP\Testing\AppTestCase` play the app without a window: `invoke()`,
+  `pageSend()`, `requestClose()`, `answerDialog()`, `frames()`, `wait()`, `sent('window.set_title')`, `lastSent()`.
+  Write one per feature as you go, like game tests.
+- Don'ts: no SDL / `Engine` in an app (it has no SDL window); no blocking calls; never write outside `var/` (the
+  user's data folder once exported) except files the user chose in a dialog.
+

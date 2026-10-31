@@ -1,0 +1,507 @@
+//! JumPHP's Tauri runtime: a C library that PHP loads with FFI (engine/src/Tauri/TauriRuntime.php).
+//!
+//! PHP is the program. It calls `jt_run()` from its main thread: Tauri builds the app and runs its native event
+//! loop there (GTK on Linux), and calls PHP back with `frame()` at every frame (`tick_hz` times a second, and at
+//! once when something happens), exactly like the browser engine calls `jumphp_frame()`. During a frame PHP
+//! reads what happened with `jt_poll()` (a JSON array of events) and asks for things with `jt_send()` (one JSON
+//! command each); the commands run on the main thread right after the frame. `jt_run()` returns the exit code
+//! when PHP asks to quit (`{"cmd":"app.exit"}`).
+//!
+//! Nothing here decides for PHP: closing a window or the app is an event PHP answers (its default handlers
+//! close / quit). The pages are served from a folder chosen at run time (`root`), not compiled in, so one
+//! library serves every app.
+//!
+//! C API (include/jumphp_tauri.h):
+//!   int         jt_run(const char *config_json, void (*frame)(void));
+//!   const char *jt_poll(void);                // owned by the library until the next jt_poll()
+//!   void        jt_send(const char *command_json);
+//!   const char *jt_version(void);
+
+use std::borrow::Cow;
+use std::collections::VecDeque;
+use std::ffi::{c_char, CStr, CString};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+
+use serde_json::{json, Value};
+use tauri::utils::assets::{AssetKey, CspHash};
+use tauri::{AppHandle, Assets, Emitter, LogicalPosition, LogicalSize, Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
+use tauri_plugin_dialog::{DialogExt, FilePath, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_opener::OpenerExt;
+
+const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "\0");
+
+/// The JavaScript every page gets before its own scripts: window.jumphp (engine/web/... has the same API for apps).
+const BRIDGE_JS: &str = include_str!("bridge.js");
+
+type FrameFn = extern "C" fn();
+
+static EVENTS: Mutex<VecDeque<Value>> = Mutex::new(VecDeque::new());
+static COMMANDS: Mutex<VecDeque<Value>> = Mutex::new(VecDeque::new());
+static FRAME: OnceLock<FrameFn> = OnceLock::new();
+static HANDLE: OnceLock<AppHandle<Wry>> = OnceLock::new();
+static FRAME_PENDING: AtomicBool = AtomicBool::new(false);
+static RUNNING: AtomicBool = AtomicBool::new(false);
+static STARTED: AtomicBool = AtomicBool::new(false);
+static TICK_US: AtomicU64 = AtomicU64::new(16_667);
+
+thread_local! {
+    /// what the last jt_poll() returned: alive until the next call (PHP copies it at once)
+    static POLLED: std::cell::RefCell<CString> = std::cell::RefCell::new(CString::default());
+    static IN_FRAME: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn push_event(event: Value) {
+    if let Ok(mut q) = EVENTS.lock() {
+        q.push_back(event);
+    }
+    request_frame();
+}
+
+/// A frame as soon as the loop is free (coalesced: one pending at a time).
+fn request_frame() {
+    if !RUNNING.load(Ordering::SeqCst) || FRAME_PENDING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(handle) = HANDLE.get() {
+        if handle.run_on_main_thread(do_frame).is_err() {
+            FRAME_PENDING.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
+/// On the main thread: PHP's frame, then the commands it sent.
+fn do_frame() {
+    FRAME_PENDING.store(false, Ordering::SeqCst);
+    if !RUNNING.load(Ordering::SeqCst) || IN_FRAME.with(|f| f.replace(true)) {
+        return;
+    }
+    if let Some(frame) = FRAME.get() {
+        frame();
+    }
+    IN_FRAME.with(|f| f.set(false));
+    if let Some(handle) = HANDLE.get() {
+        let commands: Vec<Value> = COMMANDS.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();
+        for command in commands {
+            let name = command.get("cmd").and_then(Value::as_str).unwrap_or("").to_string();
+            if let Err(e) = run_command(handle, &name, &command) {
+                push_event(json!({"type": "error", "cmd": name, "message": e}));
+            }
+        }
+    }
+}
+
+// --- the pages: a folder on disk, read at run time ------------------------------------------------------------
+
+struct FolderAssets {
+    root: PathBuf,
+}
+
+impl FolderAssets {
+    fn path(&self, key: &str) -> Option<PathBuf> {
+        let rel = Path::new(key.trim_start_matches('/'));
+        // never outside the folder
+        if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
+            return None;
+        }
+        let path = self.root.join(rel);
+        path.is_file().then_some(path)
+    }
+}
+
+impl<R: Runtime> Assets<R> for FolderAssets {
+    fn get(&self, key: &AssetKey) -> Option<Cow<'_, [u8]>> {
+        let key = key.as_ref();
+        let path = self.path(key).or_else(|| {
+            // "/" and folders: their index.html
+            let index = format!("{}/index.html", key.trim_end_matches('/'));
+            self.path(&index)
+        })?;
+        std::fs::read(path).ok().map(Cow::Owned)
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (Cow<'_, str>, Cow<'_, [u8]>)> + '_> {
+        Box::new(std::iter::empty())
+    }
+
+    fn csp_hashes(&self, _html_path: &AssetKey) -> Box<dyn Iterator<Item = CspHash<'_>> + '_> {
+        Box::new(std::iter::empty())
+    }
+}
+
+// --- JS -> PHP: window.jumphp.invoke(name, payload) --------------------------------------------------------------
+
+#[tauri::command]
+fn jumphp_invoke(webview: tauri::Webview<Wry>, id: u64, name: String, payload: Value) {
+    push_event(json!({"type": "invoke", "window": webview.label(), "id": id, "name": name, "payload": payload}));
+}
+
+#[tauri::command]
+fn jumphp_emit(webview: tauri::Webview<Wry>, name: String, payload: Value) {
+    push_event(json!({"type": "page", "window": webview.label(), "name": name, "payload": payload}));
+}
+
+// --- PHP -> Tauri: the commands --------------------------------------------------------------------------------
+
+fn str_of<'a>(c: &'a Value, key: &str) -> Option<&'a str> {
+    c.get(key).and_then(Value::as_str)
+}
+
+fn f64_of(c: &Value, key: &str) -> Option<f64> {
+    c.get(key).and_then(Value::as_f64)
+}
+
+fn bool_of(c: &Value, key: &str) -> Option<bool> {
+    c.get(key).and_then(Value::as_bool)
+}
+
+fn window(handle: &AppHandle<Wry>, c: &Value) -> Result<tauri::WebviewWindow<Wry>, String> {
+    let label = str_of(c, "window").unwrap_or("main");
+    handle.get_webview_window(label).ok_or_else(|| format!("no window '{label}'"))
+}
+
+fn js_value(v: &Value) -> String {
+    // JSON is JavaScript, except two line separators that JSON allows in strings
+    v.to_string().replace('\u{2028}', "\\u2028").replace('\u{2029}', "\\u2029")
+}
+
+fn path_string(p: FilePath) -> String {
+    match p.into_path() {
+        Ok(path) => path.to_string_lossy().into_owned(),
+        Err(e) => format!("{e}"),
+    }
+}
+
+fn run_command(handle: &AppHandle<Wry>, name: &str, c: &Value) -> Result<(), String> {
+    let id = c.get("id").cloned().unwrap_or(Value::Null);
+    let e = |r: tauri::Result<()>| r.map_err(|e| e.to_string());
+    match name {
+        "window.create" => {
+            let label = str_of(c, "window").unwrap_or("main").to_string();
+            let url = str_of(c, "url").unwrap_or("index.html");
+            let url = if url.starts_with("http://") || url.starts_with("https://") {
+                WebviewUrl::External(url.parse().map_err(|e| format!("url: {e}"))?)
+            } else {
+                WebviewUrl::App(url.trim_start_matches('/').into())
+            };
+            let mut b = WebviewWindowBuilder::new(handle, &label, url)
+                .title(str_of(c, "title").unwrap_or("JumPHP"))
+                .inner_size(f64_of(c, "width").unwrap_or(960.0), f64_of(c, "height").unwrap_or(640.0))
+                .resizable(bool_of(c, "resizable").unwrap_or(true))
+                .fullscreen(bool_of(c, "fullscreen").unwrap_or(false))
+                .maximized(bool_of(c, "maximized").unwrap_or(false))
+                .decorations(bool_of(c, "decorations").unwrap_or(true))
+                .always_on_top(bool_of(c, "always_on_top").unwrap_or(false))
+                .visible(bool_of(c, "visible").unwrap_or(true))
+                .initialization_script(BRIDGE_JS);
+            if let (Some(w), Some(h)) = (f64_of(c, "min_width"), f64_of(c, "min_height")) {
+                b = b.min_inner_size(w, h);
+            }
+            if bool_of(c, "center").unwrap_or(true) {
+                b = b.center();
+            }
+            if let (Some(x), Some(y)) = (f64_of(c, "x"), f64_of(c, "y")) {
+                b = b.position(x, y);
+            }
+            if let Some(dir) = str_of(c, "data_directory") {
+                b = b.data_directory(PathBuf::from(dir));
+            }
+            if let Some(icon) = str_of(c, "icon") {
+                match tauri::image::Image::from_path(icon) {
+                    Ok(img) => b = b.icon(img).map_err(|e| e.to_string())?,
+                    Err(err) => push_event(json!({"type": "error", "cmd": name, "message": format!("icon {icon}: {err}")})),
+                }
+            }
+            let devtools = bool_of(c, "devtools").unwrap_or(false);
+            b = b.devtools(devtools);
+            let w = b.build().map_err(|e| e.to_string())?;
+            #[cfg(any(debug_assertions, feature = "devtools"))]
+            if devtools {
+                w.open_devtools();
+            }
+            let _ = w;
+            Ok(())
+        }
+        "window.set_title" => e(window(handle, c)?.set_title(str_of(c, "title").unwrap_or(""))),
+        "window.set_size" => e(window(handle, c)?.set_size(LogicalSize::new(f64_of(c, "width").unwrap_or(800.0), f64_of(c, "height").unwrap_or(600.0)))),
+        "window.set_position" => e(window(handle, c)?.set_position(LogicalPosition::new(f64_of(c, "x").unwrap_or(0.0), f64_of(c, "y").unwrap_or(0.0)))),
+        "window.center" => e(window(handle, c)?.center()),
+        "window.set_fullscreen" => e(window(handle, c)?.set_fullscreen(bool_of(c, "on").unwrap_or(true))),
+        "window.set_resizable" => e(window(handle, c)?.set_resizable(bool_of(c, "on").unwrap_or(true))),
+        "window.set_always_on_top" => e(window(handle, c)?.set_always_on_top(bool_of(c, "on").unwrap_or(true))),
+        "window.show" => e(window(handle, c)?.show()),
+        "window.hide" => e(window(handle, c)?.hide()),
+        "window.focus" => e(window(handle, c)?.set_focus()),
+        "window.maximize" => e(window(handle, c)?.maximize()),
+        "window.unmaximize" => e(window(handle, c)?.unmaximize()),
+        "window.minimize" => e(window(handle, c)?.minimize()),
+        // destroy(): no CloseRequested again (PHP already decided)
+        "window.close" => e(window(handle, c)?.destroy()),
+        "window.navigate" => {
+            let w = window(handle, c)?;
+            let url = str_of(c, "url").unwrap_or("index.html");
+            let js = format!("location.href = {}", js_value(&json!(url)));
+            e(w.eval(&js))
+        }
+        "webview.eval" => e(window(handle, c)?.eval(str_of(c, "js").unwrap_or(""))),
+        // PHP -> page: window.jumphp.on(name, fn (payload)) in the page
+        "webview.emit" => {
+            let js = format!(
+                "window.jumphp && window.jumphp.__dispatch({}, {})",
+                js_value(&json!(str_of(c, "name").unwrap_or(""))),
+                js_value(c.get("payload").unwrap_or(&Value::Null))
+            );
+            match str_of(c, "window") {
+                Some(_) => e(window(handle, c)?.eval(&js)),
+                None => {
+                    for (_, w) in handle.webview_windows() {
+                        let _ = w.eval(&js);
+                    }
+                    Ok(())
+                }
+            }
+        }
+        // the answer of an invoke(): resolves (ok) or rejects its promise in the page
+        "invoke.resolve" => {
+            let js = format!(
+                "window.jumphp && window.jumphp.__resolve({}, {}, {})",
+                js_value(&id),
+                if bool_of(c, "ok").unwrap_or(true) { "true" } else { "false" },
+                js_value(c.get("result").unwrap_or(&Value::Null))
+            );
+            e(window(handle, c)?.eval(&js))
+        }
+        "dialog.message" | "dialog.confirm" => {
+            let kind = match str_of(c, "kind").unwrap_or("info") {
+                "warning" => MessageDialogKind::Warning,
+                "error" => MessageDialogKind::Error,
+                _ => MessageDialogKind::Info,
+            };
+            let ok = str_of(c, "ok").map(str::to_string);
+            let cancel = str_of(c, "cancel").map(str::to_string);
+            let buttons = if name == "dialog.confirm" {
+                match (ok, cancel) {
+                    (Some(o), Some(n)) => MessageDialogButtons::OkCancelCustom(o, n),
+                    _ => MessageDialogButtons::OkCancel,
+                }
+            } else {
+                match ok {
+                    Some(o) => MessageDialogButtons::OkCustom(o),
+                    None => MessageDialogButtons::Ok,
+                }
+            };
+            let mut d = handle.dialog().message(str_of(c, "message").unwrap_or("")).kind(kind).buttons(buttons);
+            if let Some(t) = str_of(c, "title") {
+                d = d.title(t);
+            }
+            if let Ok(w) = window(handle, c) {
+                d = d.parent(&w);
+            }
+            d.show(move |answer| push_event(json!({"type": "dialog", "id": id, "result": answer})));
+            Ok(())
+        }
+        "dialog.open" | "dialog.save" => {
+            let mut d = handle.dialog().file();
+            if let Some(t) = str_of(c, "title") {
+                d = d.set_title(t);
+            }
+            if let Some(dir) = str_of(c, "directory") {
+                d = d.set_directory(dir);
+            }
+            if let Some(n) = str_of(c, "file_name") {
+                d = d.set_file_name(n);
+            }
+            if let Some(filters) = c.get("filters").and_then(Value::as_object) {
+                for (label, exts) in filters {
+                    let exts: Vec<String> = exts.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                    let refs: Vec<&str> = exts.iter().map(String::as_str).collect();
+                    d = d.add_filter(label, &refs);
+                }
+            }
+            if let Ok(w) = window(handle, c) {
+                d = d.set_parent(&w);
+            }
+            let reply = move |result: Value| push_event(json!({"type": "dialog", "id": id, "result": result}));
+            if name == "dialog.save" {
+                d.save_file(move |p| reply(p.map(|p| Value::String(path_string(p))).unwrap_or(Value::Null)));
+            } else if bool_of(c, "folder").unwrap_or(false) {
+                d.pick_folder(move |p| reply(p.map(|p| Value::String(path_string(p))).unwrap_or(Value::Null)));
+            } else if bool_of(c, "multiple").unwrap_or(false) {
+                d.pick_files(move |ps| reply(ps.map(|ps| Value::Array(ps.into_iter().map(|p| Value::String(path_string(p))).collect())).unwrap_or(Value::Null)));
+            } else {
+                d.pick_file(move |p| reply(p.map(|p| Value::String(path_string(p))).unwrap_or(Value::Null)));
+            }
+            Ok(())
+        }
+        "notification.show" => {
+            let mut n = handle.notification().builder().title(str_of(c, "title").unwrap_or(""));
+            if let Some(body) = str_of(c, "body") {
+                n = n.body(body);
+            }
+            n.show().map_err(|e| e.to_string())
+        }
+        "opener.url" => handle.opener().open_url(str_of(c, "url").unwrap_or(""), None::<&str>).map_err(|e| e.to_string()),
+        "opener.path" => handle.opener().open_path(str_of(c, "path").unwrap_or(""), None::<&str>).map_err(|e| e.to_string()),
+        "opener.reveal" => handle.opener().reveal_item_in_dir(str_of(c, "path").unwrap_or("")).map_err(|e| e.to_string()),
+        // the page's Tauri events (listen() in JS), for pages using @tauri-apps/api
+        "app.emit" => e(handle.emit(str_of(c, "name").unwrap_or(""), c.get("payload").cloned().unwrap_or(Value::Null))),
+        "app.tick" => {
+            let hz = f64_of(c, "hz").unwrap_or(60.0).clamp(1.0, 1000.0);
+            TICK_US.store((1_000_000.0 / hz) as u64, Ordering::SeqCst);
+            Ok(())
+        }
+        "app.exit" => {
+            handle.exit(c.get("code").and_then(Value::as_i64).unwrap_or(0) as i32);
+            Ok(())
+        }
+        _ => Err(format!("unknown command '{name}'")),
+    }
+}
+
+fn window_event(label: &str, event: &WindowEvent) -> Option<Value> {
+    Some(match event {
+        WindowEvent::CloseRequested { .. } => json!({"type": "window", "window": label, "event": "close-requested"}),
+        WindowEvent::Destroyed => json!({"type": "window", "window": label, "event": "destroyed"}),
+        WindowEvent::Focused(on) => json!({"type": "window", "window": label, "event": if *on { "focus" } else { "blur" }}),
+        WindowEvent::Resized(size) => json!({"type": "window", "window": label, "event": "resized", "width": size.width, "height": size.height}),
+        WindowEvent::Moved(pos) => json!({"type": "window", "window": label, "event": "moved", "x": pos.x, "y": pos.y}),
+        WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => json!({"type": "window", "window": label, "event": "drop",
+            "paths": paths.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>()}),
+        _ => return None,
+    })
+}
+
+fn config_of(json: &str) -> Value {
+    serde_json::from_str(json).unwrap_or_else(|_| json!({}))
+}
+
+fn run(config: Value) -> Result<i32, String> {
+    let mut context: tauri::Context<Wry> = tauri::generate_context!();
+    let root = PathBuf::from(str_of(&config, "root").unwrap_or("."));
+    if let Some(id) = str_of(&config, "identifier") {
+        context.config_mut().identifier = id.to_string();
+    }
+    if let Some(n) = str_of(&config, "product_name") {
+        context.config_mut().product_name = Some(n.to_string());
+    }
+    if let Some(v) = str_of(&config, "version") {
+        context.config_mut().version = Some(v.to_string());
+        context.package_info_mut().version = v.parse().unwrap_or_else(|_| context.package_info().version.clone());
+    }
+    context.set_assets(Box::new(FolderAssets { root }));
+    if let Some(hz) = f64_of(&config, "tick_hz") {
+        TICK_US.store((1_000_000.0 / hz.clamp(1.0, 1000.0)) as u64, Ordering::SeqCst);
+    }
+
+    let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![jumphp_invoke, jumphp_emit])
+        .setup(|app| {
+            let _ = HANDLE.set(app.handle().clone());
+            RUNNING.store(true, Ordering::SeqCst);
+            push_event(json!({"type": "ready"}));
+            // the frames: one every tick (coalesced with the ones events ask for)
+            std::thread::spawn(|| {
+                while RUNNING.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_micros(TICK_US.load(Ordering::SeqCst)));
+                    request_frame();
+                }
+            });
+            Ok(())
+        })
+        .build(context)
+        .map_err(|e| e.to_string())?;
+
+    let code = app.run_return(|_handle, event| match event {
+        RunEvent::WindowEvent { label, event, .. } => {
+            if let WindowEvent::CloseRequested { api, .. } = &event {
+                // PHP decides (its default handler closes the window)
+                api.prevent_close();
+            }
+            if let Some(ev) = window_event(&label, &event) {
+                push_event(ev);
+            }
+        }
+        RunEvent::ExitRequested { code, api, .. } => {
+            if code.is_none() {
+                // the last window is gone: PHP decides (its default handler quits)
+                api.prevent_exit();
+                push_event(json!({"type": "exit-requested"}));
+            }
+        }
+        RunEvent::Resumed => push_event(json!({"type": "resumed"})),
+        _ => {}
+    });
+    RUNNING.store(false, Ordering::SeqCst);
+    Ok(code)
+}
+
+// --- the C API --------------------------------------------------------------------------------------------------
+
+/// Runs the app until PHP asks to quit; returns its exit code (negative: it could not start, see stderr).
+/// Once per process (the native event loop can be created once).
+#[no_mangle]
+pub extern "C" fn jt_run(config_json: *const c_char, frame: Option<FrameFn>) -> i32 {
+    let Some(frame) = frame else { return -2 };
+    if STARTED.swap(true, Ordering::SeqCst) {
+        eprintln!("[jumphp-tauri] jt_run() can only be called once per process");
+        return -3;
+    }
+    let config = if config_json.is_null() { json!({}) } else { config_of(&unsafe { CStr::from_ptr(config_json) }.to_string_lossy()) };
+    let _ = FRAME.set(frame);
+    match catch_unwind(AssertUnwindSafe(|| run(config))) {
+        Ok(Ok(code)) => code,
+        Ok(Err(e)) => {
+            eprintln!("[jumphp-tauri] {e}");
+            -1
+        }
+        Err(_) => {
+            eprintln!("[jumphp-tauri] panic in the native runtime");
+            RUNNING.store(false, Ordering::SeqCst);
+            -1
+        }
+    }
+}
+
+/// The events since the last call, as a JSON array. The string stays valid until the next call.
+#[no_mangle]
+pub extern "C" fn jt_poll() -> *const c_char {
+    let events: Vec<Value> = EVENTS.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();
+    let text = CString::new(Value::Array(events).to_string()).unwrap_or_default();
+    POLLED.with(|p| {
+        *p.borrow_mut() = text;
+        p.borrow().as_ptr()
+    })
+}
+
+/// One command (JSON object with "cmd"), run on the main thread after the current frame.
+#[no_mangle]
+pub extern "C" fn jt_send(command_json: *const c_char) {
+    if command_json.is_null() {
+        return;
+    }
+    let text = unsafe { CStr::from_ptr(command_json) }.to_string_lossy();
+    match serde_json::from_str::<Value>(&text) {
+        Ok(command) => {
+            if let Ok(mut q) = COMMANDS.lock() {
+                q.push_back(command);
+            }
+            // sent outside a frame (from a thread callback...): run it soon
+            if !IN_FRAME.with(|f| f.get()) {
+                request_frame();
+            }
+        }
+        Err(e) => push_event(json!({"type": "error", "cmd": "", "message": format!("bad command JSON: {e}")})),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn jt_version() -> *const c_char {
+    VERSION.as_ptr() as *const c_char
+}

@@ -1,0 +1,454 @@
+<?php
+
+namespace JumPHP\Tauri;
+
+use Evenement\EventEmitter;
+use JumPHP\Async\Task;
+use JumPHP\Async\Tasks;
+use JumPHP\Bridge\JsBridge;
+use JumPHP\Http\Http;
+use JumPHP\Kernel\GameConfig;
+use JumPHP\Kernel\Platform;
+use JumPHP\Loop\GameLoop;
+use JumPHP\Save\Options;
+use JumPHP\Save\Storage;
+use JumPHP\Util\Lang;
+use JumPHP\Util\Time;
+use React\EventLoop\Loop;
+
+/**
+ * A desktop app: native windows whose pages are HTML / CSS / JS (Tauri), driven by PHP. The app's app.php:
+ *
+ *   require __DIR__ . '/vendor/autoload.php';
+ *   exit(JumPHP\Tauri\App::boot(__DIR__)->run());
+ *
+ * PHP is the main program, like for a game: run() starts the native runtime from PHP's main thread and the
+ * runtime calls frame() at every frame (60 a second by default, and at once when something happens), where
+ * PHP handles what happened, runs one turn of the ReactPHP loop (timers, HTTP, tasks) and sends its commands.
+ *
+ * config/game.yaml (under game:): id, title, version, lang, ui: webview, main: App\Main (a class implementing
+ * AppMain: it registers the commands and listeners), and app: {identifier, pages, tick_hz, icon, window: {...},
+ * native_commands} (docs/tauri.md).
+ *
+ * Page -> PHP:  jumphp.invoke('greet', {name}) -> $app->command('greet', fn (array $p) => "Hello {$p['name']}")
+ *               jumphp.send('clicked', {...})  -> $app->on('page:clicked', fn (array|null $p, string $window) => ...)
+ * PHP -> page:  $app->window()->send('tick', [...]) or $app->send(...) (every window) -> jumphp.on('tick', ...)
+ *
+ * Events of the app: 'ready', 'frame' (float $dt), 'exit-requested' (NativeEvent: the last window closed; quits
+ * unless prevented), 'page:<name>', 'error' (string $message), 'quit'. Windows have their own (Window).
+ */
+final class App extends EventEmitter
+{
+    private static ?App $current = null;
+
+    public readonly GameLoop $gameLoop;
+    public readonly Storage $storage;
+    public readonly Options $options;
+    public readonly Lang $lang;
+
+    /** @var array<string, Window> */
+    private array $windows = [];
+    /** @var array<string, \Closure> */
+    private array $commands = [];
+    /** @var array<int, Task> dialogs waiting for their answer, by id */
+    private array $dialogs = [];
+    private int $nextId = 1;
+    private bool $running = false;
+    private bool $quitting = false;
+    private int $exitCode = 0;
+    private int $frame = 0;
+    private float $time = 0.0;
+    private float $lastTime = 0.0;
+    private ?\Throwable $crash = null;
+    private ?Tasks $tasks = null;
+    private ?Http $http = null;
+    private ?JsBridge $bridge = null;
+
+    public function __construct(public readonly GameConfig $config, private readonly NativeRuntime $runtime)
+    {
+        $this->gameLoop = new GameLoop();
+        $this->storage = Storage::fromConfig($config);
+        $this->options = new Options($this->storage);
+        $this->lang = Lang::fromConfig($config);
+        $this->lang->setLang((string)$this->options->get('lang', $config->lang()));
+        self::$current = $this;
+        if ($this->option('native_commands', true)) {
+            NativeCommands::register($this);
+        }
+    }
+
+    /**
+     * The app of the folder $root: its config, the native runtime (FFI, else an error saying what is missing),
+     * its main window, then its main class (game.yaml main) to register commands and listeners.
+     */
+    public static function boot(string $root, ?NativeRuntime $runtime = null): self
+    {
+        $root = rtrim($root, '/');
+        if (!defined('JUMPHP_ROOT')) {
+            define('JUMPHP_ROOT', $root);
+        }
+        if (Platform::setting('JUMPHP_SMOKE') !== null) {
+            set_error_handler(static function (int $level, string $message, string $file, int $line): bool {
+                if (!(error_reporting() & $level)) {
+                    return false;
+                }
+                throw new \ErrorException($message, 0, $level, $file, $line);
+            });
+        }
+        $config = GameConfig::load($root);
+        $runtime ??= TauriRuntime::create($root) ?? throw new \RuntimeException(self::missingRuntime($root));
+        $app = new self($config, $runtime);
+        $window = (array)$app->option('window', []);
+        $app->createWindow('main', $window + ['title' => $config->title()]);
+        $main = $config->get('main');
+        if ($main !== null) {
+            if (!class_exists((string)$main)) {
+                throw new \RuntimeException("game.main: class '$main' not found (namespace / file name?)");
+            }
+            $object = new $main();
+            if (!$object instanceof AppMain) {
+                throw new \RuntimeException("game.main: $main must implement " . AppMain::class);
+            }
+            $object->boot($app);
+        }
+        return $app;
+    }
+
+    /** The running app (for code that has no access to it: JumPHP\Native). */
+    public static function current(): ?self
+    {
+        return self::$current;
+    }
+
+    /** A key of game.yaml's app: section. */
+    public function option(string $key, mixed $default = null): mixed
+    {
+        return ((array)$this->config->get('app', []))[$key] ?? $default;
+    }
+
+    /** Runs until the app quits. @return int exit code */
+    public function run(): int
+    {
+        $this->running = true;
+        $this->lastTime = Time::now();
+        $config = [
+            'identifier' => (string)$this->option('identifier', 'net.jumphp.' . preg_replace('/[^a-z0-9]+/', '', strtolower($this->config->id()))),
+            'product_name' => $this->config->title(),
+            'version' => (string)$this->config->get('version', '0.1.0'),
+            'root' => $this->pagesDir(),
+            'tick_hz' => (float)$this->option('tick_hz', 60),
+        ];
+        $code = $this->runtime->run($config, fn () => $this->frame());
+        $this->running = false;
+        $this->tasks?->shutdown();
+        Loop::stop();   // no ReactPHP auto-run at the end of the script
+        self::$current = $this->runtime instanceof FakeRuntime ? self::$current : null;
+        if ($this->crash !== null) {
+            return 1;
+        }
+        return $code < 0 ? 1 : ($this->exitCode ?: $code);
+    }
+
+    /** One frame (called by the native runtime): its events, one turn of the loop, the 'frame' listeners. */
+    public function frame(): void
+    {
+        if ($this->quitting && $this->crash !== null) {
+            return;
+        }
+        try {
+            $now = Time::now();
+            $dt = min(max($now - $this->lastTime, 0.0), 0.25);
+            $this->lastTime = $now;
+            $this->time += $dt;
+            foreach ($this->runtime->poll() as $event) {
+                $this->dispatch($event);
+            }
+            $this->tasks?->poll();
+            $this->http?->poll();
+            $this->emit('frame', [$dt]);
+            $this->gameLoop->start(1);
+            $this->frame++;
+            $this->checkHeadless();
+        } catch (\Throwable $e) {
+            $this->crashed($e);
+        }
+    }
+
+    // --- windows --------------------------------------------------------------------------------------------
+
+    /** The main window (or another one by its label). */
+    public function window(string $label = 'main'): Window
+    {
+        return $this->windows[$label] ?? throw new \OutOfBoundsException("no window '$label'");
+    }
+
+    /** @return array<string, Window> */
+    public function windows(): array
+    {
+        return $this->windows;
+    }
+
+    /**
+     * A new window. Options: title, url (a page of the app's pages folder, default index.html, or http(s)://...),
+     * width, height (logical pixels), min_width, min_height, x, y, center, resizable, fullscreen, maximized,
+     * decorations, always_on_top, visible, devtools, icon (a PNG of the app).
+     */
+    public function createWindow(string $label, array $options = []): Window
+    {
+        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $label)) {
+            throw new \InvalidArgumentException("window label '$label': letters, digits, - and _ only");
+        }
+        $window = $this->windows[$label] = new Window($this, $label);
+        $icon = $options['icon'] ?? $this->option('icon', is_file($this->config->path('assets/icon.png')) ? 'assets/icon.png' : null);
+        if ($icon !== null) {
+            $options['icon'] = Platform::isAbsolutePath((string)$icon) ? $icon : $this->config->path((string)$icon);
+        }
+        $options['data_directory'] ??= $this->storage->path('webview');
+        $this->sendCommand(['cmd' => 'window.create', 'window' => $label] + $options);
+        return $window;
+    }
+
+    // --- page <-> PHP -----------------------------------------------------------------------------------------
+
+    /**
+     * What a page can call: jumphp.invoke($name, payload) resolves with the handler's return value (any JSON
+     * value; a Task: its result when it ends), rejects with the message of what it throws.
+     * $handler: fn (mixed $payload, Invocation $call): mixed
+     */
+    public function command(string $name, callable $handler): self
+    {
+        $this->commands[$name] = \Closure::fromCallable($handler);
+        return $this;
+    }
+
+    public function hasCommand(string $name): bool
+    {
+        return isset($this->commands[$name]);
+    }
+
+    /** PHP -> every page: jumphp.on($name, fn (payload)). */
+    public function send(string $name, mixed $payload = null): self
+    {
+        $this->sendCommand(['cmd' => 'webview.emit', 'name' => $name, 'payload' => $payload]);
+        return $this;
+    }
+
+    // --- the app ----------------------------------------------------------------------------------------------
+
+    /** Quits after this frame (closes every window). */
+    public function quit(int $code = 0): void
+    {
+        if ($this->quitting) {
+            return;
+        }
+        $this->quitting = true;
+        $this->exitCode = $code;
+        $this->emit('quit');
+        $this->sendCommand(['cmd' => 'app.exit', 'code' => $code]);
+    }
+
+    public function isRunning(): bool
+    {
+        return $this->running && !$this->quitting;
+    }
+
+    /** Seconds since the app started. */
+    public function time(): float
+    {
+        return $this->time;
+    }
+
+    public function frameCount(): int
+    {
+        return $this->frame;
+    }
+
+    /** Frames a second the runtime calls frame() when nothing happens (default game.yaml app.tick_hz, 60). */
+    public function setTickRate(float $hz): void
+    {
+        $this->sendCommand(['cmd' => 'app.tick', 'hz' => $hz]);
+    }
+
+    /** Background work, as in games (threads with the async runtime, between frames otherwise). */
+    public function tasks(): Tasks
+    {
+        return $this->tasks ??= new Tasks($this->config);
+    }
+
+    /** Asynchronous HTTP (curl), as in games. */
+    public function http(): Http
+    {
+        return $this->http ??= new Http($this->bridge ??= new JsBridge());
+    }
+
+    /** The folder of the pages (game.yaml app.pages, default ui/). */
+    public function pagesDir(): string
+    {
+        $pages = (string)$this->option('pages', 'ui');
+        return Platform::isAbsolutePath($pages) ? $pages : $this->config->path($pages);
+    }
+
+    public function isSmoke(): bool
+    {
+        return Platform::setting('JUMPHP_SMOKE') !== null;
+    }
+
+    /** @internal the runtime that runs this app */
+    public function runtime(): NativeRuntime
+    {
+        return $this->runtime;
+    }
+
+    /** @internal Window, JumPHP\Native: one command for the native side */
+    public function sendCommand(array $command): void
+    {
+        $this->runtime->send($command);
+    }
+
+    /**
+     * @internal JumPHP\Native: a native dialog; the Task ends with its answer (true / false, a path, a list of
+     * paths, or null when cancelled).
+     */
+    public function dialog(string $cmd, array $args): Task
+    {
+        $id = $this->nextId++;
+        $task = $this->dialogs[$id] = new Task();
+        $this->sendCommand(['cmd' => $cmd, 'id' => $id] + $args);
+        return $task;
+    }
+
+    // --- events from the native side --------------------------------------------------------------------------
+
+    private function dispatch(array $event): void
+    {
+        $window = isset($event['window']) ? ($this->windows[(string)$event['window']] ?? null) : null;
+        switch ($event['type'] ?? '') {
+            case 'ready':
+                $this->emit('ready');
+                break;
+            case 'invoke':
+                $this->invoke(new Invocation((int)($event['id'] ?? 0), (string)($event['name'] ?? ''), $event['payload'] ?? null,
+                    (string)($event['window'] ?? 'main')));
+                break;
+            case 'page':
+                $name = (string)($event['name'] ?? '');
+                if ($name === '__loaded') {
+                    $window?->dispatch('loaded', []);
+                    $this->emit('loaded', [(string)($event['window'] ?? 'main')]);
+                } else {
+                    $this->emit('page:' . $name, [$event['payload'] ?? null, (string)($event['window'] ?? 'main')]);
+                }
+                break;
+            case 'window':
+                $window?->dispatch((string)($event['event'] ?? ''), $event);
+                if (($event['event'] ?? '') === 'destroyed') {
+                    unset($this->windows[(string)$event['window']]);
+                }
+                break;
+            case 'dialog':
+                $task = $this->dialogs[(int)($event['id'] ?? 0)] ?? null;
+                unset($this->dialogs[(int)($event['id'] ?? 0)]);
+                $task?->settle($event['result'] ?? null);
+                break;
+            case 'exit-requested':
+                $e = new NativeEvent('exit-requested');
+                $this->emit('exit-requested', [$e]);
+                if (!$e->isDefaultPrevented()) {
+                    $this->quit($this->exitCode);
+                }
+                break;
+            case 'error':
+                $message = (string)($event['message'] ?? 'native error') . (empty($event['cmd']) ? '' : " ({$event['cmd']})");
+                if ($this->listeners('error') === []) {
+                    self::stderr("[jumphp] native: $message\n");
+                }
+                $this->emit('error', [$message]);
+                break;
+            default:
+                $this->emit('native', [$event]);
+        }
+    }
+
+    private function invoke(Invocation $call): void
+    {
+        $reply = function (bool $ok, mixed $result) use ($call): void {
+            $this->sendCommand(['cmd' => 'invoke.resolve', 'window' => $call->window, 'id' => $call->id, 'ok' => $ok, 'result' => $result]);
+        };
+        $failed = static fn (\Throwable $e): array => ['message' => $e->getMessage(), 'class' => get_class($e)];
+        $handler = $this->commands[$call->name] ?? null;
+        if ($handler === null) {
+            $reply(false, ['message' => "no command '{$call->name}' (App::command())", 'class' => 'BadMethodCallException']);
+            return;
+        }
+        try {
+            $result = $handler($call->payload, $call);
+        } catch (\Throwable $e) {
+            if ($this->isSmoke()) {
+                throw $e;
+            }
+            $reply(false, $failed($e));
+            return;
+        }
+        if ($result instanceof Task) {
+            $result->then(static fn (mixed $value) => $reply(true, $value), static fn (\Throwable $e) => $reply(false, $failed($e)));
+        } else {
+            $reply(true, $result);
+        }
+    }
+
+    // --- headless runs (bin/jumphp app:test / app:shot) -------------------------------------------------------
+
+    private function checkHeadless(): void
+    {
+        if (!Platform::isHeadless() || $this->quitting) {
+            return;
+        }
+        $shot = Platform::setting('JUMPHP_SCREENSHOT');
+        $max = (int)Platform::setting('JUMPHP_MAX_FRAMES', 300);
+        if ($this->frame < $max) {
+            return;
+        }
+        if ($shot !== null) {
+            // the screen of the X server the app runs on (Xvfb): ImageMagick's import
+            @mkdir(dirname((string)$shot), 0777, true);
+            $g = isset($this->windows['main']) ? $this->windows['main']->geometry() : ['width' => 0];
+            $crop = $g['width'] > 0 ? sprintf(' -crop %dx%d+%d+%d +repage', $g['width'], $g['height'], $g['x'], $g['y']) : '';
+            exec('import -window root' . $crop . ' ' . escapeshellarg((string)$shot) . ' 2>&1', $out, $status);
+            self::stderr($status === 0 ? "[jumphp] screenshot: $shot (frame {$this->frame})\n" : "[jumphp] screenshot failed: " . implode("\n", $out) . "\n");
+        }
+        if ($this->isSmoke() && $this->option('smoke_page', true) && isset($this->windows['main']) && !$this->windows['main']->isLoaded()) {
+            $this->crashed(new \RuntimeException("the main window's page never loaded in {$this->frame} frames (" . $this->pagesDir() . ')'));
+            return;
+        }
+        self::stderr("[jumphp] smoke test OK: {$this->frame} frames, " . count($this->windows) . " window(s)\n");
+        $this->quit(0);
+    }
+
+    private function crashed(\Throwable $e): void
+    {
+        $this->crash = $e;
+        self::stderr("[jumphp] CRASH: " . get_class($e) . ': ' . $e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine()
+            . "\n" . $e->getTraceAsString() . "\n");
+        $this->quit(1);
+    }
+
+    private static function stderr(string $message): void
+    {
+        $stream = defined('STDERR') ? STDERR : @fopen('php://stderr', 'w');
+        if ($stream) {
+            fwrite($stream, $message);
+        }
+    }
+
+    private static function missingRuntime(string $root): string
+    {
+        if (Platform::isWasm()) {
+            return 'Desktop apps (JumPHP\Tauri) are native only: they do not run in the browser';
+        }
+        if (!extension_loaded('ffi')) {
+            return "PHP's FFI extension is missing: run the app with bin/jumphp app:run (the jumphp/tauri image has it)";
+        }
+        return 'No Tauri runtime (' . TauriRuntime::platform() . '/' . TauriRuntime::fileName() . '): bin/jumphp tauri:build, or JUMPHP_TAURI_LIB=<file>'
+            . " (looked from $root)";
+    }
+}
