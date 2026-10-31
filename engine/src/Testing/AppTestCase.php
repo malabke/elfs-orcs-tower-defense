@@ -41,6 +41,7 @@ abstract class AppTestCase extends TestCase
     protected function tearDown(): void
     {
         Native::setProvider(null);
+        App::forgetCurrent();
         Loop::stop();
     }
 

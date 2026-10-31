@@ -10,7 +10,7 @@ ARG RUST_VERSION=1.95.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential curl file libffi-dev \
         libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
-        libxdo-dev libssl-dev \
+        libxdo-dev libssl-dev libayatana-appindicator3-dev \
         xauth x11-utils xdotool imagemagick dbus dbus-x11 \
     && rm -rf /var/lib/apt/lists/* \
     && docker-php-ext-install ffi \

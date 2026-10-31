@@ -93,9 +93,12 @@ Desktop apps (Tauri: native windows with HTML / CSS / JS pages, driven by PHP; n
   app:run <app>             open the app on your screen
   app:test <app>            php -l + phpstan + phpunit (AppTestCase, no window) + the app on a virtual screen
   app:shot <app> [frames] [out.png]  the app's window after N frames (default 120) -> var/screenshots/app.png
-  app:export <app> [--linux]  the app as one executable: dist/standalone/<app>-linux-x86_64 (needs WebKitGTK 4.1)
+  app:export <app> [--linux] [--windows]  the app as one executable: dist/standalone/<app>-linux-x86_64
+                            (needs WebKitGTK 4.1) / <app>-windows-x86_64.exe (WebView2)
   tauri:setup               build the Tauri image (desktop runtime + FFI + Rust + WebKitGTK)
   tauri:build               build the Tauri runtime library tauri/ -> build/tauri/linux-x86_64/libjumphp_tauri.so
+  tauri:download [platform...|--all]  the runtime library of these sources from JumPHP's GitHub releases (workflow
+                            tauri): linux-x86_64 (default), windows-x86_64, macos-universal
 
 Engine
   test engine               engine unit tests + phpstan
@@ -605,6 +608,7 @@ cmd_export_standalone() {
   done
   [ ${#targets[@]} -gt 0 ] || targets=(linux-x86_64)
   ensure_vendor "$dir"
+  if is_hybrid "$game" && [ -z "${JUMPHP_STANDALONE_EXTENSIONS:-}" ]; then hybrid_export_env; fi
   local home="${JUMPHP_HOME:-$HOME/.jumphp}" image="${JUMPHP_STANDALONE_IMAGE:-jumphp/standalone:dev}" target out log
   mkdir -p "$home/standalone"
   docker image inspect "$image" >/dev/null 2>&1 || { say "building $image (first time, ~3 min)"; docker build -t "$image" docker/standalone; }
@@ -687,6 +691,7 @@ cmd_run() {
       [ -n "$gid" ] && flags+=(--group-add "$gid")
     done
   fi
+  if is_hybrid "${1:-}"; then run_game_hybrid "$dir" "${flags[@]}"; return; fi
   php_run "$dir" "${flags[@]}" -- php app.php
 }
 
@@ -1095,6 +1100,7 @@ main() {
     pages) cmd_pages "$@" ;;
     tauri:setup) cmd_tauri_setup ;;
     tauri:build) cmd_tauri_build ;;
+    tauri:download) cmd_tauri_download "$@" ;;
     app:new) cmd_app_new "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;

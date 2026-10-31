@@ -55,6 +55,16 @@ abstract class BaseProvider implements Provider
         return false;
     }
 
+    public function copy(string $text): bool
+    {
+        return false;
+    }
+
+    public function paste(): Task
+    {
+        return $this->unsupported('paste');
+    }
+
     protected function unsupported(string $feature): Task
     {
         $task = new Task();

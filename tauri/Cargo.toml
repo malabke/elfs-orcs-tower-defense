@@ -22,10 +22,14 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # custom-protocol: the pages are served by the app (tauri://localhost), never by a development server
-tauri = { version = "2", features = ["custom-protocol", "image-png"] }
+tauri = { version = "2", features = ["custom-protocol", "image-png", "tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"
 serde_json = "1"
 
 [profile.release]

@@ -3,6 +3,7 @@
 namespace JumPHP\Tests\Tauri;
 
 use JumPHP\Async\Task;
+use JumPHP\Native\Clipboard;
 use JumPHP\Native\Dialog;
 use JumPHP\Native\FilePicker;
 use JumPHP\Native\Native;
@@ -35,6 +36,7 @@ final class AppTest extends TestCase
     protected function tearDown(): void
     {
         Native::setProvider(null);
+        App::forgetCurrent();
         Loop::stop();
     }
 
@@ -197,5 +199,70 @@ final class AppTest extends TestCase
             putenv('JUMPHP_TAURI_LIB');
         }
         self::assertMatchesRegularExpression('/^(linux|windows|macos)-/', TauriRuntime::platform());
+    }
+
+    public function testTheClipboardGoesThroughTauri(): void
+    {
+        self::assertTrue(Clipboard::copy('hi'));
+        self::assertSame('hi', $this->runtime->sentOf('clipboard.write')[0]['text']);
+        $text = null;
+        Clipboard::paste()->then(function ($t) use (&$text) {
+            $text = $t;
+        });
+        $read = $this->runtime->sentOf('clipboard.read')[0];
+        $this->runtime->push(['type' => 'result', 'id' => $read['id'], 'result' => 'from the system']);
+        $this->runtime->frame();
+        self::assertSame('from the system', $text);
+    }
+
+    public function testANativeFailureFailsItsTask(): void
+    {
+        $error = null;
+        Clipboard::paste()->then(fn () => null, function (\Throwable $e) use (&$error) {
+            $error = $e->getMessage();
+        });
+        $read = $this->runtime->sentOf('clipboard.read')[0];
+        $this->runtime->push(['type' => 'result', 'id' => $read['id'], 'error' => 'no clipboard']);
+        $this->runtime->frame();
+        self::assertSame('no clipboard', $error);
+    }
+
+    public function testATrayIconAndItsMenu(): void
+    {
+        $picked = [];
+        $this->app->tray('main', ['tooltip' => 'T', 'menu' => [['id' => 'open', 'text' => 'Open'], '-', ['id' => 'quit']]])
+            ->on('menu', function (string $item) use (&$picked) {
+                $picked[] = $item;
+            });
+        $cmd = $this->runtime->sentOf('tray.create')[0];
+        self::assertSame([['id' => 'open', 'text' => 'Open', 'enabled' => true], ['separator' => true], ['id' => 'quit', 'text' => 'quit', 'enabled' => true]], $cmd['menu']);
+        $this->runtime->push(['type' => 'tray', 'tray' => 'main', 'event' => 'menu', 'item' => 'quit']);
+        $this->runtime->frame();
+        self::assertSame(['quit'], $picked);
+    }
+
+    public function testAGlobalShortcutCallsBack(): void
+    {
+        $count = 0;
+        $this->app->globalShortcut('CmdOrCtrl+Shift+K', function () use (&$count) {
+            $count++;
+        });
+        self::assertSame('CmdOrCtrl+Shift+K', $this->runtime->sentOf('shortcut.register')[0]['accelerator']);
+        $this->runtime->push(['type' => 'shortcut', 'accelerator' => 'CmdOrCtrl+Shift+K', 'state' => 'pressed']);
+        $this->runtime->push(['type' => 'shortcut', 'accelerator' => 'CmdOrCtrl+Shift+K', 'state' => 'released']);
+        $this->runtime->frame();
+        self::assertSame(1, $count);
+    }
+
+    public function testAHybridGameWithoutWhatItNeedsRunsAsAPlainGame(): void
+    {
+        $config = new \JumPHP\Kernel\GameConfig(['ui' => 'hybrid']);
+        putenv('JUMPHP_SMOKE=1');
+        try {
+            self::assertFalse(\JumPHP\Tauri\Hybrid::wanted($config));     // headless runs: a plain game
+        } finally {
+            putenv('JUMPHP_SMOKE');
+        }
+        self::assertFalse(\JumPHP\Tauri\Hybrid::wanted(new \JumPHP\Kernel\GameConfig([])));
     }
 }

@@ -20,8 +20,9 @@ L'exemple : [`games/hello-desktop`](../games/hello-desktop), un bloc-notes (ouvr
 de dialogue du système, une horloge PHP envoyée à la page, des fichiers glissés sur la fenêtre, une question avant
 de quitter si le texte n'est pas enregistré).
 
-**Natif uniquement.** Les applications de bureau ne tournent pas dans le navigateur. Linux aujourd'hui ; Windows et
-macOS sont prévus. **Rien ne change pour les jeux** : jeux SDL sur le bureau, dans le navigateur (WebAssembly), en
+**Natif uniquement.** Les applications de bureau ne tournent pas dans le navigateur. Linux, Windows et macOS : le
+runtime est compilé et essayé sur les trois par GitHub Actions ; l'export en un fichier existe pour Linux et
+Windows. Un **jeu** peut aussi s'en servir : les [jeux hybrides](#jeux-hybrides-sdl--tauri) (`ui: hybrid`). **Rien ne change pour les jeux** : jeux SDL sur le bureau, dans le navigateur (WebAssembly), en
 exécutable autonome, applis Android et Apple fonctionnent exactement comme avant ; aucun de leurs codes, images
 Docker ou commandes n'utilise cette partie.
 
@@ -115,18 +116,46 @@ Dialog::confirm('Supprimer ?', 'Notes', 'Supprimer', 'Garder')->then(fn (bool $o
 FilePicker::open([...])->then(fn (?string $fichier) => ...);   // aussi multiple, folder(), save()
 Notification::show('Fini', 'Export terminé');
 Shell::openUrl('https://jumphp.net');
+Clipboard::copy('texte'); Clipboard::paste()->then(fn (string $t) => ...);
 Native::supports('open');                                      // avant d'appeler
+
+// apps et jeux hybrides : icône de zone de notification avec menu, raccourci global (même sans le focus)
+$app->tray('main', ['tooltip' => 'Notes', 'menu' => [['id' => 'show', 'text' => 'Afficher'], '-', ['id' => 'quit', 'text' => 'Quitter']]])
+    ->on('menu', fn (string $item) => $item === 'quit' ? $app->quit() : $app->window()->show());
+$app->globalShortcut('CmdOrCtrl+Shift+K', fn () => $app->window()->show()->focus());
 ```
 
 | Cible | Fournisseur | Fonctions |
 |---|---|---|
-| app de bureau | `tauri` | toutes : message, confirm, open, save, folder, notify, openUrl, openPath, reveal |
+| app de bureau, jeu hybride | `tauri` | toutes : message, confirm, open, save, folder, notify, openUrl, openPath, reveal, copy, paste |
 | jeu SDL sur le bureau | `sdl` | message (la boîte de message de SDL) |
-| version navigateur | `browser` | openUrl |
+| version navigateur | `browser` | openUrl, copy |
 | tests sans écran, ailleurs | `none` | rien |
 
 Ce qui manque à une cible fait échouer la Task avec `UnsupportedFeature` (ou renvoie `false`). En dessous restent
 le **FFI** de PHP (n'importe quelle bibliothèque C du système) et les extensions PHP.
+
+## Jeux hybrides (SDL + Tauri)
+
+Un jeu peut aussi piloter Tauri : `ui: hybrid` dans son `config/game.yaml`. Il reste un jeu SDL (scènes, fenêtre
+SDL, son ; `app.php` inchangé) et gagne le côté natif des apps : `JumPHP\Native`, icône de zone de notification,
+raccourcis globaux, et des fenêtres HTML à côté de la sienne (panneau de contrôle, éditeur, lanceur…). Exemple :
+[`games/hello-hybrid`](../games/hello-hybrid) (des balles en SDL, un panneau de contrôle en HTML, « enregistrer une
+image » par le sélecteur de fichiers du système, un menu dans la zone de notification, Ctrl+Maj+P partout).
+
+```yaml
+game:
+  ui: hybrid
+  main: App\Desktop                # facultatif : un AppMain (commandes des fenêtres HTML, icône, raccourcis)
+  app:
+    window: {url: index.html, width: 340, height: 560}    # facultatif : une fenêtre HTML (pages dans ui/)
+```
+
+`Application::run()` passe la main à `JumPHP\Tauri\Hybrid` : la boucle de Tauri appelle la frame de l'app, qui fait
+un tour de ReactPHP, où le timer du jeu fait avancer le moteur comme d'habitude. Le jeu tourne **comme un jeu
+normal** (sans Tauri) dans les tests sans écran, dans le navigateur, dans les applis téléphone, et sans FFI ou sans
+runtime. `bin/jumphp run` le lance dans l'image Tauri ; `export:standalone` le fait avec un micro SDL **et** FFI
+(`tools/hybrid-extensions.txt`).
 
 ## Tests
 
@@ -158,21 +187,34 @@ micro qu'avant (même clé).
 | `app:run <app>` | l'app sur ton écran (X11, sinon Wayland ; bus de session pour les notifications ; GPU) |
 | `app:test <app>` | php -l, phpstan, phpunit, puis l'app pour de vrai sur Xvfb |
 | `app:shot <app> [frames] [out.png]` | la fenêtre principale après N frames |
-| `app:export <app> [--linux]` | un exécutable Linux |
+| `app:export <app> [--linux] [--windows]` | un exécutable Linux / Windows (`.exe` : WebView2, présent dans Windows 10 / 11) |
 | `tauri:setup` | l'image `jumphp/tauri` (le runtime bureau + FFI + Rust + WebKitGTK) |
-| `tauri:build` | `tauri/` → `build/tauri/linux-x86_64/libjumphp_tauri.so` (lancé tout seul quand il manque ou que ses sources ont changé) |
+| `tauri:build` | `tauri/` → `build/tauri/linux-x86_64/libjumphp_tauri.so` |
+| `tauri:download [plateforme...\|--all]` | la bibliothèque de ces sources depuis les releases GitHub : `linux-x86_64`, `windows-x86_64`, `macos-universal` |
+
+Quand la bibliothèque manque ou est plus ancienne que ses sources, les commandes d'app la téléchargent (si la
+release de ces sources existe), sinon la compilent. `JUMPHP_TAURI_TRACE=1` affiche chaque commande et événement.
 
 `run`, `test` et `shot` sur le dossier d'une app passent la main à `app:run`, `app:test`, `app:shot` ;
 `pages` ne publie pas les apps (elles n'ont pas de version navigateur).
 
+## Plateformes
+
+Le workflow `.github/workflows/tauri.yml` (à chaque changement de `tauri/` ou du côté PHP, ou à la main) compile la
+bibliothèque sur Linux (Ubuntu 22.04 : glibc 2.35+), Windows et macOS (universelle), lance `games/hello-desktop` pour
+de vrai sur chacun (la page doit se charger et appeler PHP), et publie la release `tauri-<clé>` qu'utilisent
+`tauri:download` et `app:export`. Le micro des apps pour Windows est publié par le workflow `standalone` lancé avec
+`extensions: tools/app-extensions.txt`. Sous Windows et macOS sans Docker : un PHP 8.2+ avec FFI (`ffi.enable=1`),
+`composer install`, puis `JUMPHP_TAURI_LIB=<la bibliothèque> php app.php`.
+
 ## Feuille de route
 
-Fait (Linux) : le runtime, PHP qui le pilote depuis son thread principal, fenêtres, pages, page ↔ PHP dans les deux
-sens, dialogues / notifications / ouverture de liens, glisser-déposer, fermeture décidée par PHP, tests sans fenêtre,
-tests en vraie fenêtre sur Xvfb, export en un fichier.
+Fait : le runtime (Linux, Windows, macOS), PHP qui le pilote depuis son thread principal, fenêtres, pages, page ↔ PHP,
+dialogues / notifications / liens / presse-papiers, icône de zone de notification, raccourcis globaux,
+glisser-déposer, fermeture décidée par PHP, jeux hybrides, tests sans fenêtre et en vraie fenêtre, export Linux et
+Windows.
 
-Ensuite : Windows et macOS (le runtime compile tel quel ; il faut `tauri:build` sur ces systèmes via GitHub
-Actions et le micro des apps pour eux), Android et iOS (Tauri les gère, mais la boucle y est pilotée par l'activité /
-UIKit : PHP y serait appelé depuis ces boucles, comme le font déjà les applis SDL natives), le mode hybride (une
-surface SDL dans une fenêtre WebView), d'autres fonctions natives (presse-papiers, icône de zone de notification,
-raccourcis globaux, mise à jour automatique).
+Ensuite : l'export macOS (une `.app` avec PHP, via la chaîne Apple), Android et iOS (la boucle y est pilotée par
+l'activité / UIKit : un projet mobile Tauri embarquant le PHP d'Android / iOS de JumPHP, un chantier en soi), le SDL
+dans une fenêtre WebView (une seule fenêtre pour les jeux hybrides), d'autres fonctions natives (mise à jour
+automatique, menus de fenêtre).

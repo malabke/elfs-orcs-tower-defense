@@ -18,7 +18,7 @@
 //!   const char *jt_version(void);
 
 use std::borrow::Cow;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_char, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Component, Path, PathBuf};
@@ -32,6 +32,10 @@ use tauri::{AppHandle, Assets, Emitter, LogicalPosition, LogicalSize, Manager, R
 use tauri_plugin_dialog::{DialogExt, FilePath, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "\0");
 
@@ -48,6 +52,20 @@ static FRAME_PENDING: AtomicBool = AtomicBool::new(false);
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static STARTED: AtomicBool = AtomicBool::new(false);
 static TICK_US: AtomicU64 = AtomicU64::new(16_667);
+/// when the last frame ended (µs since START): the ticker leaves the loop some idle time after it, or GTK's
+/// lower-priority work (painting the WebViews, their IPC) starves when frames are long (a hybrid game's)
+static LAST_END_US: AtomicU64 = AtomicU64::new(0);
+static START: OnceLock<std::time::Instant> = OnceLock::new();
+
+fn now_us() -> u64 {
+    START.get_or_init(std::time::Instant::now).elapsed().as_micros() as u64
+}
+/// global shortcuts registered by PHP: their id -> the accelerator PHP gave
+static SHORTCUTS: OnceLock<Mutex<HashMap<u32, String>>> = OnceLock::new();
+
+fn shortcuts() -> &'static Mutex<HashMap<u32, String>> {
+    SHORTCUTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 thread_local! {
     /// what the last jt_poll() returned: alive until the next call (PHP copies it at once)
@@ -84,12 +102,20 @@ fn do_frame() {
         frame();
     }
     IN_FRAME.with(|f| f.set(false));
+    LAST_END_US.store(now_us(), Ordering::SeqCst);
     if let Some(handle) = HANDLE.get() {
         let commands: Vec<Value> = COMMANDS.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();
         for command in commands {
             let name = command.get("cmd").and_then(Value::as_str).unwrap_or("").to_string();
-            if let Err(e) = run_command(handle, &name, &command) {
-                push_event(json!({"type": "error", "cmd": name, "message": e}));
+            // a panic in a plugin (a missing system library...) must not cross into PHP
+            let result = catch_unwind(AssertUnwindSafe(|| run_command(handle, &name, &command)))
+                .unwrap_or_else(|_| Err(format!("{name}: the native side panicked")));
+            if let Err(e) = result {
+                match command.get("id") {
+                    // a command PHP waits for: its Task fails
+                    Some(id) if !id.is_null() => push_event(json!({"type": "result", "id": id, "error": e})),
+                    _ => push_event(json!({"type": "error", "cmd": name, "message": e})),
+                }
             }
         }
     }
@@ -344,6 +370,97 @@ fn run_command(handle: &AppHandle<Wry>, name: &str, c: &Value) -> Result<(), Str
             }
             n.show().map_err(|e| e.to_string())
         }
+        "clipboard.write" => handle.clipboard().write_text(str_of(c, "text").unwrap_or("").to_string()).map_err(|e| e.to_string()),
+        "clipboard.read" => {
+            let text = handle.clipboard().read_text().map_err(|e| e.to_string())?;
+            push_event(json!({"type": "result", "id": id, "result": text}));
+            Ok(())
+        }
+        "tray.create" => {
+            let tray_id = str_of(c, "tray").unwrap_or("main").to_string();
+            let _ = handle.remove_tray_by_id(&tray_id);
+            let mut b = TrayIconBuilder::with_id(&tray_id);
+            match str_of(c, "icon").map(tauri::image::Image::from_path) {
+                Some(Ok(img)) => b = b.icon(img),
+                Some(Err(err)) => return Err(format!("tray icon: {err}")),
+                None => {
+                    if let Some(img) = handle.default_window_icon() {
+                        b = b.icon(img.clone());
+                    }
+                }
+            }
+            if let Some(t) = str_of(c, "tooltip") {
+                b = b.tooltip(t);
+            }
+            if let Some(t) = str_of(c, "title") {
+                b = b.title(t);
+            }
+            if let Some(items) = c.get("menu").and_then(Value::as_array) {
+                let menu = Menu::new(handle).map_err(|e| e.to_string())?;
+                for item in items {
+                    if item.get("separator").and_then(Value::as_bool).unwrap_or(false) {
+                        menu.append(&PredefinedMenuItem::separator(handle).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+                    } else {
+                        let item_id = str_of(item, "id").unwrap_or("");
+                        let text = str_of(item, "text").unwrap_or(item_id);
+                        let enabled = bool_of(item, "enabled").unwrap_or(true);
+                        let entry = MenuItem::with_id(handle, format!("{tray_id}\u{1f}{item_id}"), text, enabled, None::<&str>).map_err(|e| e.to_string())?;
+                        menu.append(&entry).map_err(|e| e.to_string())?;
+                    }
+                }
+                b = b.menu(&menu).show_menu_on_left_click(bool_of(c, "menu_on_left_click").unwrap_or(true));
+            }
+            b.on_menu_event(|_app, event| {
+                let raw = event.id().as_ref().to_string();
+                if let Some((tray, item)) = raw.split_once('\u{1f}') {
+                    push_event(json!({"type": "tray", "tray": tray, "event": "menu", "item": item}));
+                }
+            })
+            .on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click { button, button_state: MouseButtonState::Up, .. } = event {
+                    let button = match button {
+                        MouseButton::Left => "left",
+                        MouseButton::Right => "right",
+                        MouseButton::Middle => "middle",
+                    };
+                    push_event(json!({"type": "tray", "tray": tray.id().as_ref(), "event": "click", "button": button}));
+                }
+            })
+            .build(handle)
+            .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        "tray.set_tooltip" => {
+            let tray = handle.tray_by_id(str_of(c, "tray").unwrap_or("main")).ok_or("no such tray icon")?;
+            tray.set_tooltip(str_of(c, "tooltip")).map_err(|e| e.to_string())
+        }
+        "tray.remove" => {
+            handle.remove_tray_by_id(str_of(c, "tray").unwrap_or("main"));
+            Ok(())
+        }
+        "shortcut.register" => {
+            let accel = str_of(c, "accelerator").unwrap_or("").to_string();
+            let shortcut: Shortcut = accel.parse().map_err(|e| format!("shortcut '{accel}': {e}"))?;
+            handle.global_shortcut().register(shortcut).map_err(|e| format!("shortcut '{accel}': {e}"))?;
+            if let Ok(mut map) = shortcuts().lock() {
+                map.insert(shortcut.id(), accel);
+            }
+            Ok(())
+        }
+        "shortcut.unregister" => {
+            let accel = str_of(c, "accelerator").unwrap_or("");
+            let shortcut: Shortcut = accel.parse().map_err(|e| format!("shortcut '{accel}': {e}"))?;
+            if let Ok(mut map) = shortcuts().lock() {
+                map.remove(&shortcut.id());
+            }
+            handle.global_shortcut().unregister(shortcut).map_err(|e| e.to_string())
+        }
+        "shortcut.unregister_all" => {
+            if let Ok(mut map) = shortcuts().lock() {
+                map.clear();
+            }
+            handle.global_shortcut().unregister_all().map_err(|e| e.to_string())
+        }
         "opener.url" => handle.opener().open_url(str_of(c, "url").unwrap_or(""), None::<&str>).map_err(|e| e.to_string()),
         "opener.path" => handle.opener().open_path(str_of(c, "path").unwrap_or(""), None::<&str>).map_err(|e| e.to_string()),
         "opener.reveal" => handle.opener().reveal_item_in_dir(str_of(c, "path").unwrap_or("")).map_err(|e| e.to_string()),
@@ -401,6 +518,16 @@ fn run(config: Value) -> Result<i32, String> {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|_app, shortcut, event| {
+                    let accel = shortcuts().lock().ok().and_then(|m| m.get(&shortcut.id()).cloned()).unwrap_or_default();
+                    let state = if event.state() == ShortcutState::Pressed { "pressed" } else { "released" };
+                    push_event(json!({"type": "shortcut", "accelerator": accel, "state": state}));
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![jumphp_invoke, jumphp_emit])
         .setup(|app| {
             let _ = HANDLE.set(app.handle().clone());
@@ -409,7 +536,14 @@ fn run(config: Value) -> Result<i32, String> {
             // the frames: one every tick (coalesced with the ones events ask for)
             std::thread::spawn(|| {
                 while RUNNING.load(Ordering::SeqCst) {
-                    std::thread::sleep(Duration::from_micros(TICK_US.load(Ordering::SeqCst)));
+                    let tick = TICK_US.load(Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_micros(tick));
+                    // at least a quarter of a tick (3 ms or more) idle since the last frame ended
+                    let gap = (tick / 4).max(3_000);
+                    let idle = now_us().saturating_sub(LAST_END_US.load(Ordering::SeqCst));
+                    if idle < gap {
+                        std::thread::sleep(Duration::from_micros(gap - idle));
+                    }
                     request_frame();
                 }
             });

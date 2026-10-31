@@ -4,10 +4,10 @@ namespace JumPHP\Native;
 
 use JumPHP\Bridge\JsBridge;
 
-/** The browser build: links open in a new tab (the page does it, JsBridge 'open'). */
+/** The browser build: links open in a new tab, text to the clipboard (the page does them through JsBridge). */
 final class BrowserProvider extends BaseProvider
 {
-    protected array $features = ['openUrl'];
+    protected array $features = ['openUrl', 'copy'];
 
     public function __construct(private readonly JsBridge $bridge)
     {
@@ -16,6 +16,11 @@ final class BrowserProvider extends BaseProvider
     public function name(): string
     {
         return 'browser';
+    }
+
+    public function copy(string $text): bool
+    {
+        return $this->bridge->send('device', ['do' => 'copy', 'text' => $text]);
     }
 
     public function openUrl(string $url): bool

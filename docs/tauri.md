@@ -19,7 +19,9 @@ The example: [`games/hello-desktop`](../games/hello-desktop) (a notepad: open / 
 PHP clock pushed to the page, files dropped on the window, a question before quitting with unsaved text).
 
 **Native only.** Desktop apps do not run in the browser (there is no PHP-to-WebView bridge there, and a web page
-is already HTML). Linux today; Windows and macOS are planned (the runtime is portable, see [Roadmap](#roadmap)).
+is already HTML). Linux, Windows and macOS: the runtime is built and tried on the three by GitHub Actions
+([Platforms](#platforms)); the one-file export is made for Linux and Windows. A **game** can use all of it too:
+[hybrid games](#hybrid-games-sdl--tauri) (`ui: hybrid`).
 **Nothing changes for games**: SDL games on the desktop, in the browser (WebAssembly), as standalone executables,
 Android and Apple apps work exactly as before; none of their code, images or commands use any of this.
 
@@ -70,7 +72,9 @@ Config of `jt_run`: `identifier`, `product_name`, `version`, `root` (the pages' 
 
 Events: `ready`, `resumed`, `invoke {id, window, name, payload}`, `page {window, name, payload}`,
 `window {window, event: close-requested | destroyed | focus | blur | resized {width, height} | moved {x, y} | drop {paths}}`,
-`dialog {id, result}`, `exit-requested`, `error {cmd, message}`.
+`dialog {id, result}`, `result {id, result | error}` (the answer of a command PHP waits for; a command with an `id`
+that fails answers `error` there), `tray {tray, event: menu {item} | click {button}}`,
+`shortcut {accelerator, state: pressed | released}`, `exit-requested`, `error {cmd, message}`.
 
 Commands: `window.create {window, url, title, width, height, min_width, min_height, x, y, center, resizable,
 fullscreen, maximized, decorations, always_on_top, visible, devtools, icon, data_directory}`, `window.set_title`,
@@ -80,6 +84,9 @@ fullscreen, maximized, decorations, always_on_top, visible, devtools, icon, data
 `invoke.resolve {window, id, ok, result}`, `dialog.message` / `dialog.confirm {id, message, title, kind, ok, cancel}`,
 `dialog.open {id, title, directory, filters, multiple, folder}`, `dialog.save {id, title, directory, file_name, filters}`,
 `notification.show {title, body}`, `opener.url {url}`, `opener.path {path}`, `opener.reveal {path}`,
+`clipboard.write {text}`, `clipboard.read {id}`, `tray.create {tray, icon, tooltip, title, menu: [{id, text, enabled} |
+{separator}], menu_on_left_click}`, `tray.set_tooltip {tray, tooltip}`, `tray.remove {tray}`,
+`shortcut.register {accelerator}`, `shortcut.unregister {accelerator}`, `shortcut.unregister_all`,
 `app.emit {name, payload}` (Tauri events, for pages using `@tauri-apps/api`), `app.tick {hz}`, `app.exit {code}`.
 
 You never need them directly: `JumPHP\Tauri\App` and `Window` send them.
@@ -232,14 +239,15 @@ FilePicker::folder()->then(fn (?string $dir) => ...);
 FilePicker::save(['file_name' => 'out.txt'])->then(fn (?string $file) => ...);
 Notification::show('Done', 'Export finished');                        // bool
 Shell::openUrl('https://jumphp.net'); Shell::openPath($file); Shell::reveal($file);
+Clipboard::copy('text'); Clipboard::paste()->then(fn (string $text) => ...);
 Native::supports('open'); Native::name();                              // 'tauri', 'sdl', 'browser', 'none'
 ```
 
 | Target | `Native::name()` | Features |
 |---|---|---|
-| desktop app (`JumPHP\Tauri\App`) | `tauri` | all: message, confirm, open, save, folder, notify, openUrl, openPath, reveal |
+| desktop app (`JumPHP\Tauri\App`), hybrid game | `tauri` | all: message, confirm, open, save, folder, notify, openUrl, openPath, reveal, copy, paste |
 | SDL game on the desktop | `sdl` | message (SDL's own message box, modal) |
-| browser build | `browser` | openUrl (a new tab) |
+| browser build | `browser` | openUrl (a new tab), copy |
 | headless runs (`test`, `shot`), elsewhere | `none` | nothing |
 
 What a target lacks fails the Task with `JumPHP\Native\UnsupportedFeature` (or returns `false`): check
@@ -247,8 +255,59 @@ What a target lacks fails the Task with `JumPHP\Native\UnsupportedFeature` (or r
 `JumPHP\Native\Provider`). Dialogs never block the frame (answers come back as Tasks), except SDL's message box,
 which is modal by nature.
 
+Desktop apps and hybrid games also have, through `App` (`App::current()` from anywhere):
+
+```php
+// an icon in the system's tray, with a menu (Linux: libayatana-appindicator3 and a desktop that shows tray icons;
+// the click event is not sent on Linux, the menu is)
+$app->tray('main', ['tooltip' => 'Notes', 'menu' => [['id' => 'show', 'text' => 'Show'], '-', ['id' => 'quit', 'text' => 'Quit']]])
+    ->on('menu', fn (string $item) => $item === 'quit' ? $app->quit() : $app->window()->show()->focus());
+
+// a shortcut of the whole system, even without the focus (Linux: X11, not Wayland)
+$app->globalShortcut('CmdOrCtrl+Shift+K', fn () => $app->window()->show()->focus());
+```
+
 Lower levels stay available: PHP's **FFI** for any C library of the system (the desktop app's PHP has it), and
 PHP extensions.
+
+---
+
+## Hybrid games (SDL + Tauri)
+
+A game can drive Tauri too: `ui: hybrid` in its `config/game.yaml`. It stays an SDL game (scenes, entities, its
+SDL window, sound; `app.php` unchanged), and gets the desktop apps' native side: `JumPHP\Native` (file choosers,
+dialogs, notifications, clipboard), a tray icon, global shortcuts, and HTML windows beside its own (a control
+panel, an editor, a launcher...). Example: [`games/hello-hybrid`](../games/hello-hybrid) (balls bouncing in SDL, an
+HTML control panel, "save a picture" through the system's file chooser, a tray menu, Ctrl+Shift+P anywhere).
+
+```yaml
+game:
+  start_scene: App\Scene\BallsScene
+  ui: hybrid
+  main: App\Desktop                # optional: an AppMain (commands for the HTML windows, tray icon, shortcuts)
+  app:
+    window: {url: index.html, width: 340, height: 560}    # optional: an HTML window (pages in ui/)
+```
+
+How: `Application::run()` hands over to `JumPHP\Tauri\Hybrid`: the Tauri runtime runs the main thread's loop and
+calls the app's frame, which runs one turn of ReactPHP, where the game's frame timer ticks the engine as usual.
+The runtime leaves the loop some idle time after each frame, so the WebViews keep painting while the game runs.
+The game quits when its SDL window closes (closing the HTML window does not end it); `Engine::quit()` ends both.
+
+The scenes use the native side when it is there and work without it:
+
+```php
+if (Native::supports('save')) {
+    FilePicker::save(['file_name' => 'picture.png'])->then(fn (?string $f) => $f && $this->engine->sdl->saveScreenshot($f));
+}
+App::current()?->send('stats', ['score' => $this->score]);    // to the HTML window(s), when there is a native side
+```
+
+It runs as a **plain game** (no Tauri) in headless runs (`bin/jumphp test` / `shot`: game tests work as before), in
+the browser, in the phone apps, and on a desktop without FFI or without the runtime (a line on stderr says so).
+`bin/jumphp run <game>` runs a hybrid game in the Tauri image; `export:standalone <game>` makes it with a micro that
+has SDL **and** FFI (`tools/hybrid-extensions.txt`, built once) and the runtime library inside. Test the native
+side with `AppTestCase` (it boots the `main` class and the `app.window` of game.yaml), the game with `GameTestCase`.
 
 ---
 
@@ -288,7 +347,9 @@ default 240). `bin/jumphp app:shot <app> [frames] [out.png]` saves the main wind
 ## Exporting: one executable
 
 `bin/jumphp app:export <app>` makes `games/<app>/dist/standalone/<app>-linux-x86_64`: one file, nothing to
-install but WebKitGTK (as every Tauri app on Linux). It reuses `export:standalone` ([standalone.md](standalone.md)):
+install but WebKitGTK (as every Tauri app on Linux); `--windows` makes `<app>-windows-x86_64.exe` (Windows 10 / 11
+have WebView2; its micro and library come from JumPHP's GitHub releases, see [Platforms](#platforms)). It reuses
+`export:standalone` ([standalone.md](standalone.md)):
 
 | Part | |
 |---|---|
@@ -317,13 +378,18 @@ before (same key).
 | `app:shot <app> [frames] [out.png]` | the main window after N frames (default 120) |
 | `app:export <app> [--linux]` | one executable for Linux |
 | `tauri:setup` | the `jumphp/tauri` image: the desktop runtime + FFI + Rust + WebKitGTK headers (~5 min) |
-| `tauri:build` | `tauri/` -> `build/tauri/linux-x86_64/libjumphp_tauri.so` (~5 min the first time, Cargo caches in `~/.jumphp/tauri`); the app commands run it when the library is missing or older than its sources |
+| `tauri:build` | `tauri/` -> `build/tauri/linux-x86_64/libjumphp_tauri.so` (~5 min the first time, Cargo caches in `~/.jumphp/tauri`) |
+| `tauri:download [platform...\|--all]` | the library of these sources of `tauri/` from JumPHP's GitHub releases: `linux-x86_64` (default), `windows-x86_64`, `macos-universal` |
+
+The app commands get the library when it is missing or older than its sources: downloaded when the release of
+these sources exists, else built (`JUMPHP_TAURI_BUILD=1`: always built).
 
 `install <app>` and `composer <app> ...` are the games' commands (composer works the same).
 `run`, `test` and `shot` on an app's folder hand over to `app:run`, `app:test`, `app:shot`; `pages` skips apps
 (they have no browser build).
 
-Environment: `JUMPHP_TAURI_LIB` (another library file), `JUMPHP_TAURI_IMAGE`, `JUMPHP_SMOKE`, `JUMPHP_MAX_FRAMES`,
+Environment: `JUMPHP_TAURI_LIB` (another library file), `JUMPHP_TAURI_TRACE=1` (every command and event on
+stderr), `JUMPHP_TAURI_IMAGE`, `JUMPHP_TAURI_BUILD`, `JUMPHP_TAURI_RELEASES`, `JUMPHP_SMOKE`, `JUMPHP_MAX_FRAMES`,
 `JUMPHP_SCREENSHOT`, `JUMPHP_VAR`.
 
 Where `TauriRuntime` looks for the library: `JUMPHP_TAURI_LIB`; `<app>/native/<platform>/libjumphp_tauri.so`
@@ -336,14 +402,16 @@ Where `TauriRuntime` looks for the library: `JUMPHP_TAURI_LIB`; `<app>/native/<p
 | Path | |
 |---|---|
 | `tauri/` | the runtime (Rust crate `jumphp-tauri`, a `cdylib`): `src/lib.rs` (C API, commands, events, assets), `src/bridge.js` (`window.jumphp`), `include/jumphp_tauri.h`, `tauri.conf.json` (a minimal config: windows are made by PHP), `Cargo.lock` |
-| `engine/src/Tauri/` | `App`, `Window`, `AppMain`, `Invocation`, `NativeEvent`, `NativeCommands`, `NativeRuntime`, `TauriRuntime` (FFI), `FakeRuntime` |
-| `engine/src/Native/` | `Native`, `Dialog`, `FilePicker`, `Notification`, `Shell`, providers (`TauriProvider`, `SdlProvider`, `BrowserProvider`, `NullProvider`), `UnsupportedFeature` |
+| `engine/src/Tauri/` | `App`, `Window`, `Tray`, `AppMain`, `Hybrid`, `Invocation`, `NativeEvent`, `NativeCommands`, `NativeRuntime`, `TauriRuntime` (FFI), `FakeRuntime` |
+| `engine/src/Native/` | `Native`, `Dialog`, `FilePicker`, `Notification`, `Shell`, `Clipboard`, providers (`TauriProvider`, `SdlProvider`, `BrowserProvider`, `NullProvider`), `UnsupportedFeature` |
 | `engine/src/Testing/AppTestCase.php` | tests without a window |
 | `skeleton-app/` | the app template (`app:new`) |
 | `games/hello-desktop/` | the example app |
+| `games/hello-hybrid/` | the example hybrid game |
+| `.github/workflows/tauri.yml`, `tools/tauri-key.sh` | the libraries for Linux, Windows, macOS: built, tried, published |
 | `docker/tauri/Dockerfile` | the image (FROM the desktop image: same PHP 8.5 and extensions, + FFI, Rust, WebKitGTK, Xvfb tools) |
 | `tools/app-commands.sh` | the `app:*` / `tauri:*` commands (sourced by `bin/jumphp`) |
-| `tools/app-extensions.txt`, `tools/new-app.php` | the apps' micro extensions, `app:new`'s renaming |
+| `tools/app-extensions.txt`, `tools/hybrid-extensions.txt`, `tools/new-app.php` | the micros' extensions of apps / hybrid games, `app:new`'s renaming |
 
 ---
 
@@ -365,17 +433,39 @@ A PHP *fatal* error (not an exception) during a frame cannot be caught: it ends 
 
 ---
 
+## Platforms
+
+| | Linux x86_64 | Windows x86_64 | macOS (Apple silicon + Intel) |
+|---|---|---|---|
+| WebView | WebKitGTK 4.1 | WebView2 (Edge) | WKWebView |
+| runtime library | `libjumphp_tauri.so` | `jumphp_tauri.dll` | `libjumphp_tauri.dylib` (universal) |
+| built and tried by | `tauri:build` here, and the workflow | the workflow | the workflow |
+| `app:run` / `app:test` / `app:shot` | yes (Docker) | — (run `php app.php` with PHP's FFI) | — (same) |
+| one-file export | `app:export` | `app:export --windows` | not yet (no macOS micro) |
+
+The workflow `.github/workflows/tauri.yml` (on each change of `tauri/` or of the PHP side, or by hand) builds the
+library on the three systems (Ubuntu 22.04, so glibc 2.35+; Windows; macOS, universal), runs
+`games/hello-desktop` for real on each (its page must load and call PHP), and publishes the release
+`tauri-<key>` (`tools/tauri-key.sh`: a hash of `tauri/`'s sources) that `tauri:download` and `app:export` use.
+The micro of desktop apps for Windows is published by the workflow `standalone` run with the input
+`extensions: tools/app-extensions.txt` (`tools/hybrid-extensions.txt`: hybrid games).
+
+On Windows and macOS without Docker: a PHP 8.2+ with FFI (`ffi.enable=1`), `composer install` in the app, then
+`JUMPHP_TAURI_LIB=<the library> php app.php`.
+
+---
+
 ## Roadmap
 
-Done (Linux): the runtime, PHP driving it from its main thread, windows, pages, page <-> PHP both ways, native
-dialogs / notifications / opener, drag and drop, closing decided by PHP, tests without a window, real-window tests
-on Xvfb, one-file export.
+Done: the runtime (Linux, Windows, macOS), PHP driving it from its main thread, windows, pages, page <-> PHP both
+ways, native dialogs / notifications / opener / clipboard, tray icon, global shortcuts, drag and drop, closing
+decided by PHP, hybrid games (SDL + Tauri), tests without a window, real-window tests (Xvfb here, the three systems
+on GitHub), one-file export for Linux and Windows.
 
 Next:
-- **Windows, macOS**: the runtime builds there unchanged (Tauri); needs `tauri:build` on those systems (GitHub
-  Actions, like the Apple apps and the Windows micro) and the apps' micro for them.
+- **macOS export**: an `.app` / `.dmg` carrying PHP (the Apple pipeline, `bin/jumphp apple`, has the pieces).
 - **Android, iOS**: Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
-  does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do.
-- **Hybrid**: an SDL surface in a WebView window (menus in HTML, the game in SDL).
-- More native features as Tauri plugins + `JumPHP\Native` providers (clipboard, tray icon, global shortcuts,
-  auto-update).
+  does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do; that means a
+  Tauri mobile project embedding JumPHP's PHP build for Android / iOS, its own work.
+- **SDL inside a WebView window** (one window instead of two for hybrid games).
+- More native features as Tauri plugins + `JumPHP\Native` providers (auto-update, menus of the window).

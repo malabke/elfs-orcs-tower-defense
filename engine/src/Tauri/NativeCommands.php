@@ -2,6 +2,7 @@
 
 namespace JumPHP\Tauri;
 
+use JumPHP\Native\Clipboard;
 use JumPHP\Native\Dialog;
 use JumPHP\Native\FilePicker;
 use JumPHP\Native\Notification;
@@ -19,6 +20,8 @@ use JumPHP\Native\Shell;
  *   const out = await jumphp.invoke('native.save', {file_name: 'notes.txt'});
  *   await jumphp.invoke('native.notify', {title: 'Done', body: 'Export finished'});
  *   await jumphp.invoke('native.openUrl', {url: 'https://jumphp.net'});
+ *   await jumphp.invoke('native.copy', {text: 'hello'});
+ *   const text = await jumphp.invoke('native.paste');
  */
 final class NativeCommands
 {
@@ -32,6 +35,8 @@ final class NativeCommands
         $app->command('native.open', static fn (mixed $p) => FilePicker::open($arr($p)));
         $app->command('native.save', static fn (mixed $p) => FilePicker::save($arr($p)));
         $app->command('native.notify', static fn (mixed $p) => Notification::show((string)($arr($p)['title'] ?? ''), (string)($arr($p)['body'] ?? '')));
+        $app->command('native.copy', static fn (mixed $p) => Clipboard::copy((string)($arr($p)['text'] ?? '')));
+        $app->command('native.paste', static fn () => Clipboard::paste());
         $app->command('native.openUrl', static fn (mixed $p) => Shell::openUrl((string)($arr($p)['url'] ?? '')));
     }
 }

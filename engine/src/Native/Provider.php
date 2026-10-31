@@ -7,7 +7,7 @@ use JumPHP\Async\Task;
 /**
  * Who does the native features on a target: TauriProvider (desktop apps), SdlProvider (games on the desktop),
  * BrowserProvider (the browser build), NullProvider (none). Native::provider() picks it.
- * Features: message, confirm, open, save, folder, notify, openUrl, openPath, reveal.
+ * Features: message, confirm, open, save, folder, notify, openUrl, openPath, reveal, copy, paste.
  */
 interface Provider
 {
@@ -34,4 +34,10 @@ interface Provider
     public function openPath(string $path): bool;
 
     public function reveal(string $path): bool;
+
+    /** Text to the clipboard. */
+    public function copy(string $text): bool;
+
+    /** @return Task string: the clipboard's text */
+    public function paste(): Task;
 }

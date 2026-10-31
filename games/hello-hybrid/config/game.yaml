@@ -1,0 +1,29 @@
+# Hello Hybrid: an SDL game that also drives Tauri (ui: hybrid): native dialogs, a tray icon, a global shortcut
+# and an HTML control panel beside the game's window. docs/tauri.md "Hybrid games".
+game:
+  id: hello-hybrid
+  title: "Hello Hybrid"
+  version: 0.1.0
+  description: "An SDL game with a native side: an HTML control panel, the system's dialogs, a tray icon."
+  width: 320
+  height: 180
+  scale: 3
+  background: [12, 14, 30]
+  start_scene: App\Scene\BallsScene
+  lang: en
+  controls: "Space: a ball · S: save a picture · P: pause · Esc: quit"
+  ui: hybrid                    # SDL game + Tauri (bin/jumphp run uses the Tauri image; test / shot stay plain)
+  main: App\Desktop             # its boot(App $app): the panel's commands, the tray icon, the global shortcut
+  app:
+    window:                     # an HTML window beside the game (pages: ui/)
+      url: index.html
+      title: "Hello Hybrid — panel"
+      width: 340
+      height: 560
+      resizable: false
+      center: false
+      x: 40
+      y: 60
+  smoke:
+    scene: App\Scene\BallsScene
+    params: { demo: true }

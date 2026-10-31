@@ -117,6 +117,7 @@ casse-briques `games/breakout` a été écrit ainsi, par une IA qui n'avait lu q
 | `games/breakout/` | casse-briques écrit par une IA à partir d'AGENTS.md |
 | `games/hello-threads/` | POC des threads (TrueAsync) : une fractale calculée par un pool de threads |
 | `games/hello-desktop/` | une **application de bureau** (Tauri) : un bloc-notes, page HTML + PHP |
+| `games/hello-hybrid/` | un **jeu hybride** : un jeu SDL + un panneau de contrôle HTML, dialogues natifs, icône de notification |
 | `skeleton-app/`, `tauri/` | le modèle d'application de bureau (`bin/jumphp app:new`) et son runtime natif (Rust + Tauri 2, piloté par PHP en FFI) |
 | `docker/` | moteur WebAssembly, runtimes bureau (PHP 8.5, et PHP 8.6 ZTS + TrueAsync), relais réseau, serveur web FrankenPHP |
 | `tools/` | scripts utilisés par `bin/jumphp` (packaging, captures, contrôles) |
@@ -141,7 +142,7 @@ casse-briques `games/breakout` a été écrit ainsi, par une IA qui n'avait lu q
 | `relay up\|down\|logs` | serveur multijoueur sur `ws://localhost:8090/ws` |
 | `export:desktop <jeu>` | une image Docker qui lance le jeu |
 | `export:standalone <jeu> [--linux] [--windows]` | le jeu en un seul exécutable, rien à installer (PHP, SDL, OpenGL, OpenAL dedans), voir [docs/standalone.md](docs/standalone.md) |
-| `app:new` / `app:run` / `app:test` / `app:shot` / `app:export <app>` | **applications de bureau** : fenêtres natives aux pages HTML / CSS / JS, logique en PHP (Tauri, natif uniquement), voir [docs/tauri.fr.md](docs/tauri.fr.md) |
+| `app:new` / `app:run` / `app:test` / `app:shot` / `app:export <app>` | **applications de bureau** : fenêtres natives aux pages HTML / CSS / JS, logique en PHP (Tauri, natif : Linux, Windows, macOS ; `ui: hybrid` pour un jeu), voir [docs/tauri.fr.md](docs/tauri.fr.md) |
 | `deploy:setup` / `deploy [jeux...]` | configure / déploie sur ton serveur (FrankenPHP seul ou avec Traefik, HTTPS Let's Encrypt) ; sans serveur : rsync vers `JUMPHP_DEPLOY_TARGET` |
 | `server:setup` / `server:logs` | installe Docker sur le serveur / journaux du serveur web |
 | `github` | met le projet sur GitHub (`gh`), et en option sur GitHub Pages |
@@ -314,6 +315,7 @@ breaker was written that way, by an AI that had only read this file.
 | `games/breakout/` | brick breaker written by an AI from AGENTS.md |
 | `games/hello-threads/` | threads POC (TrueAsync): a fractal computed by a thread pool |
 | `games/hello-desktop/` | a **desktop application** (Tauri): a notepad, HTML page + PHP |
+| `games/hello-hybrid/` | a **hybrid game**: an SDL game + an HTML control panel, native dialogs, tray icon |
 | `skeleton-app/`, `tauri/` | the desktop app template (`bin/jumphp app:new`) and its native runtime (Rust + Tauri 2, driven by PHP through FFI) |
 | `docker/` | WebAssembly engine, desktop runtimes (PHP 8.5, and PHP 8.6 ZTS + TrueAsync), network relay, FrankenPHP web server |
 | `tools/` | scripts used by `bin/jumphp` (packaging, screenshots, checks) |
@@ -338,7 +340,7 @@ breaker was written that way, by an AI that had only read this file.
 | `relay up\|down\|logs` | multiplayer server on `ws://localhost:8090/ws` |
 | `export:desktop <game>` | a Docker image that runs the game |
 | `export:standalone <game> [--linux] [--windows]` | the game as one executable, nothing to install (PHP, SDL, OpenGL, OpenAL inside), see [docs/standalone.md](docs/standalone.md) |
-| `app:new` / `app:run` / `app:test` / `app:shot` / `app:export <app>` | **desktop applications**: native windows with HTML / CSS / JS pages, logic in PHP (Tauri, native only), see [docs/tauri.md](docs/tauri.md) |
+| `app:new` / `app:run` / `app:test` / `app:shot` / `app:export <app>` | **desktop applications**: native windows with HTML / CSS / JS pages, logic in PHP (Tauri, native: Linux, Windows, macOS; `ui: hybrid` for a game), see [docs/tauri.md](docs/tauri.md) |
 | `deploy:setup` / `deploy [games...]` | sets up / deploys to your server (FrankenPHP alone or with Traefik, Let's Encrypt HTTPS); without a server: rsync to `JUMPHP_DEPLOY_TARGET` |
 | `server:setup` / `server:logs` | installs Docker on the server / web server logs |
 | `github` | puts the project on GitHub (`gh`), optionally on GitHub Pages |

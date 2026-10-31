@@ -14,7 +14,7 @@ use JumPHP\Kernel\Platform;
  *   2. <app>/native/<platform>/<name> (what `bin/jumphp app:export` puts next to the app);
  *   3. <project>/build/tauri/<platform>/<name> (what `bin/jumphp tauri:build` makes), going up from the app;
  *   4. the system: /usr/local/lib, /usr/lib.
- * <platform> is linux-x86_64, linux-aarch64, windows-x86_64 or macos-<arch>; <name> libjumphp_tauri.so /
+ * <platform> is linux-x86_64, linux-aarch64, windows-x86_64, macos-<arch> or macos-universal; <name> libjumphp_tauri.so /
  * jumphp_tauri.dll / libjumphp_tauri.dylib.
  */
 final class TauriRuntime implements NativeRuntime
@@ -76,11 +76,16 @@ final class TauriRuntime implements NativeRuntime
         if ($env !== null) {
             return is_file((string)$env) ? (string)$env : null;
         }
-        $rel = self::platform() . '/' . self::fileName();
-        $candidates = [rtrim($appRoot, '/') . '/native/' . $rel];
-        $dir = realpath($appRoot) ?: $appRoot;
-        for ($i = 0; $i < 6 && $dir !== dirname($dir); $i++, $dir = dirname($dir)) {
-            $candidates[] = $dir . '/build/tauri/' . $rel;
+        // macOS: one universal library (Apple silicon + Intel) serves both
+        $platforms = PHP_OS_FAMILY === 'Darwin' ? [self::platform(), 'macos-universal'] : [self::platform()];
+        $candidates = [];
+        foreach ($platforms as $platform) {
+            $rel = $platform . '/' . self::fileName();
+            $candidates[] = rtrim($appRoot, '/') . '/native/' . $rel;
+            $dir = realpath($appRoot) ?: $appRoot;
+            for ($i = 0; $i < 6 && $dir !== dirname($dir); $i++, $dir = dirname($dir)) {
+                $candidates[] = $dir . '/build/tauri/' . $rel;
+            }
         }
         $candidates[] = '/usr/local/lib/' . self::fileName();
         $candidates[] = '/usr/lib/' . self::fileName();

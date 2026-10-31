@@ -12,9 +12,9 @@ use JumPHP\Tauri\App;
  *
  * | target                               | provider | features                                       |
  * |--------------------------------------|----------|------------------------------------------------|
- * | desktop app (JumPHP\Tauri\App)       | tauri    | all: message, confirm, open, save, folder, notify, openUrl, openPath, reveal |
+ * | desktop app (JumPHP\Tauri\App)       | tauri    | all: message, confirm, open, save, folder, notify, openUrl, openPath, reveal, copy, paste |
  * | game on the desktop (SDL)            | sdl      | message                                        |
- * | browser build                        | browser  | openUrl                                        |
+ * | browser build                        | browser  | openUrl, copy                                  |
  * | headless runs (test, shot), others   | none     | nothing                                        |
  *
  * What a target lacks fails its Task with UnsupportedFeature (or returns false): check supports() first.

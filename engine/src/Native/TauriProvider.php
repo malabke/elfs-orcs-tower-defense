@@ -8,7 +8,7 @@ use JumPHP\Tauri\App;
 /** Desktop apps (JumPHP\Tauri\App): Tauri's dialog, notification and opener plugins, over the main window. */
 final class TauriProvider extends BaseProvider
 {
-    protected array $features = ['message', 'confirm', 'open', 'save', 'folder', 'notify', 'openUrl', 'openPath', 'reveal'];
+    protected array $features = ['message', 'confirm', 'open', 'save', 'folder', 'notify', 'openUrl', 'openPath', 'reveal', 'copy', 'paste'];
 
     public function __construct(private readonly App $app)
     {
@@ -71,6 +71,17 @@ final class TauriProvider extends BaseProvider
     {
         $this->app->sendCommand(['cmd' => 'opener.reveal', 'path' => $path]);
         return true;
+    }
+
+    public function copy(string $text): bool
+    {
+        $this->app->sendCommand(['cmd' => 'clipboard.write', 'text' => $text]);
+        return true;
+    }
+
+    public function paste(): Task
+    {
+        return $this->app->request('clipboard.read');
     }
 
     /** the dialog over the main window when it is open */

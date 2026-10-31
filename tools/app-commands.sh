@@ -45,10 +45,52 @@ cmd_tauri_build() {
   say "done: $TAURI_LIB ($(du -h "$ROOT/$TAURI_LIB" | cut -f1))"
 }
 
-# the library, built when missing or older than its sources
+tauri_key() { (cd "$ROOT" && bash tools/tauri-key.sh | sha256sum | cut -c1-16); }
+
+# the published libraries (release tauri-<key>, .github/workflows/tauri.yml): <platform> -> its asset name, its file
+tauri_asset() {
+  case "$1" in
+    linux-x86_64) echo "libjumphp_tauri-linux-x86_64.so libjumphp_tauri.so" ;;
+    windows-x86_64) echo "jumphp_tauri-windows-x86_64.dll jumphp_tauri.dll" ;;
+    macos-universal) echo "libjumphp_tauri-macos-universal.dylib libjumphp_tauri.dylib" ;;
+    *) return 1 ;;
+  esac
+}
+
+# tauri:download [platform...]: the libraries of this version of tauri/ from JumPHP's GitHub releases, into
+# build/tauri/<platform>/ (default: linux-x86_64; --all: Linux, Windows, macOS). Returns 1 when one is missing.
+cmd_tauri_download() {
+  local platforms=("$@") key status=0 p asset file url out
+  [ ${#platforms[@]} -gt 0 ] || platforms=("$TAURI_PLATFORM")
+  [ "${platforms[0]}" = "--all" ] && platforms=(linux-x86_64 windows-x86_64 macos-universal)
+  key="$(tauri_key)"
+  for p in "${platforms[@]}"; do
+    asset=""; file=""
+    read -r asset file <<<"$(tauri_asset "$p" || true)"
+    [ -n "$asset" ] || die "unknown platform $p (linux-x86_64, windows-x86_64, macos-universal)"
+    url="${JUMPHP_TAURI_RELEASES:-https://github.com/davidnurdin/jumPhp/releases/download}/tauri-$key/$asset"
+    out="$ROOT/build/tauri/$p/$file"
+    mkdir -p "$(dirname "$out")"
+    if curl -fsSL -A jumphp-tauri -o "$out.part" "$url"; then
+      mv "$out.part" "$out"
+      [ "$p" = linux-x86_64 ] || [ "$p" = macos-universal ] && chmod 755 "$out"
+      touch "$out"
+      say "tauri-$key: build/tauri/$p/$file"
+    else
+      rm -f "$out.part"
+      warn "no $asset in the release tauri-$key (the workflow .github/workflows/tauri.yml publishes it)"
+      status=1
+    fi
+  done
+  return $status
+}
+
+# the library, downloaded (the release of these sources) or built, when missing or older than its sources
 ensure_tauri_lib() {
-  if [ ! -f "$ROOT/$TAURI_LIB" ] || [ -n "$(find "$ROOT/tauri/src" "$ROOT/tauri/Cargo.toml" "$ROOT/tauri/tauri.conf.json" -newer "$ROOT/$TAURI_LIB" 2>/dev/null | head -1)" ]; then
-    cmd_tauri_build
+  if [ ! -f "$ROOT/$TAURI_LIB" ] || [ -n "$(find "$ROOT/tauri/src" "$ROOT/tauri/Cargo.toml" "$ROOT/tauri/Cargo.lock" "$ROOT/tauri/tauri.conf.json" -newer "$ROOT/$TAURI_LIB" 2>/dev/null | head -1)" ]; then
+    if [ -n "${JUMPHP_TAURI_BUILD:-}" ] || ! cmd_tauri_download "$TAURI_PLATFORM" 2>/dev/null; then
+      cmd_tauri_build
+    fi
   fi
 }
 
@@ -134,21 +176,65 @@ cmd_app_shot() {
   echo "$ROOT/$dir/$out"
 }
 
-# the app as one executable for Linux (StaticPHP's micro with FFI + the app + the Tauri library), through
-# export:standalone with the apps' settings (docs/tauri.md). The player needs WebKitGTK 4.1 (as every Tauri app).
+# the app as one executable (StaticPHP's micro with FFI + the app + the Tauri library), through export:standalone
+# with the apps' settings (docs/tauri.md). Linux: the player needs WebKitGTK 4.1 (as every Tauri app); Windows:
+# WebView2 (in Windows 10 / 11). Windows' micro and library come from JumPHP's GitHub releases.
 cmd_app_export() {
   local app="${1:-}"; local dir; dir="$(app_dir "$app")"; shift || true
-  [ $# -eq 0 ] || [ "$*" = "--linux" ] || die "app:export: Linux only for now (--linux)"
+  local targets=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --linux) targets+=(linux) ;;
+      --windows) targets+=(windows) ;;
+      *) die "unknown option $1 (--linux, --windows)" ;;
+    esac
+    shift
+  done
+  [ ${#targets[@]} -gt 0 ] || targets=(linux)
   ensure_vendor "$dir"
-  ensure_tauri_lib
-  JUMPHP_STANDALONE_EXTENSIONS=tools/app-extensions.txt JUMPHP_STANDALONE_SPC=spc-app \
-  JUMPHP_STANDALONE_BOOT='JumPHP\Tauri\App' JUMPHP_STANDALONE_NATIVE="$TAURI_LIB" \
-  JUMPHP_STANDALONE_INI=$'ffi.enable=1\nmemory_limit=512M' \
-    cmd_export_standalone "$app" --linux
-  echo "  A desktop app: the computer needs WebKitGTK 4.1 (Debian 12+, Ubuntu 22.04+, Fedora 39+: libwebkit2gtk-4.1)." >&2
+  local t lib
+  for t in "${targets[@]}"; do
+    if [ "$t" = linux ]; then
+      ensure_tauri_lib
+      lib="$TAURI_LIB"
+    else
+      lib="build/tauri/windows-x86_64/jumphp_tauri.dll"
+      [ -f "$ROOT/$lib" ] || cmd_tauri_download windows-x86_64 \
+        || die "no Windows library for these sources of tauri/: run the GitHub workflow tauri (Actions > tauri), then again"
+    fi
+    JUMPHP_STANDALONE_EXTENSIONS=tools/app-extensions.txt JUMPHP_STANDALONE_SPC=spc-app \
+    JUMPHP_STANDALONE_BOOT='JumPHP\Tauri\App' JUMPHP_STANDALONE_NATIVE="$lib" \
+    JUMPHP_STANDALONE_INI=$'ffi.enable=1\nmemory_limit=512M' \
+      cmd_export_standalone "$app" "--$t"
+  done
+  echo "  A desktop app. Linux: the computer needs WebKitGTK 4.1 (Debian 12+, Ubuntu 22.04+, Fedora 39+: libwebkit2gtk-4.1)." >&2
+  echo "  Windows: WebView2 (part of Windows 10 / 11)." >&2
 }
 
 # run / test / shot of a desktop app's folder: the app:* commands (a game's folder: nothing changes)
 is_app() {
   [ -n "${1:-}" ] && grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$ROOT/games/$1/config/game.yaml" 2>/dev/null
+}
+
+# a game with ui: hybrid (SDL + Tauri: native dialogs, tray, HTML windows; docs/tauri.md "Hybrid games")
+is_hybrid() {
+  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?hybrid' "$ROOT/games/$1/config/game.yaml" 2>/dev/null
+}
+
+# run_game_hybrid <dir> <docker flags...>: what bin/jumphp run does for a hybrid game (its flags + the Tauri image)
+run_game_hybrid() {
+  local dir="$1"; shift
+  ensure_tauri_lib
+  local gdk=x11
+  case " $* " in *SDL_VIDEODRIVER=wayland*) gdk=wayland ;; esac
+  local xdg="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bus=()
+  [ -S "$xdg/bus" ] && bus=(-v "$xdg/bus:/tmp/bus" -e DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/bus)
+  tauri_run "$dir" "$@" -e "GDK_BACKEND=$gdk" ${bus[@]+"${bus[@]}"} -- php app.php
+}
+
+# export:standalone of a hybrid game: the games' micro + FFI, the Tauri library inside
+hybrid_export_env() {
+  ensure_tauri_lib
+  export JUMPHP_STANDALONE_EXTENSIONS=tools/hybrid-extensions.txt JUMPHP_STANDALONE_SPC=spc-hybrid \
+    JUMPHP_STANDALONE_NATIVE="$TAURI_LIB" JUMPHP_STANDALONE_INI=$'ffi.enable=1'
 }

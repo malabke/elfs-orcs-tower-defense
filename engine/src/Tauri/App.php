@@ -50,6 +50,10 @@ final class App extends EventEmitter
     private array $windows = [];
     /** @var array<string, \Closure> */
     private array $commands = [];
+    /** @var array<string, Tray> */
+    private array $trays = [];
+    /** @var array<string, \Closure> global shortcuts: accelerator -> callback */
+    private array $shortcuts = [];
     /** @var array<int, Task> dialogs waiting for their answer, by id */
     private array $dialogs = [];
     private int $nextId = 1;
@@ -63,10 +67,13 @@ final class App extends EventEmitter
     private ?Tasks $tasks = null;
     private ?Http $http = null;
     private ?JsBridge $bridge = null;
+    /** JUMPHP_TAURI_TRACE=1: every command and event on stderr */
+    private bool $trace = false;
 
     public function __construct(public readonly GameConfig $config, private readonly NativeRuntime $runtime)
     {
         $this->gameLoop = new GameLoop();
+        $this->trace = (bool)Platform::setting('JUMPHP_TAURI_TRACE', false);
         $this->storage = Storage::fromConfig($config);
         $this->options = new Options($this->storage);
         $this->lang = Lang::fromConfig($config);
@@ -118,6 +125,12 @@ final class App extends EventEmitter
     public static function current(): ?self
     {
         return self::$current;
+    }
+
+    /** @internal tests: no running app any more */
+    public static function forgetCurrent(): void
+    {
+        self::$current = null;
     }
 
     /** A key of game.yaml's app: section. */
@@ -233,6 +246,45 @@ final class App extends EventEmitter
         return $this;
     }
 
+    // --- tray icons, global shortcuts ---------------------------------------------------------------------------
+
+    /**
+     * An icon in the system's tray (notification area), with a menu: ['icon' => 'assets/icon.png' (default: the
+     * app's), 'tooltip' => '...', 'menu' => [['id' => 'show', 'text' => 'Show'], '-', ['id' => 'quit', 'text' => 'Quit']]].
+     * Its events: 'menu' (string $itemId), 'click' (string $button: not sent on Linux, where the menu is the way).
+     * Linux needs libayatana-appindicator3 (and a desktop that shows tray icons).
+     */
+    public function tray(string $id = 'main', array $options = []): Tray
+    {
+        $tray = $this->trays[$id] ??= new Tray($this, $id);
+        $tray->setUp($options);
+        return $tray;
+    }
+
+    /** @internal Tray */
+    public function forgetTray(string $id): void
+    {
+        unset($this->trays[$id]);
+    }
+
+    /**
+     * A keyboard shortcut of the whole system (works while the app has no focus): 'CmdOrCtrl+Shift+K', 'Alt+F2'...
+     * $callback(string $accelerator) when pressed. Linux: X11 only (not Wayland).
+     */
+    public function globalShortcut(string $accelerator, callable $callback): self
+    {
+        $this->shortcuts[$accelerator] = \Closure::fromCallable($callback);
+        $this->sendCommand(['cmd' => 'shortcut.register', 'accelerator' => $accelerator]);
+        return $this;
+    }
+
+    public function removeGlobalShortcut(string $accelerator): self
+    {
+        unset($this->shortcuts[$accelerator]);
+        $this->sendCommand(['cmd' => 'shortcut.unregister', 'accelerator' => $accelerator]);
+        return $this;
+    }
+
     // --- the app ----------------------------------------------------------------------------------------------
 
     /** Quits after this frame (closes every window). */
@@ -302,6 +354,9 @@ final class App extends EventEmitter
     /** @internal Window, JumPHP\Native: one command for the native side */
     public function sendCommand(array $command): void
     {
+        if ($this->trace) {
+            self::stderr('[tauri] -> ' . json_encode($command, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+        }
         $this->runtime->send($command);
     }
 
@@ -310,6 +365,15 @@ final class App extends EventEmitter
      * paths, or null when cancelled).
      */
     public function dialog(string $cmd, array $args): Task
+    {
+        return $this->request($cmd, $args);
+    }
+
+    /**
+     * @internal a command whose answer comes back later (dialogs, clipboard.read): the Task ends with it, or fails
+     * with what the native side said
+     */
+    public function request(string $cmd, array $args = []): Task
     {
         $id = $this->nextId++;
         $task = $this->dialogs[$id] = new Task();
@@ -321,6 +385,9 @@ final class App extends EventEmitter
 
     private function dispatch(array $event): void
     {
+        if ($this->trace) {
+            self::stderr('[tauri] <- ' . json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+        }
         $window = isset($event['window']) ? ($this->windows[(string)$event['window']] ?? null) : null;
         switch ($event['type'] ?? '') {
             case 'ready':
@@ -346,9 +413,28 @@ final class App extends EventEmitter
                 }
                 break;
             case 'dialog':
+            case 'result':
                 $task = $this->dialogs[(int)($event['id'] ?? 0)] ?? null;
                 unset($this->dialogs[(int)($event['id'] ?? 0)]);
-                $task?->settle($event['result'] ?? null);
+                isset($event['error'])
+                    ? $task?->settle(null, new \RuntimeException((string)$event['error']))
+                    : $task?->settle($event['result'] ?? null);
+                break;
+            case 'tray':
+                $tray = $this->trays[(string)($event['tray'] ?? '')] ?? null;
+                if (($event['event'] ?? '') === 'menu') {
+                    $tray?->emit('menu', [(string)($event['item'] ?? '')]);
+                } else {
+                    $tray?->emit('click', [(string)($event['button'] ?? 'left')]);
+                }
+                break;
+            case 'shortcut':
+                $accel = (string)($event['accelerator'] ?? '');
+                $callback = $this->shortcuts[$accel] ?? null;
+                if ($callback !== null && ($event['state'] ?? 'pressed') === 'pressed') {
+                    $callback($accel);
+                }
+                $this->emit('shortcut', [$accel, (string)($event['state'] ?? 'pressed')]);
                 break;
             case 'exit-requested':
                 $e = new NativeEvent('exit-requested');

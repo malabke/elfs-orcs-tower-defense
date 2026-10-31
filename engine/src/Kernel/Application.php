@@ -142,12 +142,24 @@ final class Application
     /** Desktop: runs until the game quits. @return int exit code */
     public function run(): int
     {
-        $this->engine->gameLoop->start();
+        // ui: hybrid (a game that also drives Tauri: native dialogs, HTML windows): its runtime runs the loop
+        $hybrid = \JumPHP\Tauri\Hybrid::wanted($this->config) ? \JumPHP\Tauri\Hybrid::run($this) : null;
+        if ($hybrid === null) {
+            $this->engine->gameLoop->start();
+        } elseif ($hybrid !== 0 && $this->exitCode === 0) {
+            $this->exitCode = $hybrid;
+        }
         if ($this->crash === null) {
             $this->engine->closeAudio3d();
             $this->engine->sound->close();
             $this->engine->sdl->quit();
         }
+        return $this->exitCode;
+    }
+
+    /** 0 until the game crashed (1). */
+    public function exitCode(): int
+    {
         return $this->exitCode;
     }
 

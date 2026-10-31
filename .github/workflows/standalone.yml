@@ -2,10 +2,15 @@
 # registry (docker/standalone) for Linux and Windows, published as the release standalone-<key>
 # (tools/standalone-key.sh): export:standalone downloads them from there. Windows' can only be built on Windows
 # (Visual Studio): here. Run by hand (Actions > standalone > Run workflow), after a change of docker/standalone.
+# The input `extensions` makes the micro of desktop apps / hybrid games instead (docs/tauri.md): its own key.
 name: standalone
 
 on:
   workflow_dispatch:
+    inputs:
+      extensions:
+        description: 'The list of extensions: tools/standalone-extensions.txt (games), tools/app-extensions.txt (desktop apps), tools/hybrid-extensions.txt (hybrid games)'
+        default: tools/standalone-extensions.txt
 
 permissions:
   contents: write
@@ -21,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: key
         run: |
-          echo "key=$(bash tools/standalone-key.sh | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "key=$(JUMPHP_STANDALONE_EXTENSIONS='${{ inputs.extensions }}' bash tools/standalone-key.sh | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
           echo "spc=$(sed -nE 's/^ARG SPC_REF=(.+)/\1/p' docker/standalone/Dockerfile)" >> "$GITHUB_OUTPUT"
           echo "php=8.5" >> "$GITHUB_OUTPUT"
 
@@ -36,7 +41,7 @@ jobs:
           mkdir -p out
           docker run --rm -v "$PWD:/workspace:ro" -v "$PWD/out:/out" \
             -e SPC_TARGET="$(cat docker/standalone/spc-target)" -e SPC_REGISTRIES=/workspace/docker/standalone/registry/spc.registry.yml \
-            jumphp/standalone:dev sh -c 'printf "php-version: ${{ needs.key.outputs.php }}\nextensions: %s\nsapi:\n  - micro\n" "$(cat /workspace/tools/standalone-extensions.txt)" > craft.yml && spc craft && cp buildroot/bin/micro.sfx /out/micro-linux-x86_64.sfx || { cp -r log /out/log; exit 1; }'
+            jumphp/standalone:dev sh -c 'printf "php-version: ${{ needs.key.outputs.php }}\nextensions: %s\nsapi:\n  - micro\n" "$(cat /workspace/${{ inputs.extensions }})" > craft.yml && spc craft && cp buildroot/bin/micro.sfx /out/micro-linux-x86_64.sfx || { cp -r log /out/log; exit 1; }'
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -69,7 +74,7 @@ jobs:
           SPC_REGISTRIES: ${{ github.workspace }}\jumphp\docker\standalone\registry\spc.registry.yml
         run: |
           # no pcntl / posix on Windows
-          $ext = ((Get-Content ../jumphp/tools/standalone-extensions.txt).Trim() -split ',' | Where-Object { $_ -notin 'pcntl','posix' }) -join ','
+          $ext = ((Get-Content ../jumphp/${{ inputs.extensions }}).Trim() -split ',' | Where-Object { $_ -notin 'pcntl','posix' }) -join ','
           "php-version: ${{ needs.key.outputs.php }}`nextensions: $ext`nsapi:`n  - micro`n" | Set-Content craft.yml
           ./bin/spc doctor --auto-fix
           ./bin/spc craft
