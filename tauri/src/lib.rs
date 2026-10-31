@@ -590,7 +590,10 @@ pub extern "C" fn jt_run(config_json: *const c_char, frame: Option<FrameFn>) -> 
     let config = if config_json.is_null() { json!({}) } else { config_of(&unsafe { CStr::from_ptr(config_json) }.to_string_lossy()) };
     let _ = FRAME.set(frame);
     #[cfg(windows)]
-    common_controls::activate();
+    {
+        common_controls::pin_module();
+        common_controls::activate();
+    }
     match catch_unwind(AssertUnwindSafe(|| run(config))) {
         Ok(Ok(code)) => code,
         Ok(Err(e)) => {
@@ -668,6 +671,19 @@ mod common_controls {
     extern "system" {
         fn CreateActCtxW(actctx: *const ActCtxW) -> *mut c_void;
         fn ActivateActCtx(actctx: *mut c_void, cookie: *mut usize) -> i32;
+        fn GetModuleHandleExW(flags: u32, module_name: *const u16, module: *mut *mut c_void) -> i32;
+    }
+
+    /// PHP frees the library at its shutdown while threads of the runtime (the ticker, WebView2's) may still run
+    /// its code: pinned, it stays loaded until the process ends.
+    pub fn pin_module() {
+        const FROM_ADDRESS: u32 = 0x4;
+        const PIN: u32 = 0x1;
+        let mut module = std::ptr::null_mut();
+        let anchor = pin_module as *const () as *const u16;
+        if unsafe { GetModuleHandleExW(FROM_ADDRESS | PIN, anchor, &mut module) } == 0 {
+            eprintln!("[jumphp-tauri] GetModuleHandleExW failed: the library may be unloaded too early");
+        }
     }
 
     const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
