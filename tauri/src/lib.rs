@@ -589,6 +589,8 @@ pub extern "C" fn jt_run(config_json: *const c_char, frame: Option<FrameFn>) -> 
     }
     let config = if config_json.is_null() { json!({}) } else { config_of(&unsafe { CStr::from_ptr(config_json) }.to_string_lossy()) };
     let _ = FRAME.set(frame);
+    #[cfg(windows)]
+    common_controls::activate();
     match catch_unwind(AssertUnwindSafe(|| run(config))) {
         Ok(Ok(code)) => code,
         Ok(Err(e)) => {
@@ -638,4 +640,74 @@ pub extern "C" fn jt_send(command_json: *const c_char) {
 #[no_mangle]
 pub extern "C" fn jt_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
+}
+
+/// Windows: the native dialogs (TaskDialogIndirect) live in version 6 of comctl32, which Windows only gives a
+/// process whose executable asks for it in its manifest (php.exe does not). comctl32 is delay-loaded (build.rs)
+/// and this activation context, active on the main thread for the whole run, makes it load version 6.
+#[cfg(windows)]
+mod common_controls {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+
+    #[repr(C)]
+    #[allow(non_snake_case)]
+    struct ActCtxW {
+        cbSize: u32,
+        dwFlags: u32,
+        lpSource: *const u16,
+        wProcessorArchitecture: u16,
+        wLangId: u16,
+        lpAssemblyDirectory: *const u16,
+        lpResourceName: *const u16,
+        lpApplicationName: *const u16,
+        hModule: *mut c_void,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateActCtxW(actctx: *const ActCtxW) -> *mut c_void;
+        fn ActivateActCtx(actctx: *mut c_void, cookie: *mut usize) -> i32;
+    }
+
+    const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>
+"#;
+
+    pub fn activate() {
+        let path = std::env::temp_dir().join(format!("jumphp-tauri-common-controls-{}.manifest", std::process::id()));
+        if std::fs::write(&path, MANIFEST).is_err() {
+            eprintln!("[jumphp-tauri] cannot write {}: native dialogs may not work", path.display());
+            return;
+        }
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let ctx = ActCtxW {
+            cbSize: std::mem::size_of::<ActCtxW>() as u32,
+            dwFlags: 0,
+            lpSource: wide.as_ptr(),
+            wProcessorArchitecture: 0,
+            wLangId: 0,
+            lpAssemblyDirectory: std::ptr::null(),
+            lpResourceName: std::ptr::null(),
+            lpApplicationName: std::ptr::null(),
+            hModule: std::ptr::null_mut(),
+        };
+        let handle = unsafe { CreateActCtxW(&ctx) };
+        let _ = std::fs::remove_file(&path);
+        if handle as isize == -1 {
+            eprintln!("[jumphp-tauri] CreateActCtxW failed: native dialogs may not work");
+            return;
+        }
+        let mut cookie = 0usize;
+        if unsafe { ActivateActCtx(handle, &mut cookie) } == 0 {
+            eprintln!("[jumphp-tauri] ActivateActCtx failed: native dialogs may not work");
+        }
+        // never released: it stays active on this thread until the process ends
+    }
 }
