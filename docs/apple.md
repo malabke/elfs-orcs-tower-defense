@@ -58,7 +58,9 @@ The apps are signed **ad hoc** (no identity):
 
 ## With an Apple developer account (later)
 
-An account of the [Apple Developer Program](https://developer.apple.com/programs/) (99 $ a year) is needed to:
+Each developer uses **their own** account of the [Apple Developer Program](https://developer.apple.com/programs/)
+(99 $ a year): the apps are published under their name, with their certificates, in their repository's secrets;
+JumPHP never holds an account for anyone. It is needed to:
 
 - put a Mac app online without the right click: **Developer ID** signing + **notarization** by Apple;
 - install the iPhone app on a device (more than 7 days) and send it to **TestFlight** / the **App Store**.
