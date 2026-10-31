@@ -77,6 +77,11 @@ jobs:
           fi
           ls -la ../out
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.file }}
+
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -101,10 +106,17 @@ jobs:
             php app.php
           fi
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: out/${{ matrix.file }}
+      - name: Why Windows did not load the library
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object FullName -like '*Hostx64\x64*' | Select-Object -First 1
+          & $dumpbin.FullName /dependents out\${{ matrix.file }}
+          & $dumpbin.FullName /imports out\${{ matrix.file }} | Select-String -Pattern '^\s+\S+\.dll$|^\s+[0-9A-F]+ \S+$' | Select-Object -First 400
+          $php = Split-Path (Get-Command php).Source
+          Get-ChildItem $php -Filter *.dll | Select-Object Name, Length
+          python -c "import ctypes,sys; ctypes.CDLL(sys.argv[1]); print('python loads it')" out\${{ matrix.file }}
 
   release:
     needs: [key, build]
