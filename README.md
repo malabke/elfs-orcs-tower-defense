@@ -63,7 +63,7 @@ Le tutoriel complet, pas à pas, est dans **[docs/tutoriel.md](docs/tutoriel.md)
 | H. GitHub | `bin/jumphp github` (`bin/jumphp pages <id>`) | le dépôt créé avec `gh` (et le jeu sur GitHub Pages) |
 | I. Mettre à jour | `bin/jumphp update` | la dernière version de JumPHP fusionnée dans le projet |
 | J. Commande `jumphp` | `bin/jumphp cli:install` (proposé par l'assistant) | `jumphp <commande>` de n'importe quel dossier du projet, `jumphp new <dossier>`, et une question quand une nouvelle version sort sur Packagist |
-| K. Google Play | `bin/jumphp twa <id> --url https://…` | le jeu en appli Android (.aab pour le Play Store, .apk), voir [docs/android.md](docs/android.md) |
+| K. Google Play | `bin/jumphp twa <id> --url https://…` | le jeu en appli Android (.aab pour le Play Store, .apk), voir [docs/android.md](docs/android.md) ; la publication pas à pas : [docs/google-play.md](docs/google-play.md) |
 | L. Mac, iPhone, iPad | `bin/jumphp apple <id>` (`macos` / `ios`) | le jeu en applis Apple natives (.dmg, .ipa), fabriquées et essayées sur les Mac de GitHub, voir [docs/apple.md](docs/apple.md) |
 
 ### Démarrage rapide
@@ -262,7 +262,7 @@ The complete step-by-step tutorial is **[docs/tutorial.md](docs/tutorial.md)**. 
 | H. GitHub | `bin/jumphp github` (`bin/jumphp pages <id>`) | the repository created with `gh` (and the game on GitHub Pages) |
 | I. Update | `bin/jumphp update` | the newest JumPHP merged into the project |
 | J. `jumphp` command | `bin/jumphp cli:install` (offered by the wizard) | `jumphp <command>` from any folder of the project, `jumphp new <folder>`, and a question when a new version is out on Packagist |
-| K. Google Play | `bin/jumphp twa <id> --url https://…` | the game as an Android app (.aab for the Play Store, .apk), see [docs/android.md](docs/android.md) |
+| K. Google Play | `bin/jumphp twa <id> --url https://…` | the game as an Android app (.aab for the Play Store, .apk), see [docs/android.md](docs/android.md); publishing step by step: [docs/google-play.md](docs/google-play.md) |
 | L. Mac, iPhone, iPad | `bin/jumphp apple <id>` (`macos` / `ios`) | the game as native Apple apps (.dmg, .ipa), built and tried on GitHub's Macs, see [docs/apple.md](docs/apple.md) |
 
 ### Quick start

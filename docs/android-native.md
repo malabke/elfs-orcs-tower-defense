@@ -53,6 +53,9 @@ certificates (`cacert.pem`, put in by `tools/stage-game.sh`; `openssl.cafile` se
 
 ## On Google Play
 
+In short below; the whole procedure (keys, phone checks, every Play Console declaration, review, pitfalls) is in
+[google-play.md](google-play.md).
+
 1. **A developer account**: [play.google.com/console](https://play.google.com/console) (25 $ once, an identity
    check; a new personal account must have 12 testers for 14 days before going public).
 2. **Create the app**: name, default language, "Game", free; the declarations (privacy policy: a page saying the

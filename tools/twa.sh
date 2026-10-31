@@ -33,9 +33,12 @@ if [ ! -x "$SDK/build-tools/$BUILD_TOOLS/apksigner" ] || [ ! -d "$SDK/platforms/
     unzip -q /tmp/tools.zip -d "$SDK/cmdline-tools" && mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest" && rm /tmp/tools.zip
   fi
   say "Android SDK: build-tools $BUILD_TOOLS, $PLATFORM (license accepted by you)"
-  yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null
+  # the new SDK CLI no longer needs --licenses; `yes` gets SIGPIPE under pipefail, so never fail on it
+  { yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null; } || true
   "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" "build-tools;$BUILD_TOOLS" "platforms;$PLATFORM" | grep -v '^\[=*' || true
 fi
+# bubblewrap looks for the SDK's bin/ (or tools/) folder, where the old layout had sdkmanager
+[ -e "$SDK/bin" ] || ln -s cmdline-tools/latest/bin "$SDK/bin"
 mkdir -p "$HOME/.bubblewrap"
 printf '{"jdkPath": "/opt/jdk", "androidSdkPath": "%s"}\n' "$SDK" > "$HOME/.bubblewrap/config.json"
 
@@ -64,6 +67,12 @@ skip=(--skipVersionUpgrade)
 [ "$isNew" = 0 ] && [ "${BUMP:-1}" = 1 ] && skip=()
 say "Android project (bubblewrap update${skip[*]:+, same version})"
 bubblewrap update --manifest="$TWA_JSON" ${skip[@]+"${skip[@]}"} </dev/null
+# the app opens its page in Chrome of the main profile: without it, Android asks which browser (a second Chrome
+# in a dual-space profile made the question, and the app closed when it was dismissed)
+launcher="$PROJECT/app/src/main/java/$(echo "$PACKAGE" | tr . /)/LauncherActivity.java"
+if [ -f "$launcher" ] && ! grep -q createTwaLauncher "$launcher"; then
+  perl -0pi -e 's|(    \@Override\n    protected Uri getLaunchingUrl\(\))|    \@Override\n    protected com.google.androidbrowserhelper.trusted.TwaLauncher createTwaLauncher() {\n        return new com.google.androidbrowserhelper.trusted.TwaLauncher(this, "com.android.chrome");\n    }\n\n$1|' "$launcher"
+fi
 say "build (Gradle: a few minutes the first time)"
 bubblewrap build --manifest="$TWA_JSON" --skipPwaValidation </dev/null
 version="$(node -e 'const m = require(process.argv[1]); console.log(`${m.appVersionName}`)' "$TWA_JSON")"

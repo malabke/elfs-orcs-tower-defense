@@ -932,6 +932,22 @@ Then:
 - a new version of the app (name, icon): `bin/jumphp twa <id>` again (versionCode + 1). The game itself updates
   with the site, no new app needed.
 
+**Publishing on Google Play** (web app or native app `bin/jumphp android`): follow `docs/google-play.md`, step by
+step. Its rules, every time:
+- back up the upload key (`~/.jumphp/android/keys/<package>.keystore` + `.env`) before the first upload: lost, the
+  updates are refused; keys, passwords, `dist/`, `var/` never in git or in notes;
+- the web app's assetlinks needs **both** SHA-256 fingerprints (the upload key's, printed by the build, and Google
+  Play's app signing key's, Play Console > Setup > App signing) or the Play version opens with an address bar;
+- try the `.apk` on a real phone with `adb` and look at a screenshot (`adb exec-out screencap -p`) before any upload;
+  a web app that opens then closes = two Chrome on the phone (clone / dual space), see the guide;
+- the privacy policy address must answer (open it): a page of the game's site (`site/privacy.html`) or the
+  repository's `PRIVACY.md`; Store settings needs a category and the contact e-mail the user gives;
+- the target audience, the content rating answers, accepting terms and **sending to production** are the user's:
+  show them what you will answer / send and wait for their yes, for that step; never say the game is for children
+  unless they want it;
+- never remove a phone's user / clone space or uninstall an app without asking (data is lost);
+- each build is versionCode + 1: commit `android/twa-manifest.json` / `android/app.json` at once.
+
 ### Apple apps (macOS, iPhone / iPad)
 
 When the user wants the game on a Mac, an iPhone or an iPad as an app ("an app for iOS", "on the App Store", "a Mac

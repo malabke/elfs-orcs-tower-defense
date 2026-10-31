@@ -35,4 +35,6 @@ lists the app's package and the SHA-256 fingerprints of the keys that sign it, t
 
 The developer account and the Play Console are the user's: create the app with the same package, upload the
 `.aab` in internal testing, add Google's signing fingerprint to the site (above), then the store listing
-(screenshots: `bin/jumphp shot`) and production. The playground's guide: https://jumphp.net/docs/android
+(screenshots: `bin/jumphp shot`) and production. **The whole procedure, step by step (keys, phone checks, every
+Play Console declaration, review, next versions, pitfalls): [google-play.md](google-play.md).** The playground's
+guide: https://jumphp.net/docs/google-play
