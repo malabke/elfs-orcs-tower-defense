@@ -11,6 +11,7 @@
 #   JUMPHP_STANDALONE_SPC         StaticPHP's work folder under /cache (default spc)
 #   JUMPHP_STANDALONE_BOOT        the class whose boot($root)->run() starts it (default JumPHP\Kernel\Application)
 #   JUMPHP_STANDALONE_NATIVE      a native library carried in the package, at native/<target>/<its name>
+#   JUMPHP_STANDALONE_NATIVE_DIR  its folder instead of <target> (macOS: macos-universal, one library for both)
 #   JUMPHP_STANDALONE_INI         php.ini lines injected in the executable (StaticPHP's micro ini section)
 set -euo pipefail
 
@@ -27,7 +28,8 @@ OUT="$GAME_DIR/dist/standalone"
 case "$TARGET" in
   linux-x86_64) FILE="$GAME-$TARGET" ;;
   windows-x86_64) FILE="$GAME-$TARGET.exe" ;;
-  *) die "unknown target $TARGET (linux-x86_64, windows-x86_64)" ;;
+  macos-arm64|macos-x86_64) FILE="$GAME-$TARGET" ;;   # desktop apps: bin/jumphp app:export --macos puts both in an .app
+  *) die "unknown target $TARGET (linux-x86_64, windows-x86_64, macos-arm64, macos-x86_64)" ;;
 esac
 
 # 1. the micro (PHP + JumPHP's extensions) for this target: kept, else JumPHP's GitHub release of it, else built here
@@ -40,7 +42,7 @@ if [ ! -s "$micro" ] && [ -z "${JUMPHP_STANDALONE_BUILD:-}" ]; then
   curl -fsSL -A jumphp-standalone -o "$micro.part" "$release" && mv "$micro.part" "$micro" || rm -f "$micro.part"
 fi
 if [ ! -s "$micro" ]; then
-  [ "$TARGET" = linux-x86_64 ] || die "no PHP for $TARGET (standalone-$key) on JumPHP's GitHub releases: it is built on Windows by the workflow .github/workflows/standalone.yml (Actions > standalone > Run workflow), see docs/standalone.md"
+  [ "$TARGET" = linux-x86_64 ] || die "no PHP for $TARGET (standalone-$key) on JumPHP's GitHub releases: it is built on Windows / macOS by the workflow .github/workflows/standalone.yml (Actions > standalone > Run workflow), see docs/standalone.md"
   say "PHP $PHP_VERSION with $(cat "$EXTENSIONS"), built here (StaticPHP: ~15 min the first time, then kept)"
   for dir in downloads source buildroot pkgroot log; do mkdir -p "$SPC/$dir"; rm -rf "/opt/spc/$dir"; ln -s "$SPC/$dir" "/opt/spc/$dir"; done
   printf 'php-version: %s\nextensions: %s\nsapi:\n  - micro\n' "$PHP_VERSION" "$(cat "$EXTENSIONS")" > /opt/spc/craft.yml
@@ -56,8 +58,9 @@ stage=/tmp/stage/game
 build="$(bash /workspace/tools/stage-game.sh "$GAME_DIR" "$stage")" || die "games/$GAME has no vendor/ (bin/jumphp install $GAME)"
 if [ -n "${JUMPHP_STANDALONE_NATIVE:-}" ]; then
   # the native library of a desktop app (Tauri), unpacked with it: JumPHP\Tauri\TauriRuntime finds it there
-  mkdir -p "$stage/native/$TARGET"
-  cp "/workspace/$JUMPHP_STANDALONE_NATIVE" "$stage/native/$TARGET/"
+  native="$stage/native/${JUMPHP_STANDALONE_NATIVE_DIR:-$TARGET}"
+  mkdir -p "$native"
+  cp "/workspace/$JUMPHP_STANDALONE_NATIVE" "$native/"
   build="$(cd "$stage" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
 fi
 id="$(sed -nE 's/^ *id: *["'\'']?([a-z0-9-]+).*/\1/p' "$GAME_DIR/config/game.yaml" | head -1)"

@@ -602,6 +602,8 @@ cmd_export_standalone() {
     case "$1" in
       --linux) targets+=(linux-x86_64) ;;
       --windows) targets+=(windows-x86_64) ;;
+      --macos-arm64) targets+=(macos-arm64) ;;     # desktop apps (app:export --macos), not games: bin/jumphp apple
+      --macos-x86_64) targets+=(macos-x86_64) ;;
       *) die "unknown option $1 (--linux, --windows)" ;;
     esac
     shift
@@ -616,7 +618,7 @@ cmd_export_standalone() {
     log="$(mktemp)"
     docker run --rm $TTY_FLAGS --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -v "$home/standalone:/cache" \
       -e HOME=/tmp -e GAME="$game" -e TARGET="$target" -e JUMPHP_STANDALONE_PHP -e JUMPHP_STANDALONE_BUILD \
-      -e JUMPHP_STANDALONE_EXTENSIONS -e JUMPHP_STANDALONE_SPC -e JUMPHP_STANDALONE_BOOT -e JUMPHP_STANDALONE_NATIVE -e JUMPHP_STANDALONE_INI \
+      -e JUMPHP_STANDALONE_EXTENSIONS -e JUMPHP_STANDALONE_SPC -e JUMPHP_STANDALONE_BOOT -e JUMPHP_STANDALONE_NATIVE -e JUMPHP_STANDALONE_NATIVE_DIR -e JUMPHP_STANDALONE_INI \
       "$image" bash /workspace/tools/standalone.sh | tee "$log"
     out="$(sed -n 's/^OUT=//p' "$log")"; rm -f "$log"
     [ -n "$out" ] || die "no executable for $target (see above)"

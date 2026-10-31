@@ -186,7 +186,8 @@ cmd_app_export() {
     case "$1" in
       --linux) targets+=(linux) ;;
       --windows) targets+=(windows) ;;
-      *) die "unknown option $1 (--linux, --windows)" ;;
+      --macos) targets+=(macos) ;;
+      *) die "unknown option $1 (--linux, --windows, --macos)" ;;
     esac
     shift
   done
@@ -194,6 +195,10 @@ cmd_app_export() {
   ensure_vendor "$dir"
   local t lib
   for t in "${targets[@]}"; do
+    if [ "$t" = macos ]; then
+      app_export_macos "$app" "$dir"
+      continue
+    fi
     if [ "$t" = linux ]; then
       ensure_tauri_lib
       lib="$TAURI_LIB"
@@ -209,6 +214,26 @@ cmd_app_export() {
   done
   echo "  A desktop app. Linux: the computer needs WebKitGTK 4.1 (Debian 12+, Ubuntu 22.04+, Fedora 39+: libwebkit2gtk-4.1)." >&2
   echo "  Windows: WebView2 (part of Windows 10 / 11)." >&2
+  echo "  macOS: 12 or newer; not signed: the first time, right click on the app > Open (docs/tauri.md)." >&2
+}
+
+# app:export --macos: <app>-macos.zip holding <Title>.app (Apple silicon + Intel executables, the universal library)
+app_export_macos() {
+  local app="$1" dir="$2" lib="build/tauri/macos-universal/libjumphp_tauri.dylib" arch
+  [ -f "$ROOT/$lib" ] || cmd_tauri_download macos-universal \
+    || die "no macOS library for these sources of tauri/: run the GitHub workflow tauri (Actions > tauri), then again"
+  for arch in arm64 x86_64; do
+    JUMPHP_STANDALONE_EXTENSIONS=tools/app-extensions.txt JUMPHP_STANDALONE_SPC=spc-app \
+    JUMPHP_STANDALONE_BOOT='JumPHP\Tauri\App' JUMPHP_STANDALONE_NATIVE="$lib" JUMPHP_STANDALONE_NATIVE_DIR=macos-universal \
+    JUMPHP_STANDALONE_INI=$'ffi.enable=1\nmemory_limit=512M' \
+      cmd_export_standalone "$app" "--macos-$arch"
+  done
+  local out="games/$app/dist/standalone"
+  docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -w /workspace "$DESKTOP_IMAGE" \
+    php tools/macos-app.php "games/$app" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
+    || die "the .app was not made (see above)"
+  rm -f "$ROOT/$out/$app-macos-arm64" "$ROOT/$out/$app-macos-x86_64"
+  say "done: $out/$app-macos.zip ($(du -h "$ROOT/$out/$app-macos.zip" | cut -f1)): the .app inside, Apple silicon + Intel"
 }
 
 # run / test / shot of a desktop app's folder: the app:* commands (a game's folder: nothing changes)

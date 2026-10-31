@@ -10,13 +10,18 @@ const JUMPHP_GAME_BUILD = '{{BUILD}}';
 
 ini_set('memory_limit', '1G');
 $windows = PHP_OS_FAMILY === 'Windows';
+$mac = PHP_OS_FAMILY === 'Darwin';
 $home = (string)(getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir());
-$cache = getenv('JUMPHP_STANDALONE_DIR') ?: ($windows
-    ? (getenv('LOCALAPPDATA') ?: sys_get_temp_dir()) . '\\JumPHP'
-    : (getenv('XDG_CACHE_HOME') ?: "$home/.cache") . '/jumphp');
-$data = $windows
-    ? (getenv('APPDATA') ?: $home) . '\\' . JUMPHP_GAME_ID
-    : (getenv('XDG_DATA_HOME') ?: "$home/.local/share") . '/' . JUMPHP_GAME_ID;
+$cache = getenv('JUMPHP_STANDALONE_DIR') ?: match (true) {
+    $windows => (getenv('LOCALAPPDATA') ?: sys_get_temp_dir()) . '\\JumPHP',
+    $mac => "$home/Library/Caches/JumPHP",
+    default => (getenv('XDG_CACHE_HOME') ?: "$home/.cache") . '/jumphp',
+};
+$data = match (true) {
+    $windows => (getenv('APPDATA') ?: $home) . '\\' . JUMPHP_GAME_ID,
+    $mac => "$home/Library/Application Support/" . JUMPHP_GAME_ID,
+    default => (getenv('XDG_DATA_HOME') ?: "$home/.local/share") . '/' . JUMPHP_GAME_ID,
+};
 $root = $cache . DIRECTORY_SEPARATOR . JUMPHP_GAME_ID . '-' . JUMPHP_GAME_BUILD;
 
 if (!is_file("$root/.unpacked")) {
@@ -55,7 +60,7 @@ if (getenv('JUMPHP_VAR') === false) {
 // HTTPS: the computer's CA certificates (Debian / Ubuntu / Arch, Fedora / openSUSE), else the game's (Windows, the
 // others): PHP's OpenSSL is built in, it does not know where this system keeps them
 if (getenv('SSL_CERT_FILE') === false) {
-    $system = $windows ? [] : ['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'];
+    $system = $windows ? [] : ['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt', '/etc/ssl/cert.pem'];
     foreach ([...$system, "$root/cacert.pem"] as $ca) {
         if (is_file($ca)) {
             putenv("SSL_CERT_FILE=$ca");

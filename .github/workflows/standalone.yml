@@ -1,6 +1,6 @@
 # The micro binaries of bin/jumphp export:standalone (PHP + SDL, OpenGL, OpenAL), built by StaticPHP with JumPHP's
 # registry (docker/standalone) for Linux and Windows, published as the release standalone-<key>
-# (tools/standalone-key.sh): export:standalone downloads them from there. Windows' can only be built on Windows
+# (tools/standalone-key.sh): export:standalone downloads them from there. macOS (arm64, Intel): for desktop apps. Windows' can only be built on Windows
 # (Visual Studio): here. Run by hand (Actions > standalone > Run workflow), after a change of docker/standalone.
 # The input `extensions` makes the micro of desktop apps / hybrid games instead (docs/tauri.md): its own key.
 name: standalone
@@ -90,8 +90,59 @@ jobs:
           name: micro-windows-x86_64
           path: out/micro-windows-x86_64.sfx
 
+  macos:
+    # desktop apps only (tools/app-extensions.txt): the games' Mac app is bin/jumphp apple (docs/apple.md)
+    needs: key
+    if: inputs.extensions == 'tools/app-extensions.txt'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, arch: arm64 }
+          - { os: macos-15-intel, arch: x86_64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: jumphp
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: StaticPHP
+        run: |
+          git clone -q https://github.com/crazywhalecc/static-php-cli.git spc
+          git -C spc checkout -q ${{ needs.key.outputs.spc }}
+          cd spc
+          composer install -q --no-dev --no-interaction
+          php ../jumphp/docker/standalone/spc-registries.php
+      - name: Build (Xcode's clang, macOS 12+)
+        working-directory: spc
+        env:
+          SPC_REGISTRIES: ${{ github.workspace }}/jumphp/docker/standalone/registry/spc.registry.yml
+          MACOSX_DEPLOYMENT_TARGET: '12.0'
+        run: |
+          printf 'php-version: ${{ needs.key.outputs.php }}\nextensions: %s\nsapi:\n  - micro\n' "$(cat ../jumphp/${{ inputs.extensions }})" > craft.yml
+          ./bin/spc doctor --auto-fix
+          ./bin/spc craft
+          mkdir -p ../out
+          cp buildroot/bin/micro.sfx ../out/micro-macos-${{ matrix.arch }}.sfx
+          file ../out/micro-macos-${{ matrix.arch }}.sfx
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-macos-${{ matrix.arch }}
+          path: spc/log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: micro-macos-${{ matrix.arch }}
+          path: out/micro-macos-${{ matrix.arch }}.sfx
+
   release:
-    needs: [key, linux, windows]
+    needs: [key, linux, windows, macos]
+    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
