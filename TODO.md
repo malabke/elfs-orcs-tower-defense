@@ -52,6 +52,27 @@ What blocks or needs work:
 First step: Pong or hello-world compiled by elephc on Linux, to see what passes and the speed gained. PHP stays
 the default (Windows, Android).
 
+### Tried (2026-11-01, elephc 0.27.6 built from its sources, Linux x86_64, in Docker)
+
+- **Speed**, same script, compiled vs PHP 8.5 (JIT off): 100 balls x 100 000 steps of physics (objects, floats)
+  **0.63 s vs 1.69 s (2.7x faster)**; but 10 000 x 1 000 additions over an integer array **1.84 s vs 0.19 s
+  (10x slower)**: its arrays are slower than PHP's. Executable: 0.9 MB, static.
+- **SDL through `extern`** works: SDL2 declared in PHP (`extern "SDL2" { function SDL_Init(...)... }`), a software
+  renderer, 600 frames, events polled, pixels read back right. The engine's SDL calls could be declared this way.
+- **Engine classes**: `Util\Math` and `Physics\Aabb` compile unchanged and print exactly PHP's results;
+  `Util\Color` stops at `public static function of(...): self` ("expects Color, got self").
+- **Language**: namespaces, interfaces, traits, abstract classes, enums, generators, closures with `use`,
+  `new $class()`, `match`, `$fn()` / `$obj->$m()` / `call_user_func`, `json_encode`, `sprintf`: pass.
+  Refused: references (`&$a['x']`), `pack()` / `unpack()` (JumPHP's network messages), `spl_object_id()`, a closure
+  `fn (string $c): Scene => new $c()` (return type "mixed"), `: self`; regex needs its native package (pcre2);
+  `$this->listeners[$ev] ?? []` warns "Undefined array key" where PHP does not.
+- Not tried: Symfony DependencyInjection, ReactPHP, a whole game.
+
+**Verdict**: not yet for whole games: the engine relies on what is refused (references, pack, `self`, DI,
+ReactPHP), and array-heavy code (tile maps, collisions) would be slower. Worth following: plain classes compile
+as they are, and objects / floats run ~3x faster. Next step when elephc grows: a "native" build of the engine's
+pure parts (physics, tile collisions) as a PHP extension (`--emit phpext`), PHP keeping the rest.
+
 ## Full native apps in PHP: every system's APIs, an optional HTML / JS / CSS layer, an IDE (likely, by David)
 
 Beyond games: any kind of app written in PHP, with the same packaging (`bin/jumphp android`, `export:standalone`,
