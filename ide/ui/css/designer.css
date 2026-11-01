@@ -160,6 +160,7 @@ select.dz-input { padding-right: 2px; }
 .fd-root .dz-field { grid-template-columns: 92px minmax(0, 1fr); }
 .fd-root .dz-toolbar { overflow-x: auto; scrollbar-width: none; }
 .fd-root .dz-toolbar > * { flex: none; }
+.fd-device-btn { width: auto !important; gap: 5px; padding: 0 8px; font-size: 11.5px; }
 .fd-check { display: flex !important; align-items: center; gap: 6px; color: var(--dz-text-2); padding-left: 98px; }
 .fd-size { display: flex; gap: 3px; }
 .fd-size .dz-button { padding: 0 6px; background: var(--dz-input); border-color: var(--dz-border); color: var(--dz-text-2) !important; }

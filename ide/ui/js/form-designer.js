@@ -83,11 +83,11 @@ const EVENTS = {
 const OWN_WIDTH = new Set(['button', 'checkbox', 'radio', 'spacer']);
 const BREAKPOINTS = [['xs', 0], ['sm', 600], ['md', 900], ['lg', 1200]];
 const DEVICES = {
-  desktop: { label: 'Desktop', width: 1280, height: 800 },
-  laptop: { label: 'Laptop', width: 1024, height: 700 },
-  tablet: { label: 'Tablet', width: 800, height: 1100, frame: 'tablet' },
-  phone: { label: 'iPhone', width: 390, height: 844, frame: 'ios' },
-  android: { label: 'Android', width: 412, height: 892, frame: 'android' },
+  desktop: { label: 'Desktop', short: 'PC', width: 1280, height: 800 },
+  laptop: { label: 'Laptop', short: 'Laptop', width: 1024, height: 700 },
+  tablet: { label: 'Tablet', short: 'Tablet', width: 800, height: 1100, frame: 'tablet' },
+  phone: { label: 'iPhone', short: 'iPhone', width: 390, height: 844, frame: 'ios' },
+  android: { label: 'Android', short: 'Android', width: 412, height: 892, frame: 'android' },
 };
 const THEMES = {
   light: { background: '#f3f4f7', surface: '#ffffff', text: '#1f2329', muted: '#6b7280', border: '#cfd4dc', accent: '#3b6ef5', accentText: '#ffffff', danger: '#d64545', track: '#dde1e8', selection: '#cfdcff', hover: '#e8ecf3' },
@@ -440,7 +440,9 @@ export class FormDesigner {
     const tool = (icon, title, onclick, extra = {}) => el('button', { class: 'dz-tool', title, html: svg(icon), onclick, ...extra });
     this.undoButton = tool('undo', 'Undo (Ctrl+Z)', () => this.undo());
     this.redoButton = tool('redo', 'Redo (Ctrl+Shift+Z)', () => this.redo());
-    this.deviceButtons = Object.entries(DEVICES).map(([id, d]) => tool(id, `${d.label} (${d.width} × ${d.height} dp)`, () => this.setDevice(id), { 'data-device': id }));
+    // the screen sizes, with their names: the layout of each (a grid's spans, hidden widgets) shows at once
+    this.deviceButtons = Object.entries(DEVICES).map(([id, d]) => el('button', { class: 'dz-tool fd-device-btn', title: `${d.label}: ${d.width} × ${d.height} dp`,
+      html: `${svg(id)}<span>${esc(d.short)}</span>`, onclick: () => this.setDevice(id), 'data-device': id }));
     this.zoomLabel = el('button', { class: 'dz-zoom', title: 'Fit / 100%', text: '100%', onclick: () => this.setZoom(this.zoom === 1 ? 'fit' : 1) });
     this.sizeLabel = el('span', { class: 'dz-size' });
     const actions = el('div', { class: 'dz-group' }, [
