@@ -69,6 +69,16 @@ final class FakeRuntime implements NativeRuntime
         }
     }
 
+    /** the pictures handed over (embedded games): how many, and the last one */
+    public int $pictures = 0;
+    public string $lastPicture = '';
+
+    public function picture(string $bmp): void
+    {
+        $this->pictures++;
+        $this->lastPicture = $bmp;
+    }
+
     public function version(): string
     {
         return 'fake';

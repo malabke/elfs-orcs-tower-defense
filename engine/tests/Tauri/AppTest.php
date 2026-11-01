@@ -12,6 +12,7 @@ use JumPHP\Native\NullProvider;
 use JumPHP\Native\Shell;
 use JumPHP\Native\UnsupportedFeature;
 use JumPHP\Tauri\App;
+use JumPHP\Tauri\EmbeddedGame;
 use JumPHP\Tauri\Updater;
 use JumPHP\Tauri\FakeRuntime;
 use JumPHP\Tauri\NativeEvent;
@@ -320,6 +321,20 @@ final class AppTest extends TestCase
         self::assertTrue(is_executable($exe));
         @unlink($exe);
         self::assertFalse($updater->isInstallable(), 'php app.php is not an exported app');
+    }
+
+    public function testAnEmbeddedGameGetsThePagesKeysAsSdlKeys(): void
+    {
+        \SDL_Init(\SDL_INIT_VIDEO);
+        self::assertSame(\SDLK_LEFT, EmbeddedGame::sdlKey('ArrowLeft', 'ArrowLeft'));
+        self::assertSame(\SDLK_RETURN, EmbeddedGame::sdlKey('Enter', 'Enter'));
+        self::assertSame(\SDLK_SPACE, EmbeddedGame::sdlKey(' ', 'Space'));
+        self::assertSame(\SDLK_LSHIFT, EmbeddedGame::sdlKey('Shift', 'ShiftLeft'));
+        self::assertSame(\SDLK_F11, EmbeddedGame::sdlKey('F11', 'F11'));
+        self::assertSame(\SDLK_KP_8, EmbeddedGame::sdlKey('8', 'Numpad8'));
+        self::assertSame(ord('z'), EmbeddedGame::sdlKey('Z', 'KeyZ'));
+        self::assertSame(ord('5'), EmbeddedGame::sdlKey('5', 'Digit5'));
+        self::assertSame(0, EmbeddedGame::sdlKey('Unidentified', ''));
     }
 
     public function testAGlobalShortcutCallsBack(): void

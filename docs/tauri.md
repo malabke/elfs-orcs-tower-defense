@@ -322,6 +322,30 @@ the browser, in the phone apps, and on a desktop without FFI or without the runt
 has SDL **and** FFI (`tools/hybrid-extensions.txt`, built once) and the runtime library inside. Test the native
 side with `AppTestCase` (it boots the `main` class and the `app.window` of game.yaml), the game with `GameTestCase`.
 
+### One window: the game inside the Tauri window
+
+`app: {embed: true}` puts the game **in** the Tauri window instead of a window of SDL's own
+(`JumPHP\Tauri\EmbeddedGame`):
+
+```yaml
+game:
+  ui: hybrid
+  app:
+    embed: true
+    window: {width: 960, height: 540}     # optional: the window (default: width x height x scale; no url)
+```
+
+SDL draws each frame into memory (its software renderer, as headless shots; no SDL window, video driver `dummy`);
+the picture (a BMP, ~0.2 ms for 320 x 180) goes to the runtime through `jt_frame()` and JumPHP's page
+(`engine/web/tauri/game.html`, served as `/__jumphp/game.html`) draws the newest one on a canvas, sharp and
+letterboxed (`integer_scale` honoured), once per screen refresh. The keyboard, the mouse (in the game's pixels) and
+the focus come back through `jumphp.send('__input')` into the engine's `InputManager`: actions, F3 and F11
+(fullscreen of the Tauri window) work as usual; gamepads are read by SDL. Closing the window ends the game. Sound
+stays SDL's. Other HTML windows: `$app->createWindow()` in the `main` class. Tried for real with Pong on Xvfb (the
+menu, then Enter from the page started a game). Without what it needs (headless, browser, phones, no FFI), the game
+keeps its SDL window. For bigger resolutions or OpenGL games, a window of SDL's own stays the better choice (the
+picture is copied once per frame, and GL is not drawn into memory).
+
 ---
 
 ## Tests
@@ -517,7 +541,7 @@ On Windows and macOS without Docker: a PHP 8.2+ with FFI (`ffi.enable=1`), `comp
 Done: the runtime (Linux, Windows, macOS), PHP driving it from its main thread, windows, pages, page <-> PHP both
 ways, native dialogs / notifications / opener / clipboard, menus, tray icon, global shortcuts, drag and drop, closing
 decided by PHP, hybrid games (SDL + Tauri), tests without a window, real-window tests (Xvfb here, the three systems
-on GitHub), one-file export for Linux and Windows, an `.app` for macOS, menus, updates.
+on GitHub), one-file export for Linux and Windows, an `.app` for macOS, menus, updates, a hybrid game in one window.
 
 Next:
 - **Signed apps**: macOS notarization and Windows Authenticode need the developer's certificates (the Apple
@@ -525,5 +549,4 @@ Next:
 - **Android, iOS**: Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
   does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do; that means a
   Tauri mobile project embedding JumPHP's PHP build for Android / iOS, its own work.
-- **SDL inside a WebView window** (one window instead of two for hybrid games).
 - More native features as Tauri plugins + `JumPHP\Native` providers.

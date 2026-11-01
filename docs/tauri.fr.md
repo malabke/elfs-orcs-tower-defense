@@ -168,6 +168,12 @@ normal** (sans Tauri) dans les tests sans écran, dans le navigateur, dans les a
 runtime. `bin/jumphp run` le lance dans l'image Tauri ; `export:standalone` le fait avec un micro SDL **et** FFI
 (`tools/hybrid-extensions.txt`).
 
+**Une seule fenêtre** : `app: {embed: true}` met le jeu **dans** la fenêtre Tauri (`JumPHP\Tauri\EmbeddedGame`) :
+SDL dessine chaque frame en mémoire (pas de fenêtre SDL), l'image passe au runtime (`jt_frame()`), la page de JumPHP
+(`engine/web/tauri/game.html`) la dessine sur un canvas, nette et centrée, et renvoie clavier, souris et focus au
+moteur (actions, F3, F11 marchent ; manettes lues par SDL). Fermer la fenêtre termine le jeu. Essayé pour de vrai
+avec Pong sur Xvfb. Pour les grandes résolutions ou les jeux OpenGL, une fenêtre SDL reste préférable.
+
 ## Tests
 
 `JumPHP\Testing\AppTestCase` joue l'app **sans fenêtre** (un `FakeRuntime` : ni FFI ni GTK) ; le test fait la
@@ -241,5 +247,4 @@ glisser-déposer, fermeture décidée par PHP, jeux hybrides, tests sans fenêtr
 macOS, mises à jour.
 
 Ensuite : la signature des apps (certificats du développeur), Android et iOS (la boucle y est pilotée par
-l'activité / UIKit : un projet mobile Tauri embarquant le PHP d'Android / iOS de JumPHP, un chantier en soi), le SDL
-dans une fenêtre WebView (une seule fenêtre pour les jeux hybrides), d'autres fonctions natives.
+l'activité / UIKit : un projet mobile Tauri embarquant le PHP d'Android / iOS de JumPHP, un chantier en soi), d'autres fonctions natives.

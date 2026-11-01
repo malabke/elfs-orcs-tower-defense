@@ -125,18 +125,55 @@ fn do_frame() {
 
 struct FolderAssets {
     root: PathBuf,
+    /// JumPHP's own pages (config "engine_pages"), served under /__jumphp/ (the embedded game's page)
+    engine: Option<PathBuf>,
 }
 
 impl FolderAssets {
     fn path(&self, key: &str) -> Option<PathBuf> {
-        let rel = Path::new(key.trim_start_matches('/'));
+        let key = key.trim_start_matches('/');
+        let (root, key) = match (key.strip_prefix("__jumphp/"), &self.engine) {
+            (Some(rest), Some(engine)) => (engine, rest),
+            _ => (&self.root, key),
+        };
+        let rel = Path::new(key);
         // never outside the folder
         if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
             return None;
         }
-        let path = self.root.join(rel);
+        let path = root.join(rel);
         path.is_file().then_some(path)
     }
+}
+
+// --- the embedded game's frames (ui: hybrid, app.embed): PHP hands each picture over, the page fetches it -----------
+
+static FRAME_NO: AtomicU64 = AtomicU64::new(0);
+
+fn frame_data() -> &'static Mutex<Vec<u8>> {
+    static DATA: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
+    DATA.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// jumphpframe://localhost/frame?after=<n> (Windows: http://jumphpframe.localhost/...): the newest picture (a BMP),
+/// 204 while it is still picture n.
+fn frame_response(request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    let current = FRAME_NO.load(Ordering::SeqCst);
+    let after = request
+        .uri()
+        .query()
+        .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("after=")))
+        .and_then(|v| v.parse::<u64>().ok());
+    let builder = tauri::http::Response::builder()
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Expose-Headers", "X-Frame")
+        .header("Cache-Control", "no-store")
+        .header("X-Frame", current.to_string());
+    if after == Some(current) || current == 0 {
+        return builder.status(204).body(Vec::new()).unwrap_or_default();
+    }
+    let body = frame_data().lock().map(|d| d.clone()).unwrap_or_default();
+    builder.status(200).header("Content-Type", "image/bmp").body(body).unwrap_or_default()
 }
 
 impl<R: Runtime> Assets<R> for FolderAssets {
@@ -617,7 +654,8 @@ fn run(config: Value) -> Result<i32, String> {
         context.config_mut().version = Some(v.to_string());
         context.package_info_mut().version = v.parse().unwrap_or_else(|_| context.package_info().version.clone());
     }
-    context.set_assets(Box::new(FolderAssets { root }));
+    let engine = str_of(&config, "engine_pages").map(PathBuf::from);
+    context.set_assets(Box::new(FolderAssets { root, engine }));
     if let Some(hz) = f64_of(&config, "tick_hz") {
         TICK_US.store((1_000_000.0 / hz.clamp(1.0, 1000.0)) as u64, Ordering::SeqCst);
     }
@@ -637,6 +675,7 @@ fn run(config: Value) -> Result<i32, String> {
                 .build(),
         )
         .on_menu_event(|_app, event| on_menu(event.id().as_ref()))
+        .register_uri_scheme_protocol("jumphpframe", |_ctx, request| frame_response(&request))
         .invoke_handler(tauri::generate_handler![jumphp_invoke, jumphp_emit])
         .setup(|app| {
             let _ = HANDLE.set(app.handle().clone());
@@ -747,6 +786,20 @@ pub extern "C" fn jt_send(command_json: *const c_char) {
         }
         Err(e) => push_event(json!({"type": "error", "cmd": "", "message": format!("bad command JSON: {e}")})),
     }
+}
+
+/// The embedded game's newest picture (a BMP): PHP calls it after each frame it draws.
+#[no_mangle]
+pub extern "C" fn jt_frame(data: *const u8, len: usize) {
+    if data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
+    if let Ok(mut d) = frame_data().lock() {
+        d.clear();
+        d.extend_from_slice(bytes);
+    }
+    FRAME_NO.fetch_add(1, Ordering::SeqCst);
 }
 
 #[no_mangle]

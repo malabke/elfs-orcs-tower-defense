@@ -199,6 +199,7 @@ class Engine extends EventEmitter
         }
         $renderer->endFrame();
         $this->frame++;
+        $this->emit('rendered');
     }
 
     /** Browser: one frame, then one turn of the event loop (the game's timers). */
@@ -339,6 +340,9 @@ class Engine extends EventEmitter
         if ($window !== null) {
             $window->toggleFullscreen();
             $this->options->set('fullscreen', $window->isFullscreen());
+        } else {
+            // no SDL window (a game embedded in a Tauri window: JumPHP\Tauri\EmbeddedGame): whoever shows it
+            $this->emit('fullscreen-request');
         }
     }
 

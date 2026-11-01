@@ -159,6 +159,7 @@ final class App extends EventEmitter
             'version' => (string)$this->config->get('version', '0.1.0'),
             'root' => $this->pagesDir(),
             'tick_hz' => (float)$this->option('tick_hz', 60),
+            'engine_pages' => dirname(__DIR__, 2) . '/web/tauri',     // served as /__jumphp/ (the embedded game's page)
         ];
         $code = $this->runtime->run($config, fn () => $this->frame());
         $this->running = false;

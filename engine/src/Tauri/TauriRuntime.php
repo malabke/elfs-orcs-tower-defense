@@ -23,6 +23,7 @@ final class TauriRuntime implements NativeRuntime
         int jt_run(const char *config_json, void (*frame)(void));
         const char *jt_poll(void);
         void jt_send(const char *command_json);
+        void jt_frame(const char *data, size_t len);
         const char *jt_version(void);
         C;
 
@@ -115,6 +116,11 @@ final class TauriRuntime implements NativeRuntime
     public function send(array $command): void
     {
         $this->ffi->jt_send(json_encode($command, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+    }
+
+    public function picture(string $bmp): void
+    {
+        $this->ffi->jt_frame($bmp, strlen($bmp));
     }
 
     public function version(): string

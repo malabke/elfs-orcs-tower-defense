@@ -15,6 +15,12 @@ rm -rf "$dest" && mkdir -p "$dest"
     --exclude='./vendor/jumphp/engine/vendor' --exclude='./vendor/jumphp/engine/.phpunit.cache' --exclude='*.md' . ) \
   | tar -x -C "$dest"
 mkdir -p "$dest/var"
+# desktop apps and hybrid games: JumPHP's own Tauri pages (the embedded game's), from the web/ left out above
+if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?(hybrid|webview)' "$src/config/game.yaml" 2>/dev/null \
+    && [ -d "$src/vendor/jumphp/engine/web/tauri" ]; then
+  mkdir -p "$dest/vendor/jumphp/engine/web"
+  cp -RL "$src/vendor/jumphp/engine/web/tauri" "$dest/vendor/jumphp/engine/web/"
+fi
 if [ -f /etc/ssl/certs/ca-certificates.crt ]; then cp /etc/ssl/certs/ca-certificates.crt "$dest/cacert.pem"
 elif [ -f /etc/ssl/cert.pem ]; then cp /etc/ssl/cert.pem "$dest/cacert.pem"; fi # macOS (the Apple apps' build)
 sha=(sha256sum); command -v sha256sum >/dev/null || sha=(shasum -a 256) # macOS
