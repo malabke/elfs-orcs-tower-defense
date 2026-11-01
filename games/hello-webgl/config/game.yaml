@@ -9,6 +9,18 @@ game:
   descriptions:                 # the description in the playground's languages (jumphp.net shows the visitor's)
     fr: "Des cubes 3D et des shaders de post-traitement (CRT, vague, 4 couleurs) depuis PHP, avec WebGL dans le navigateur."
     en: "3D cubes and post-processing shaders (CRT, wave, 4 colours) from PHP, with WebGL in the browser."
+    es: "Cubos 3D y shaders de posprocesado (CRT, onda, 4 colores) desde PHP, con WebGL en el navegador."
+    de: "3D-Würfel und Post-Processing-Shader (CRT, Welle, 4 Farben) aus PHP, mit WebGL im Browser."
+    it: "Cubi 3D e shader di post-elaborazione (CRT, onda, 4 colori) da PHP, con WebGL nel browser."
+    pt: "Cubos 3D e shaders de pós-processamento (CRT, onda, 4 cores) a partir de PHP, com WebGL no navegador."
+    nl: "3D-kubussen en post-processing-shaders (CRT, golf, 4 kleuren) vanuit PHP, met WebGL in de browser."
+    pl: "Sześciany 3D i shadery postprocessingu (CRT, fala, 4 kolory) z poziomu PHP, z WebGL w przeglądarce."
+    ru: "3D-кубы и шейдеры постобработки (ЭЛТ, волна, 4 цвета) из PHP, с WebGL в браузере."
+    uk: "3D-куби та шейдери постобробки (ЕПТ, хвиля, 4 кольори) з PHP, з WebGL у браузері."
+    tr: "PHP'den 3D küpler ve son işlem shader'ları (CRT, dalga, 4 renk), tarayıcıda WebGL ile."
+    ja: "PHP から 3D キューブとポストプロセスシェーダー（CRT、ウェーブ、4色）。ブラウザでは WebGL で動きます。"
+    zh: "用 PHP 实现 3D 立方体和后期处理着色器（CRT、波浪、4 色），在浏览器中使用 WebGL。"
+    ko: "PHP로 만든 3D 큐브와 후처리 셰이더(CRT, 물결, 4색), 브라우저에서는 WebGL로."
   width: 320
   height: 180
   scale: 3

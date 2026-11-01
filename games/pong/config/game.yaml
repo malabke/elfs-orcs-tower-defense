@@ -7,6 +7,18 @@ game:
   descriptions:                 # the description in the playground's languages (jumphp.net shows the visitor's)
     fr: "Le classique, en PHP : contre l'ordinateur, à deux sur un clavier, ou en ligne."
     en: "The classic, in PHP: against the computer, two players on one keyboard, or online."
+    es: "El clásico, en PHP: contra el ordenador, dos jugadores en un teclado o en línea."
+    de: "Der Klassiker in PHP: gegen den Computer, zu zweit an einer Tastatur oder online."
+    it: "Il classico, in PHP: contro il computer, in due sulla stessa tastiera o online."
+    pt: "O clássico, em PHP: contra o computador, dois jogadores no mesmo teclado ou online."
+    nl: "De klassieker, in PHP: tegen de computer, met z'n tweeën op één toetsenbord of online."
+    pl: "Klasyk w PHP: przeciwko komputerowi, we dwóch na jednej klawiaturze lub online."
+    ru: "Классика на PHP: против компьютера, вдвоём за одной клавиатурой или онлайн."
+    uk: "Класика на PHP: проти комп'ютера, удвох за однією клавіатурою або онлайн."
+    tr: "PHP ile klasik oyun: bilgisayara karşı, tek klavyede iki kişi ya da çevrim içi."
+    ja: "PHP で作ったあの定番ゲーム：コンピューター対戦、1台のキーボードで2人対戦、オンライン対戦。"
+    zh: "PHP 版经典游戏：对战电脑、两人共用一个键盘或在线对战。"
+    ko: "PHP로 만든 고전 게임: 컴퓨터와 대결, 한 키보드로 2인 플레이, 또는 온라인 대전."
   width: 320
   height: 180
   scale: 3

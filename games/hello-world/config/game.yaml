@@ -8,6 +8,18 @@ game:
   descriptions:                 # the description in the playground's languages (jumphp.net shows the visitor's)
     fr: "Le plus petit jeu JumPHP : un menu, un texte qui bouge, un son. Le point de départ des tutoriels."
     en: "The smallest JumPHP game: a menu, a text that moves, a sound. The start of the tutorials."
+    es: "El juego JumPHP más pequeño: un menú, un texto que se mueve y un sonido. El punto de partida de los tutoriales."
+    de: "Das kleinste JumPHP-Spiel: ein Menü, ein Text, der sich bewegt, ein Ton. Der Ausgangspunkt der Tutorials."
+    it: "Il più piccolo gioco JumPHP: un menu, un testo che si muove, un suono. Il punto di partenza dei tutorial."
+    pt: "O menor jogo JumPHP: um menu, um texto que se move, um som. O ponto de partida dos tutoriais."
+    nl: "Het kleinste JumPHP-spel: een menu, een bewegende tekst, een geluid. Het startpunt van de tutorials."
+    pl: "Najmniejsza gra JumPHP: menu, poruszający się tekst i dźwięk. Punkt wyjścia samouczków."
+    ru: "Самая маленькая игра на JumPHP: меню, движущийся текст и звук. С неё начинаются уроки."
+    uk: "Найменша гра на JumPHP: меню, рухомий текст і звук. З неї починаються уроки."
+    tr: "En küçük JumPHP oyunu: bir menü, hareket eden bir yazı, bir ses. Eğitimlerin başlangıç noktası."
+    ja: "いちばん小さな JumPHP ゲーム：メニュー、動くテキスト、サウンド。チュートリアルの出発点です。"
+    zh: "最小的 JumPHP 游戏：一个菜单、一段会移动的文字、一个音效。教程的起点。"
+    ko: "가장 작은 JumPHP 게임: 메뉴, 움직이는 텍스트, 사운드 하나. 튜토리얼의 출발점입니다."
   width: 320                    # virtual resolution (pixels of the game, scaled to the window)
   height: 180
   scale: 3                      # desktop window = 960 x 540

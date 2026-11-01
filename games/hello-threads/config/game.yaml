@@ -8,6 +8,18 @@ game:
   descriptions:                 # the description in the playground's languages (jumphp.net shows the visitor's)
     fr: "Une fractale calculée par un pool de threads PHP (TrueAsync), pendant que la boucle principale continue de dessiner."
     en: "A fractal computed by a pool of PHP threads (TrueAsync), while the main loop keeps drawing."
+    es: "Un fractal calculado por un pool de hilos PHP (TrueAsync), mientras el bucle principal sigue dibujando."
+    de: "Ein Fraktal, berechnet von einem Pool aus PHP-Threads (TrueAsync), während die Hauptschleife weiterzeichnet."
+    it: "Un frattale calcolato da un pool di thread PHP (TrueAsync), mentre il ciclo principale continua a disegnare."
+    pt: "Um fractal calculado por um pool de threads PHP (TrueAsync), enquanto o loop principal continua desenhando."
+    nl: "Een fractal berekend door een pool van PHP-threads (TrueAsync), terwijl de hoofdlus blijft tekenen."
+    pl: "Fraktal liczony przez pulę wątków PHP (TrueAsync), podczas gdy główna pętla nadal rysuje."
+    ru: "Фрактал, который считает пул потоков PHP (TrueAsync), пока главный цикл продолжает рисовать."
+    uk: "Фрактал, який обчислює пул потоків PHP (TrueAsync), поки головний цикл продовжує малювати."
+    tr: "Ana döngü çizmeye devam ederken bir PHP iş parçacığı havuzunun (TrueAsync) hesapladığı bir fraktal."
+    ja: "PHP スレッドプール（TrueAsync）が計算するフラクタル。その間もメインループは描画を続けます。"
+    zh: "由 PHP 线程池（TrueAsync）计算的分形，主循环同时继续绘制。"
+    ko: "PHP 스레드 풀(TrueAsync)이 계산하는 프랙털. 그동안 메인 루프는 계속 그립니다."
   width: 320
   height: 180
   scale: 3

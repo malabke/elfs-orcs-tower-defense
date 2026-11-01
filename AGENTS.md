@@ -209,7 +209,7 @@ Replace its scenes and entities with your game:
    | Key | Default | |
    |---|---|---|
    | `id`, `title`, `version`, `description` | | identity (page title, `game.json` for the portal) |
-   | `descriptions` | {} | the description per language, `{fr: '…', en: '…'}`: the playground shows the visitor's (fill both) |
+   | `descriptions` | {} | the description per language, `{fr: '…', en: '…', es: '…'}`: the playground shows the visitor's. Its languages: `fr en es de it pt nl pl ru uk tr ja zh ko` (fill them all, at least fr and en) |
    | `width`, `height` | 320, 180 | virtual resolution (classic: 320×180, 256×224, 256×192, 320×240) |
    | `scale` | 3 | desktop window = width × scale |
    | `integer_scale` | false | scale by whole factors only (sharper, bigger black borders) |
@@ -846,6 +846,15 @@ and `tools/site/`).
   `https://<playground>/<game>/` on the playground).
 - **Phones**: works at 390 px wide, no sideways scrolling, 16 px side margins.
 - Language: the user's language (or the game's `lang`). Credit the original authors for a remake.
+- **Other languages** (the playground speaks `fr en es de it pt nl pl ru uk tr ja zh ko` and shows a game's site in the
+  visitor's language when it has it): `site/index.html` is the page in the main language (its `<html lang>`), each
+  translation is `site/<code>/index.html` (same page, translated: title, description, Open Graph, `alt`, JSON-LD
+  texts). Inside `site/<code>/`, relative paths go one folder up: `../images/…`, the game `../play/` (with `?back=` if the
+  main page has one: `../play/?back=../<code>/`). Every page (the main one included) lists all the languages:
+  `<link rel="alternate" hreflang="<code>" href="https://{{DOMAIN}}/<code>/">`, the main one at `https://{{DOMAIN}}/`, plus
+  `hreflang="x-default"` = the main one; canonical and `og:url` = the page itself, `og:locale` its language; a small menu
+  of the languages (links `../<code>/`, `../` for the main one, each in its own language). `sitemap.xml`: one `<url>` per
+  language with the `xhtml:link` alternates.
 - **Check it**: `bin/jumphp build:site <id>` then `bin/jumphp siteshot <id>`: it fails on a broken image, a
   JavaScript error, a missing title / description / `play/` link or sideways scrolling, and writes
   `var/screenshots/site-desktop.png` and `site-phone.png`: **open them** and look.

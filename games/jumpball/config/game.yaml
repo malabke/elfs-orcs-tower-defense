@@ -9,6 +9,18 @@ game:
   descriptions:                 # the description in the playground's languages (jumphp.net shows the visitor's)
     fr: "Un runner 3D en PHP + WebGL : la balle roule de plus en plus vite, dirigez-la et sautez par-dessus les trous."
     en: "A 3D runner in PHP + WebGL: the ball rolls faster and faster, steer and jump over the holes."
+    es: "Un runner 3D en PHP + WebGL: la bola rueda cada vez más rápido; guíala y salta por encima de los agujeros."
+    de: "Ein 3D-Runner in PHP + WebGL: Die Kugel rollt immer schneller – lenke sie und spring über die Löcher."
+    it: "Un runner 3D in PHP + WebGL: la palla rotola sempre più veloce, guidala e salta i buchi."
+    pt: "Um runner 3D em PHP + WebGL: a bola rola cada vez mais rápido; guie-a e pule os buracos."
+    nl: "Een 3D-runner in PHP + WebGL: de bal rolt steeds sneller, stuur hem en spring over de gaten."
+    pl: "Runner 3D w PHP + WebGL: kula toczy się coraz szybciej, steruj nią i przeskakuj dziury."
+    ru: "3D-раннер на PHP + WebGL: шар катится всё быстрее — управляйте им и перепрыгивайте ямы."
+    uk: "3D-ранер на PHP + WebGL: куля котиться дедалі швидше — керуйте нею й перестрибуйте ями."
+    tr: "PHP + WebGL ile 3D bir koşu oyunu: top giderek hızlanıyor, onu yönlendir ve deliklerin üzerinden atla."
+    ja: "PHP + WebGL の 3D ランナー：どんどん速くなるボールを操り、穴を飛び越えよう。"
+    zh: "PHP + WebGL 制作的 3D 跑酷：小球越滚越快，操控它跳过坑洞。"
+    ko: "PHP + WebGL 3D 러너: 공이 점점 빨라집니다. 방향을 잡고 구멍을 뛰어넘으세요."
   width: 320
   height: 180
   scale: 3

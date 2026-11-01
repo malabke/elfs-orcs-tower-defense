@@ -7,6 +7,18 @@ game:
   descriptions:                 # the description in the playground's languages (jumphp.net shows the visitor's)
     fr: "Cassez le mur de briques avec une balle qui rebondit : 3 vies, un nouveau mur à chaque niveau."
     en: "Break the wall of bricks with a bouncing ball: 3 lives, a new wall every level."
+    es: "Rompe el muro de ladrillos con una bola que rebota: 3 vidas y un muro nuevo en cada nivel."
+    de: "Zerschlage die Ziegelmauer mit einem springenden Ball: 3 Leben, eine neue Mauer in jedem Level."
+    it: "Distruggi il muro di mattoni con una palla che rimbalza: 3 vite, un nuovo muro a ogni livello."
+    pt: "Quebre o muro de tijolos com uma bola que quica: 3 vidas e um muro novo a cada nível."
+    nl: "Breek de muur van stenen met een stuiterende bal: 3 levens, elk level een nieuwe muur."
+    pl: "Rozbij mur z cegieł odbijającą się piłką: 3 życia, nowy mur w każdym poziomie."
+    ru: "Разбейте кирпичную стену отскакивающим мячом: 3 жизни, новая стена на каждом уровне."
+    uk: "Розбийте цегляну стіну м'ячем, що відскакує: 3 життя, нова стіна на кожному рівні."
+    tr: "Seken bir topla tuğla duvarı yık: 3 can, her seviyede yeni bir duvar."
+    ja: "跳ね返るボールでレンガの壁を壊そう：ライフは3つ、レベルごとに新しい壁。"
+    zh: "用反弹的小球打破砖墙：3 条命，每关一面新墙。"
+    ko: "튕기는 공으로 벽돌 벽을 부수세요: 목숨 3개, 레벨마다 새로운 벽."
   width: 320
   height: 240
   scale: 3                      # desktop window = 960 x 720
