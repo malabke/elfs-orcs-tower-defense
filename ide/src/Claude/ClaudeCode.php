@@ -16,6 +16,12 @@ final class ClaudeCode
     /** what claude may do without asking (claude -p cannot ask): --permission-mode */
     public const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'];
 
+    /** how hard it thinks: --effort */
+    public const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+    /** a model: an alias (fable, opus, sonnet, haiku) or a full name (claude-opus-5-5, claude-sonnet-5-5[1m]...) */
+    public const MODEL = '/^[A-Za-z0-9._\[\]-]{1,60}$/';
+
     /** @var array<int, string> run id => the part of a line not ended yet */
     private array $buffers = [];
 
@@ -41,7 +47,7 @@ final class ClaudeCode
      * @param string|null $session the session_id of the conversation to go on with
      * @return array{id: int}
      */
-    public function send(string $prompt, ?string $session = null, string $mode = 'acceptEdits', ?string $model = null): array
+    public function send(string $prompt, ?string $session = null, string $mode = 'acceptEdits', ?string $model = null, ?string $effort = null): array
     {
         if (trim($prompt) === '') {
             throw new \InvalidArgumentException('Nothing to send.');
@@ -54,8 +60,11 @@ final class ClaudeCode
         if ($session !== null && preg_match('/^[\w-]{8,64}$/', $session)) {
             array_push($command, '--resume', $session);
         }
-        if ($model !== null && preg_match('/^[\w.-]{1,40}$/', $model)) {
+        if ($model !== null && preg_match(self::MODEL, $model)) {
             array_push($command, '--model', $model);
+        }
+        if ($effort !== null && in_array($effort, self::EFFORTS, true)) {
+            array_push($command, '--effort', $effort);
         }
         $id = 0;
         $started = $this->processes->start($command, $this->root, ['JUMPHP_IDE' => '1'], function (string $chunk, string $stream) use (&$id): void {

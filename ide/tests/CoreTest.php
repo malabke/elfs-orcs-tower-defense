@@ -187,7 +187,7 @@ final class CoreTest extends TestCase
             }, $processes);
             self::assertTrue($ide->handle('project.info', [])['capabilities']['claude']);
             self::assertSame('9.9 (Claude Code)', $ide->handle('claude.status', [])['version']);
-            $run = $ide->handle('claude.send', ['prompt' => 'Say hello', 'session' => 'sess-00000000', 'mode' => 'plan']);
+            $run = $ide->handle('claude.send', ['prompt' => 'Say hello', 'session' => 'sess-00000000', 'mode' => 'plan', 'model' => 'claude-opus-5-5', 'effort' => 'xhigh']);
             for ($i = 0; $i < 500 && !array_filter($events, fn ($e) => $e[0] === 'claude.exit'); $i++) {
                 $processes->poll();
                 usleep(5000);
@@ -196,7 +196,7 @@ final class CoreTest extends TestCase
             self::assertSame(['system', 'assistant', 'result'], $types);
             self::assertSame('Hello', array_values(array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'assistant'))[0][1]['event']['message']['content'][0]['text']);
             self::assertSame(['claude.exit', ['id' => $run['id'], 'code' => 0, 'error' => null]], end($events));
-            self::assertSame("-p Say hello --output-format stream-json --verbose --permission-mode plan --resume sess-00000000\n", file_get_contents("$this->dir/args.txt"));
+            self::assertSame("-p Say hello --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh\n", file_get_contents("$this->dir/args.txt"));
         } finally {
             putenv("PATH=$saved");
         }
@@ -246,5 +246,24 @@ final class CoreTest extends TestCase
         self::assertSame('JumPHP\\Scene\\AbstractScene', $tree['supers'][0]['supers'][0]['name']);
         $scene = $ide->handle('php.hierarchy', ['class' => 'JumPHP\\Ui\\MenuScene']);
         self::assertContains('App\\Scene\\TitleScene', array_column($scene['subs'], 'name'));
+    }
+
+    public function testAFileOfTheEngineLinkedByVendorOpensFromExternalLibraries(): void
+    {
+        // a game of a JumPHP checkout: vendor/jumphp/engine links to the engine, outside the game's folder
+        $engine = (string)realpath(dirname(__DIR__, 2) . '/engine');
+        $ws = new LocalWorkspace($this->dir);
+        $ws->write('composer.json', '{"autoload": {"psr-4": {"App\\\\": "src/"}}}');
+        $ws->write('vendor/composer/autoload_psr4.php', "<?php\n\$vendorDir = dirname(__DIR__);\nreturn array(\n    'JumPHP\\\\' => array(\$vendorDir . '/jumphp/engine/src'),\n);\n");
+        mkdir("$this->dir/vendor/jumphp");
+        symlink($engine, "$this->dir/vendor/jumphp/engine");
+        $ide = new Ide($ws);
+        $library = $ide->handle('libraries.list', [])[0];
+        self::assertSame(["$engine/src", true], [$library['dir'], $library['external']]);
+        $file = $ide->handle('file.read', ['path' => "$engine/src/Ui/MenuScene.php"]);
+        self::assertTrue($file['readOnly']);
+        self::assertStringContainsString('class MenuScene', $file['content']);
+        $this->expectException(WorkspaceException::class);
+        $ide->handle('file.read', ['path' => dirname($engine) . '/bin/jumphp']);
     }
 }

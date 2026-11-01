@@ -49,6 +49,12 @@ final class Main implements AppMain
         $server = (string)(getenv('JUMPHP_IDE_SERVER') ?: ($this->session['server'] ?? Playground::DEFAULT_SERVER));
         $this->playground = new Playground($app->http(), $server, $this->session['token'] ?? null);
         $this->bridge = new ClaudeBridge($this, $this->playground, $this->processes);
+        // a crash is saved for JumPHP's developers and sent at the next start (CrashReports)
+        $crashes = new CrashReports($app->storage, (string)$app->config->get('version'));
+        $app->on('crash', fn (\Throwable $e) => $crashes->save($e));
+        if (getenv('JUMPHP_IDE_CRASH_REPORTS') !== '0') {
+            $crashes->send($this->playground);
+        }
         $this->registerCommands();
         // bin/jumphp claude:connect, or the option kept from last time: this computer's Claude answers the web IDE
         if (getenv('JUMPHP_IDE_BRIDGE') === '1' || $app->options->get('claudeBridge', false)) {

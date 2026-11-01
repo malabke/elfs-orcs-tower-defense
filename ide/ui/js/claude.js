@@ -3,7 +3,7 @@
 // commands it runs, appear as they come (claude.event); the conversation goes on (--resume). What it changes on disk
 // comes back into the editors by themselves (the IDE watches the files).
 import { backend } from './backend.js';
-import { el, clear, icon, menu, notify, prefs } from './ui.js';
+import { el, clear, icon, menu, notify, prefs, prompt } from './ui.js';
 
 const MODES = {
   acceptEdits: ['Edit files', 'Claude changes files without asking; commands it may not run are refused'],
@@ -11,6 +11,18 @@ const MODES = {
   default: ['Ask (refuse what needs a yes)', 'Claude can only do what needs no permission'],
   bypassPermissions: ['Full auto', 'Claude edits and runs any command without asking: only in a project you trust'],
 };
+
+// claude --model: '' = Claude Code's own setting; aliases follow the newest model of each family; "Other…" any full name
+const MODELS = [
+  ['', 'Model: default'],
+  ['Newest', [['fable', 'Fable (newest)'], ['opus', 'Opus (newest)'], ['sonnet', 'Sonnet (newest)'], ['haiku', 'Haiku (newest)']]],
+  ['Versions', [['claude-fable-5-1', 'Fable 5.1'], ['claude-opus-5-5', 'Opus 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-haiku-5-5', 'Haiku 5.5'],
+    ['opusplan', 'Opus plans, Sonnet codes']]],
+];
+
+// claude --effort: how hard it thinks
+const EFFORTS = [['', 'Thinking: default'], ['low', 'Thinking: low'], ['medium', 'Thinking: medium'], ['high', 'Thinking: high'],
+  ['xhigh', 'Thinking: extra high'], ['max', 'Thinking: max']];
 
 export class ClaudePanel {
   constructor(app) {
@@ -26,17 +38,49 @@ export class ClaudePanel {
     this.input = el('textarea.input.claude-input', { rows: 3, placeholder: 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)',
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); } } });
     this.sendBtn = el('button.btn.primary.small', { onclick: () => (this.run ? this.stop() : this.send()) }, 'Send');
+    this.model = prefs.get('claudeModel', '');
+    this.effort = prefs.get('claudeEffort', '');
+    this.modelSelect = el('select.input.small.claude-select', { title: 'The model Claude uses (claude --model)', onchange: () => this.pickModel() });
+    this.effortSelect = el('select.input.small.claude-select', { title: 'How hard Claude thinks (claude --effort)',
+      onchange: () => { this.effort = this.effortSelect.value; prefs.set('claudeEffort', this.effort); } },
+      ...EFFORTS.map(([v, label]) => el('option', { value: v, selected: v === this.effort }, label)));
+    this.fillModels();
     this.node = el('div.claude-panel', {}, this.log, el('div.claude-compose', {}, this.input,
       el('div.claude-bar', {},
         el('button.btn.small', { title: 'Mention the file open in the editor', onclick: () => this.mentionFile() }, icon('file'), 'File'),
         el('button.btn.small', { title: 'Paste the selected code with its place', onclick: () => this.addSelection() }, icon('code'), 'Selection'),
-        el('span.tw-spacer'), this.sendBtn)));
+        el('span.tw-spacer'), this.sendBtn),
+      el('div.claude-bar', {}, this.modelSelect, this.effortSelect)));
     for (const item of this.history) this.renderItem(item);
     if (!this.history.length) this.placeholder();
     backend.on('claude.event', (p) => this.event(p));
     backend.on('claude.exit', (p) => this.exit(p));
     this.remote = !!app.project.capabilities?.claudeRemote;     // the web IDE: the Claude of the user's computer
     this.checkStatus();
+  }
+
+  /** The model list, with the one typed in "Other…" when it is not a known one. */
+  fillModels() {
+    clear(this.modelSelect);
+    const known = MODELS.flatMap(([v, g]) => (Array.isArray(g) ? g.map(([id]) => id) : [v]));
+    for (const [v, group] of MODELS) {
+      if (!Array.isArray(group)) { this.modelSelect.append(el('option', { value: v }, group)); continue; }
+      this.modelSelect.append(el('optgroup', { label: v }, ...group.map(([id, label]) => el('option', { value: id }, label))));
+    }
+    if (this.model && !known.includes(this.model)) this.modelSelect.append(el('option', { value: this.model }, this.model));
+    this.modelSelect.append(el('option', { value: '?' }, 'Other…'));
+    this.modelSelect.value = this.model;
+  }
+
+  async pickModel() {
+    let value = this.modelSelect.value;
+    if (value === '?') {
+      value = ((await prompt('Another model', { value: this.model, label: 'Its name for claude --model, e.g. claude-opus-4-1 or claude-sonnet-5-5[1m]:', placeholder: 'claude-…' })) || '').trim();
+      if (!/^[A-Za-z0-9._[\]-]{1,60}$/.test(value)) value = this.model;
+    }
+    this.model = value;
+    prefs.set('claudeModel', value);
+    this.fillModels();
   }
 
   async checkStatus() {
@@ -142,7 +186,7 @@ export class ClaudePanel {
     this.add({ role: 'user', text: prompt });
     this.input.value = '';
     try {
-      const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: this.mode });
+      const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: this.mode, model: this.model, effort: this.effort });
       this.run = { id, started: Date.now(), tools: 0 };
       if (this.remote) this.pollRemote(id, 0);
       this.sendBtn.textContent = 'Stop';

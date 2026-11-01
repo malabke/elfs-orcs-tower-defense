@@ -133,7 +133,8 @@ final class ClaudeBridge
                         $this->finish((int)$payload['code'], $payload['error'] ?? null, self::changes($game, $before));
                     }
                 });
-                $this->runId = $claude->send((string)$job['prompt'], $job['session'] ?? null, (string)($job['mode'] ?? 'acceptEdits'))['id'];
+                $this->runId = $claude->send((string)$job['prompt'], $job['session'] ?? null, (string)($job['mode'] ?? 'acceptEdits'),
+                    isset($job['model']) ? (string)$job['model'] : null, isset($job['effort']) ? (string)$job['effort'] : null)['id'];
             })
             ->then(null, fn (\Throwable $e) => $this->finish(-1, 'Your computer could not prepare the project: ' . $e->getMessage(), []));
     }

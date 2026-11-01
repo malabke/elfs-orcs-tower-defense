@@ -66,8 +66,11 @@ final class Loopback
             if (!str_contains($buffer, "\r\n\r\n") && !feof($client)) {
                 continue;
             }
-            $this->answer($client, $buffer);
             unset($this->clients[$i]);
+            $this->answer($client, $buffer);
+            if ($this->server === null) {
+                return;     // signed in or cancelled: close() let go of the rest
+            }
         }
         $this->clients = array_values($this->clients);
     }
@@ -118,7 +121,9 @@ final class Loopback
     private function close(): void
     {
         foreach ($this->clients as [$client]) {
-            @fclose($client);
+            if (is_resource($client)) {     // the one answered is closed already: fclose() of it throws
+                fclose($client);
+            }
         }
         $this->clients = [];
         if ($this->server !== null) {

@@ -77,6 +77,19 @@ final class Playground
         return $this->call($method, $path, $body, $timeout);
     }
 
+    /** A POST signed in or not (a crash report: the IDE may crash before the user signs in). */
+    public function post(string $path, array $body, float $timeout = 15.0): Task
+    {
+        if ($this->token !== null) {
+            return $this->call('POST', $path, $body, $timeout);
+        }
+        $out = new Task();
+        $this->http->request('POST', $this->server . $path, $body, ['Accept' => 'application/json', 'User-Agent' => 'jumphp-ide'], $timeout)
+            ->then(fn (HttpResponse $r) => $r->ok() ? $out->settle($r->json()) : $out->settle(null, new PlaygroundException("jumphp.net answered HTTP $r->status", $r->status)),
+                fn (\Throwable $e) => $out->settle(null, $e));
+        return $out;
+    }
+
     /** A JSON call: resolves with the decoded body, rejects with the server's error message. */
     private function call(string $method, string $path, ?array $body = null, float $timeout = 30.0): Task
     {

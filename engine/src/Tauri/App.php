@@ -602,6 +602,11 @@ final class App extends EventEmitter
         $this->crash = $e;
         self::stderr("[jumphp] CRASH: " . get_class($e) . ': ' . $e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine()
             . "\n" . $e->getTraceAsString() . "\n");
+        // the app's last word (a crash report saved for its next start): nothing it does may hide the crash
+        try {
+            $this->emit('crash', [$e]);
+        } catch (\Throwable) {
+        }
         $this->quit(1);
     }
 

@@ -85,7 +85,8 @@ final class Ide
             $this->claude = new ClaudeCode($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
-                (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null));
+                (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
+                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null));
             $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
         }
     }
@@ -271,7 +272,10 @@ final class Ide
         if (str_starts_with($path, '/')) {
             // a library file outside the project (go to definition into vendor/): read only, PHP only
             $real = realpath($path);
-            $library = $real !== false && array_filter([...$this->libraryDirs, ...(($root = $this->workspace->localPath()) !== null ? [(string)realpath("$root/engine")] : [])],
+            // the libraries added, the engine of the repository, and the ones the index found outside the project
+            // (a game whose vendor/jumphp/engine links to the JumPHP checkout: External Libraries)
+            $found = array_map(fn (array $l) => (string)realpath($l['dir']), array_filter($this->index->libraries(), fn (array $l) => $l['external']));
+            $library = $real !== false && array_filter([...$this->libraryDirs, ...$found, ...(($root = $this->workspace->localPath()) !== null ? [(string)realpath("$root/engine")] : [])],
                 fn (string $dir) => $dir !== '' && str_starts_with($real, $dir . '/'));
             if ($real === false || !str_ends_with($real, '.php') || (!str_contains($real, '/vendor/') && !$library)) {
                 throw new WorkspaceException("cannot open $path");

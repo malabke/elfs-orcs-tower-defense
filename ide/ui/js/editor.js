@@ -470,7 +470,10 @@ export class Editors {
     for (const [path, file] of this.files) {
       if (!file.model || (paths && !paths.includes(path)) || this.isDirty(path) || path.startsWith('/')) continue;
       try {
+        const version = file.model.getAlternativeVersionId();
         const data = await backend.invoke('file.read', { path });
+        // typed while the disk was read: what was typed wins (it is saved next)
+        if (this.isDirty(path) || file.model.getAlternativeVersionId() !== version) continue;
         if (data.text && data.content !== file.model.getValue()) {
           file.model.pushEditOperations([], [{ range: file.model.getFullModelRange(), text: data.content }], () => null);
           file.saved = file.model.getAlternativeVersionId();
