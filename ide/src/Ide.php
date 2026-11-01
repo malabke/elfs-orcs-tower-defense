@@ -4,6 +4,7 @@ namespace JumPHP\Ide;
 
 use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Processes;
+use JumPHP\Ide\Claude\ClaudeCode;
 use JumPHP\Ide\Git\Git;
 use JumPHP\Ide\Php\Index;
 use JumPHP\Ide\Php\Intelligence;
@@ -41,6 +42,9 @@ final class Ide
 
     private bool $indexed = false;
 
+    /** the Claude Code of this computer (desktop only) */
+    public ?ClaudeCode $claude = null;
+
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
 
@@ -76,6 +80,13 @@ final class Ide
         }
         if ($this->runner !== null) {
             $this->registerRun();
+        }
+        if ($root !== null) {
+            $this->claude = new ClaudeCode($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+            $this->register('claude.status', fn () => $this->claude->status());
+            $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
+                (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null));
+            $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
         }
     }
 
@@ -148,6 +159,7 @@ final class Ide
                 'branches' => true, 'log' => true, 'blame' => true, 'stage' => true,
                 'run' => $this->runner !== null, 'preview' => false, 'tests' => false,
                 'local' => $this->workspace->localPath() !== null,
+                'claude' => $this->claude !== null,
             ],
             'root' => $this->workspace->localPath(),
         ]);

@@ -366,3 +366,28 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .row.ext-root .label { color: var(--text-2); font-style: italic; }
 .tree-head { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px 2px; }
 .placeholder.small { font-size: 12px; padding: 4px 30px; text-align: left; }
+
+/* the Claude tool window: a conversation with the Claude Code of this computer ------------------------------- */
+.claude-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.claude-log { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; user-select: text; }
+.claude-msg { padding: 8px 10px; border-radius: 8px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.claude-msg.user { background: var(--selection); align-self: flex-end; max-width: 90%; }
+.claude-msg.assistant { background: var(--panel-2); white-space: normal; }
+.claude-msg.assistant p { margin: 0 0 6px; white-space: pre-wrap; }
+.claude-msg.assistant code { font-family: var(--mono); font-size: 12px; background: var(--hover); padding: 0 3px; border-radius: 3px; }
+.claude-code { font: 12px/1.45 var(--mono); background: var(--bg, #1e1f22); border: 1px solid var(--border-2); border-radius: 6px; padding: 8px; overflow: auto; margin: 4px 0; }
+.claude-msg.error { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.claude-msg.note { color: var(--yellow); font-size: 12px; }
+.claude-tool { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-2); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.claude-tool b { font-weight: 600; color: var(--text); }
+.claude-tool span { overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
+.claude-tool.link { cursor: pointer; }
+.claude-tool.link:hover span { text-decoration: underline; }
+.claude-done { font-size: 11px; color: var(--text-3); text-align: center; border-top: 1px dashed var(--border-2); padding-top: 4px; }
+.claude-thinking { font-size: 12px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
+.claude-thinking .spinner { width: 10px; height: 10px; border: 2px solid var(--text-3); border-top-color: var(--accent); border-radius: 50%; animation: claude-spin 0.8s linear infinite; }
+@keyframes claude-spin { to { transform: rotate(360deg); } }
+.claude-compose { border-top: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.claude-input { resize: vertical; min-height: 54px; font: inherit; }
+.claude-bar { display: flex; gap: 6px; align-items: center; }
+.claude-empty { margin: auto; text-align: center; }

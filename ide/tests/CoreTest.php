@@ -166,6 +166,42 @@ final class CoreTest extends TestCase
         }
     }
 
+    public function testClaudeCodeAnswersAsItGoesAndTheConversationGoesOn(): void
+    {
+        $saved = (string)getenv('PATH');
+        mkdir("$this->dir/fake");
+        // a stand-in claude: its arguments, then stream-json lines (one split across two writes)
+        file_put_contents("$this->dir/fake/claude", "#!/bin/sh\n[ \"\$1\" = --version ] && { echo '9.9 (Claude Code)'; exit 0; }\n"
+            . "echo \"\$@\" > args.txt\n"
+            . "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"sess-12345678\"}'\n"
+            . "printf '%s' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",'\n"
+            . "printf '%s\\n' '\"text\":\"Hello\"}]}}'\n"
+            . "printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"sess-12345678\"}'\n");
+        chmod("$this->dir/fake/claude", 0755);
+        putenv("PATH=$this->dir/fake:$saved");
+        try {
+            $events = [];
+            $processes = new Processes();
+            $ide = new Ide(new LocalWorkspace($this->dir), null, function (string $event, array $payload) use (&$events) {
+                $events[] = [$event, $payload];
+            }, $processes);
+            self::assertTrue($ide->handle('project.info', [])['capabilities']['claude']);
+            self::assertSame('9.9 (Claude Code)', $ide->handle('claude.status', [])['version']);
+            $run = $ide->handle('claude.send', ['prompt' => 'Say hello', 'session' => 'sess-00000000', 'mode' => 'plan']);
+            for ($i = 0; $i < 500 && !array_filter($events, fn ($e) => $e[0] === 'claude.exit'); $i++) {
+                $processes->poll();
+                usleep(5000);
+            }
+            $types = array_map(fn ($e) => $e[1]['event']['type'], array_values(array_filter($events, fn ($e) => $e[0] === 'claude.event')));
+            self::assertSame(['system', 'assistant', 'result'], $types);
+            self::assertSame('Hello', array_values(array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'assistant'))[0][1]['event']['message']['content'][0]['text']);
+            self::assertSame(['claude.exit', ['id' => $run['id'], 'code' => 0, 'error' => null]], end($events));
+            self::assertSame("-p Say hello --output-format stream-json --verbose --permission-mode plan --resume sess-00000000\n", file_get_contents("$this->dir/args.txt"));
+        } finally {
+            putenv("PATH=$saved");
+        }
+    }
+
     public function testTheCommandsOfTheIde(): void
     {
         $ws = new LocalWorkspace($this->dir);

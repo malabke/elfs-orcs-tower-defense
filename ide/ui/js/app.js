@@ -10,6 +10,7 @@ import { Git } from './git.js';
 import { Runner, Problems, Structure, Hierarchy } from './run.js';
 import { Welcome } from './welcome.js';
 import { GamePanel } from './game.js';
+import { ClaudePanel } from './claude.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -79,6 +80,7 @@ class App {
     this.hierarchy = new Hierarchy(this);
     this.find = new FindPanel(this);
     if (this.project.capabilities?.preview) this.game = new GamePanel(this);
+    if (this.project.capabilities?.claude) this.claude = new ClaudePanel(this);
     this.console = { append: (source, text) => { if (this.gitConsole) this.gitConsole.textContent += text; } };
     this.registerTools();
     this.registerActions();
@@ -106,6 +108,7 @@ class App {
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
+    if (this.claude) T('claude', 'right', 'Claude', 'star', this.claude, 'Alt+8');
     if (caps.log) T('git', 'bottom', 'Git', 'log', { title: () => 'Git', node: this.git.logNode, actions: () => [el('button', { title: 'Refresh', onclick: () => this.git.showLog() }, icon('refresh'))] }, 'Alt+9');
   }
 
@@ -395,6 +398,7 @@ class App {
       a.add('test', 'Run Tests on jumphp.net', () => this.runner.remoteTests(), { kbd: 'Ctrl+Shift+F10', icon: 'test' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
     }
+    if (this.claude) a.add('claudeTool', 'Claude', () => this.toggleTool('claude'), { kbd: 'Alt+8', icon: 'star' });
     if (caps.preview) {
       a.add('preview', 'Play the Game', () => this.game.play(), { kbd: 'Shift+F10', icon: 'play' });
       a.add('gameTool', 'Game', () => this.toggleTool('game'), { kbd: 'Alt+5', icon: 'game' });
@@ -453,7 +457,7 @@ class App {
     menu([
       section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'closeProject']),
       section('Edit', ['find', 'replace', 'findInFiles', 'replaceInFiles', 'comment']),
-      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'runTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
+      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'claudeTool', 'runTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),

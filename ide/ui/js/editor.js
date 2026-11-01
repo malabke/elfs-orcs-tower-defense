@@ -738,6 +738,11 @@ export class Editors {
     menu([
       play ? { label: play.label, icon: colorIcon('play', 'green'), kbd: 'Ctrl+Shift+F10', action: () => this.app.playFile(tab.path) } : null,
       play ? '-' : null,
+      this.app.claude ? { label: ed.getSelection()?.isEmpty() ? 'Ask Claude about This File' : 'Ask Claude about the Selection', icon: 'star', action: () => {
+        const sel = ed.getSelection();
+        this.app.claude.ask(sel && !sel.isEmpty() ? `In ${tab.path} (lines ${sel.startLineNumber}-${sel.endLineNumber}):\n\`\`\`\n${ed.getModel().getValueInRange(sel)}\n\`\`\`\n` : `@${tab.path} `);
+      } } : null,
+      this.app.claude ? '-' : null,
       php ? { label: 'Go to Declaration', kbd: 'Ctrl+B', action: run('editor.action.revealDefinition') } : null,
       php ? { label: 'Go to Implementation(s)', kbd: 'Ctrl+Alt+B', action: run('editor.action.goToImplementation') } : null,
       php ? { label: 'Find Usages', icon: 'find', kbd: 'Alt+F7', action: () => this.app.findUsages?.() } : null,
