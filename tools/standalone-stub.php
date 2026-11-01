@@ -73,6 +73,8 @@ define('JUMPHP_EXECUTABLE', (string)realpath(__FILE__));   // micro runs the exe
 if ($windows && is_file(JUMPHP_EXECUTABLE . '.old')) {
     @unlink(JUMPHP_EXECUTABLE . '.old');
 }
+// the folder the player started it from (paths typed on its command line are relative to it)
+define('JUMPHP_CWD', (string)getcwd());
 chdir($root);
 require "$root/vendor/autoload.php";
 // what starts it: the game (JumPHP\Kernel\Application), or a desktop app (JumPHP\Tauri\App, docs/tauri.md)
