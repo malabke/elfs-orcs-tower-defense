@@ -38,7 +38,7 @@ final class Hybrid
     public static function embedded(GameConfig $config): bool
     {
         return self::wanted($config) && ($config->get('app', [])['embed'] ?? false) === true
-            && extension_loaded('ffi') && TauriRuntime::library($config->root()) !== null;
+            && TauriRuntime::canLoad($config->root());
     }
 
     /** @return int|null the exit code, or null when the game has to run as a plain game */

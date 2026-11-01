@@ -397,8 +397,14 @@ have WebView2; its micro and library come from JumPHP's GitHub releases, see [Pl
 | the user's files | `~/.local/share/<id>` (saves, options, the WebView's storage in `webview/`) |
 
 The computer needs **WebKitGTK 4.1** (`libwebkit2gtk-4.1-0`: Debian 12+, Ubuntu 22.04+, Fedora 39+, Arch
-`webkit2gtk-4.1`) and glibc 2.34 or newer. Checked on a bare Debian 13 with
-only `libwebkit2gtk-4.1-0` installed (no PHP).
+`webkit2gtk-4.1`) and glibc 2.34 or newer. **When it is missing, the app offers to install it** before opening
+any window (`JumPHP\Tauri\LinuxWebView`): it finds the distribution (`/etc/os-release`), asks (in the terminal it
+was started from, else a `zenity` / `kdialog` dialog), installs the package with the user's rights (root,
+`pkexec`'s password window, or `sudo` in the terminal), then starts. Declined or impossible (no password, no
+network, an immutable system, an unknown distribution): it shows the exact command to run and stops.
+`JUMPHP_INSTALL=yes` installs without asking (scripts), `no` only says what to do. Tried on bare Debian 13,
+Ubuntu 24.04, Fedora 42 and Arch (each installed its package, then the app opened its window), and declining in
+a terminal.
 
 The game export is untouched: without the apps' variables, `export:standalone` builds and finds the same micro as
 before (same key).

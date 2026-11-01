@@ -228,6 +228,15 @@ d'accueil » sur iPhone. Essayé dans Chrome sans écran avec `games/hello-deskt
 enregistrement téléchargé, aucune erreur). Une vraie app Tauri native Android / iOS (PHP embarqué dans l'app) n'est
 pas faite : la boucle y appartient à l'activité / UIKit.
 
+## Linux : WebKitGTK installé par l'app
+
+Une app Linux a besoin de WebKitGTK 4.1. **S'il manque, l'app propose de l'installer** avant d'ouvrir sa fenêtre
+(`JumPHP\Tauri\LinuxWebView`) : elle reconnaît la distribution (Debian / Ubuntu / Mint, Fedora / RHEL, Arch /
+Manjaro, openSUSE), demande (dans le terminal, sinon une boîte `zenity` / `kdialog`), installe avec les droits de
+l'utilisateur (root, fenêtre de mot de passe `pkexec`, ou `sudo`), puis démarre. Refusé ou impossible : elle donne
+la commande exacte et s'arrête. `JUMPHP_INSTALL=yes` installe sans demander, `no` dit seulement quoi faire. Essayé
+sur Debian 13, Ubuntu 24.04, Fedora 42 et Arch nus. Windows (WebView2) et macOS (WKWebView) ont déjà leur WebView.
+
 ## Export macOS et mises à jour
 
 `bin/jumphp app:export <app> --macos` (depuis Linux, dans Docker) produit `dist/standalone/<app>-macos.zip` : une

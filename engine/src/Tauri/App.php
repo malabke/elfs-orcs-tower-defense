@@ -105,7 +105,7 @@ final class App extends EventEmitter
             });
         }
         $config = GameConfig::load($root);
-        $runtime ??= TauriRuntime::create($root) ?? throw new \RuntimeException(self::missingRuntime($root));
+        $runtime ??= TauriRuntime::create($root, $config->title()) ?? throw new \RuntimeException(self::missingRuntime($root));
         $app = new self($config, $runtime);
         $window = (array)$app->option('window', []);
         $app->createWindow('main', $window + ['title' => $config->title()]);

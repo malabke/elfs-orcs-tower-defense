@@ -15,6 +15,7 @@ use JumPHP\Tauri\App;
 use JumPHP\Tauri\EmbeddedGame;
 use JumPHP\Tauri\Updater;
 use JumPHP\Tauri\FakeRuntime;
+use JumPHP\Tauri\LinuxWebView;
 use JumPHP\Tauri\NativeEvent;
 use JumPHP\Tauri\TauriRuntime;
 use PHPUnit\Framework\TestCase;
@@ -335,6 +336,19 @@ final class AppTest extends TestCase
         self::assertSame(ord('z'), EmbeddedGame::sdlKey('Z', 'KeyZ'));
         self::assertSame(ord('5'), EmbeddedGame::sdlKey('5', 'Digit5'));
         self::assertSame(0, EmbeddedGame::sdlKey('Unidentified', ''));
+    }
+
+    public function testTheWebViewPackageOfEachLinuxDistribution(): void
+    {
+        self::assertSame('apt-get update && apt-get install -y libwebkit2gtk-4.1-0', LinuxWebView::installCommand(['ID' => 'debian']));
+        self::assertSame('apt-get update && apt-get install -y libwebkit2gtk-4.1-0', LinuxWebView::installCommand(['ID' => 'linuxmint', 'ID_LIKE' => 'ubuntu debian']));
+        self::assertSame('dnf install -y webkit2gtk4.1', LinuxWebView::installCommand(['ID' => 'fedora']));
+        self::assertSame('dnf install -y webkit2gtk4.1', LinuxWebView::installCommand(['ID' => 'rocky', 'ID_LIKE' => 'rhel centos fedora']));
+        self::assertSame('pacman -S --needed --noconfirm webkit2gtk-4.1', LinuxWebView::installCommand(['ID' => 'manjaro', 'ID_LIKE' => 'arch']));
+        self::assertSame('zypper --non-interactive install libwebkit2gtk-4_1-0', LinuxWebView::installCommand(['ID' => 'opensuse-tumbleweed', 'ID_LIKE' => 'opensuse suse']));
+        self::assertSame('', LinuxWebView::installCommand(['ID' => 'gentoo']));
+        self::assertTrue(LinuxWebView::isWebViewMissing(['libwebkit2gtk-4.1.so.0', 'libsoup-3.0.so.0']));
+        self::assertFalse(LinuxWebView::isWebViewMissing(['libfoo.so.1']));
     }
 
     public function testAGlobalShortcutCallsBack(): void
