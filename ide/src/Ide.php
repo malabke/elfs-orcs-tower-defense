@@ -44,6 +44,9 @@ final class Ide
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
 
+    /** @var list<string> folders outside the project whose PHP files may be opened (read only) */
+    private array $libraryDirs = [];
+
     /**
      * @param callable(string $event, array $payload): void|null $emit
      * @param string|null $cacheDir where the index is kept between sessions
@@ -58,6 +61,12 @@ final class Ide
         $this->processes = $processes ?? new Processes();
         $root = $workspace->localPath();
         if ($root !== null) {
+            // the extensions' functions (SDL, OpenGL, OpenAL...) from the engine's stubs, of the project or of a game's vendor/
+            $stubs = [];
+            foreach ([...(glob("$root/engine/stubs/*.php") ?: []), ...(glob("$root/games/*/vendor/jumphp/engine/stubs/*.php") ?: [])] as $file) {
+                $stubs[(string)realpath($file)] = true;
+            }
+            $this->index->addStubs(...array_keys($stubs));
             $this->git = new Git($this->processes, $root);
             $this->runner = new Runner($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
         }
@@ -67,6 +76,20 @@ final class Ide
         }
         if ($this->runner !== null) {
             $this->registerRun();
+        }
+    }
+
+    /**
+     * A library the project uses but does not hold (the web IDE: the engine is not in the published game):
+     * its classes resolve, go to definition opens them read only, its stubs declare the extensions' functions.
+     */
+    public function addLibrary(string $prefix, string $dir, ?string $stubsDir = null): void
+    {
+        $this->index->addLibrary($prefix, $dir);
+        $this->libraryDirs[] = (string)realpath($dir);
+        if ($stubsDir !== null && is_dir($stubsDir)) {
+            $this->index->addStubs(...(glob(rtrim($stubsDir, '/') . '/*.php') ?: []));
+            $this->libraryDirs[] = (string)realpath($stubsDir);
         }
     }
 
@@ -232,7 +255,9 @@ final class Ide
         if (str_starts_with($path, '/')) {
             // a library file outside the project (go to definition into vendor/): read only, PHP only
             $real = realpath($path);
-            if ($real === false || !str_ends_with($real, '.php') || !str_contains($real, '/vendor/')) {
+            $library = $real !== false && array_filter([...$this->libraryDirs, ...(($root = $this->workspace->localPath()) !== null ? [(string)realpath("$root/engine")] : [])],
+                fn (string $dir) => $dir !== '' && str_starts_with($real, $dir . '/'));
+            if ($real === false || !str_ends_with($real, '.php') || (!str_contains($real, '/vendor/') && !$library)) {
                 throw new WorkspaceException("cannot open $path");
             }
             return ['path' => $path, 'text' => true, 'content' => (string)file_get_contents($real), 'readOnly' => true];

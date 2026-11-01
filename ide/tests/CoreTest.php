@@ -183,4 +183,21 @@ final class CoreTest extends TestCase
         self::assertStringContainsString('final class Ship', $ws->read('src/Hero.php'));
         self::assertFalse($ide->handle('project.info', [])['capabilities']['git']);
     }
+
+    public function testAGameWithoutItsEngineSeesTheEngineTheHostGives(): void
+    {
+        $engine = dirname(__DIR__, 2) . '/engine';
+        $text = "<?php\nnamespace App\\Scene;\n\nuse JumPHP\\Ui\\MenuScene;\n\nfinal class TitleScene extends MenuScene\n{\n    protected function items(): array\n    {\n        \\SDL_Delay(1);\n        \$this->refresh();\n        return [];\n    }\n}\n";
+        $ws = new MemoryWorkspace(['composer.json' => '{"autoload": {"psr-4": {"App\\\\": "src/"}}}', 'src/Scene/TitleScene.php' => $text]);
+        $ide = new Ide($ws);
+        $ide->addLibrary('JumPHP\\', "$engine/src", "$engine/stubs");
+        $ide->tick(1.0);
+        $problems = array_column($ide->handle('php.diagnostics', ['path' => 'src/Scene/TitleScene.php', 'text' => $text]), 'message');
+        self::assertSame([], $problems);
+        $definition = $ide->handle('php.definition', ['path' => 'src/Scene/TitleScene.php', 'text' => $text, 'line' => 6, 'column' => 35]);
+        self::assertStringEndsWith('/engine/src/Ui/MenuScene.php', $definition[0]['path']);
+        $file = $ide->handle('file.read', ['path' => $definition[0]['path']]);
+        self::assertTrue($file['readOnly']);
+        self::assertStringContainsString('class MenuScene', $file['content']);
+    }
 }

@@ -39,9 +39,49 @@ final class Index
 
     private bool $dirty = false;
 
+    /** @var array<string, list<string>> PSR-4 prefixes given by the host (a library outside the project) */
+    private array $extraPsr4 = [];
+
+    /** @var list<string> stub files (functions / classes of extensions), analyzed at the first miss */
+    private array $stubs = [];
+
+    private bool $stubsLoaded = false;
+
     public function __construct(private Workspace $workspace, private ?string $cacheFile = null)
     {
         $this->load();
+    }
+
+    /** A library outside the project: its PSR-4 prefix and folder (absolute, or relative to the project). */
+    public function addLibrary(string $prefix, string $dir): void
+    {
+        $this->extraPsr4[$prefix][] = rtrim(str_replace('\\', '/', $dir), '/');
+        $this->findLibraries();
+    }
+
+    /** Stub files (absolute paths) declaring functions, classes and constants of extensions the IDE does not have. */
+    public function addStubs(string ...$files): void
+    {
+        array_push($this->stubs, ...$files);
+        $this->stubsLoaded = false;
+    }
+
+    private function loadStubs(): bool
+    {
+        if ($this->stubsLoaded) {
+            return false;
+        }
+        $this->stubsLoaded = true;
+        foreach ($this->stubs as $file) {
+            if (isset($this->libraries[$file]) || !is_file($file)) {
+                continue;
+            }
+            $entry = Analyzer::analyze((string)file_get_contents($file)) + ['path' => $file, 'mtime' => 0.0];
+            $entry['refs'] = [];
+            $this->libraries[$file] = $entry;
+            $this->register($entry);
+        }
+        return true;
     }
 
     public function workspace(): Workspace
@@ -169,6 +209,9 @@ final class Index
         if (!isset($this->classes[$key])) {
             $this->loadLibraryClass($fqn);
         }
+        if (!isset($this->classes[$key]) && Builtins::classInfo($key) === null) {
+            $this->loadStubs();
+        }
         $path = $this->classes[$key] ?? null;
         $entry = $path !== null ? $this->file($path) : null;
         if ($entry === null || !isset($entry['classes'][$key])) {
@@ -182,6 +225,9 @@ final class Index
     public function findFunction(string $fqn): ?array
     {
         $key = strtolower(ltrim($fqn, '\\'));
+        if (!isset($this->functions[$key]) && Builtins::functionInfo($key) === null) {
+            $this->loadStubs();
+        }
         $path = $this->functions[$key] ?? null;
         $entry = $path !== null ? $this->file($path) : null;
         if ($entry !== null && isset($entry['functions'][$key])) {
@@ -400,6 +446,15 @@ final class Index
                     }
                     $this->psr4[$prefix][] = $dir;
                 }
+            }
+        }
+        // a JumPHP project whose game has no vendor/ yet: the engine of the project itself
+        if (!isset($this->psr4['JumPHP\\']) && $this->workspace->exists('engine/src/Kernel/Engine.php')) {
+            $this->psr4['JumPHP\\'][] = 'engine/src';
+        }
+        foreach ($this->extraPsr4 as $prefix => $dirs) {
+            if (!isset($this->psr4[$prefix])) {
+                $this->psr4[$prefix] = $dirs;
             }
         }
         foreach ($this->psr4 as $prefix => $dirs) {

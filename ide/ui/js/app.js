@@ -9,6 +9,7 @@ import { searchEverywhere, recentFiles, fileStructure, FindPanel } from './searc
 import { Git } from './git.js';
 import { Runner, Problems, Structure } from './run.js';
 import { Welcome } from './welcome.js';
+import { GamePanel } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -76,6 +77,7 @@ class App {
     this.problems = new Problems(this);
     this.structure = new Structure(this);
     this.find = new FindPanel(this);
+    if (this.project.capabilities?.preview) this.game = new GamePanel(this);
     this.console = { append: (source, text) => { if (this.gitConsole) this.gitConsole.textContent += text; } };
     this.registerTools();
     this.registerActions();
@@ -101,6 +103,7 @@ class App {
     if (caps.run || caps.tests) T('run', 'bottom', 'Run', 'play', this.runner, 'Alt+4');
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
+    if (this.game) T('game', 'right', 'Game', 'game', this.game, 'Alt+5');
     if (caps.log) T('git', 'bottom', 'Git', 'log', { title: () => 'Git', node: this.git.logNode, actions: () => [el('button', { title: 'Refresh', onclick: () => this.git.showLog() }, icon('refresh'))] }, 'Alt+9');
   }
 
@@ -117,17 +120,18 @@ class App {
     for (const t of Object.values(this.tools).filter((t) => t.side === 'left')) left.append(button(t));
     left.append(el('div.sep'));
     for (const t of Object.values(this.tools).filter((t) => t.side === 'bottom')) left.append(button(t));
+    for (const t of Object.values(this.tools).filter((t) => t.side === 'right')) right.append(button(t));
     right.append(el('button', { title: 'Notifications', onclick: () => this.showNotifications() }, icon('bell')));
     const root = document.documentElement;
-    for (const v of ['--left-width', '--bottom-height']) { const saved = prefs.get('size' + v); if (saved) root.style.setProperty(v, saved); }
+    for (const v of ['--left-width', '--bottom-height', '--right-width']) { const saved = prefs.get('size' + v); if (saved) root.style.setProperty(v, saved); }
     splitter($('leftSplitter'), '--left-width', { min: 160, max: 700, onEnd: () => prefs.set('size--left-width', getComputedStyle(root).getPropertyValue('--left-width')) });
     splitter($('bottomSplitter'), '--bottom-height', { axis: 'y', invert: true, min: 90, max: innerHeight - 160, onEnd: () => prefs.set('size--bottom-height', getComputedStyle(root).getPropertyValue('--bottom-height')) });
-    this.open = { left: null, bottom: null };
+    splitter($('rightSplitter'), '--right-width', { invert: true, min: 240, max: innerWidth - 300, onEnd: () => prefs.set('size--right-width', getComputedStyle(root).getPropertyValue('--right-width')) });
+    this.open = { left: null, bottom: null, right: null };
     this.showTool(prefs.get('tool:left', 'project'), true);
     const bottom = prefs.get('tool:bottom', null);
     if (bottom && this.tools[bottom]) this.showTool(bottom, true); else this.closeSide('bottom');
-    $('rightPanel').classList.add('closed');
-    $('rightSplitter').classList.add('hidden');
+    this.closeSide('right');
   }
 
   toggleTool(id) {
@@ -139,13 +143,19 @@ class App {
   showTool(id, quiet = false) {
     const tool = this.tools[id];
     if (!tool) return;
-    const panel = tool.side === 'left' ? $('leftPanel') : $('bottomPanel');
+    const panel = $(tool.side + 'Panel');
     this.open[tool.side] = id;
     prefs.set('tool:' + tool.side, id);
     panel.classList.remove('closed');
-    (tool.side === 'left' ? $('leftSplitter') : $('bottomSplitter')).classList.remove('hidden');
-    clear(panel);
+    $(tool.side + 'Splitter').classList.remove('hidden');
     const view = tool.view;
+    if (id === 'game' && tool.header && panel.contains(tool.header)) {
+      // shown again as it was: moving an iframe in the page would reload the game
+      for (const t of Object.values(this.tools)) t.button?.classList.toggle('on', this.open[t.side] === t.id);
+      this.editors?.layout();
+      return;
+    }
+    clear(panel);
     const node = typeof view.node === 'function' ? view.node() : view.node;
     if (id === 'commit') {
       panel.append(node);
@@ -174,9 +184,9 @@ class App {
   closeSide(side) {
     this.open[side] = null;
     prefs.set('tool:' + side, null);
-    const panel = side === 'left' ? $('leftPanel') : $('bottomPanel');
+    const panel = $(side + 'Panel');
     panel.classList.add('closed');
-    (side === 'left' ? $('leftSplitter') : $('bottomSplitter')).classList.add('hidden');
+    $(side + 'Splitter').classList.add('hidden');
     for (const t of Object.values(this.tools)) t.button?.classList.toggle('on', this.open[t.side] === t.id);
     this.editors?.layout();
     this.editors?.editor()?.focus();
@@ -203,7 +213,7 @@ class App {
     $('pullBtn').addEventListener('click', () => this.git?.pull());
     $('commitBtn').addEventListener('click', () => this.showTool('commit'));
     $('pushBtn').addEventListener('click', () => this.git?.push());
-    $('previewBtn').addEventListener('click', () => this.runner?.preview());
+    $('previewBtn').addEventListener('click', () => (this.game ? this.game.play() : this.runner?.preview()));
     $('publishBtn').addEventListener('click', () => this.publish());
     $('searchBtn').addEventListener('click', () => searchEverywhere(this));
     $('settingsBtn').addEventListener('click', () => this.settings());
@@ -363,7 +373,11 @@ class App {
       a.add('test', 'Run Tests on jumphp.net', () => this.runner.remoteTests(), { kbd: 'Ctrl+Shift+F10', icon: 'test' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
     }
-    if (caps.preview) a.add('preview', 'Preview the Game', () => this.runner.preview(), { kbd: 'Shift+F10', icon: 'globe' });
+    if (caps.preview) {
+      a.add('preview', 'Play the Game', () => this.game.play(), { kbd: 'Shift+F10', icon: 'play' });
+      a.add('gameTool', 'Game', () => this.toggleTool('game'), { kbd: 'Alt+5', icon: 'game' });
+      a.add('previewTab', 'Play in a New Tab', () => this.runner.preview(), { icon: 'globe' });
+    }
     a.add('settings', 'Settings…', () => this.settings(), { kbd: 'Ctrl+Alt+S', icon: 'settings' });
     a.add('theme', 'Toggle Light / Dark Theme', () => this.toggleTheme());
     a.add('rebuildIndex', 'Rebuild the PHP Index', () => backend.invoke('index.rebuild'));
@@ -417,11 +431,11 @@ class App {
     menu([
       section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'closeProject']),
       section('Edit', ['find', 'replace', 'findInFiles', 'replaceInFiles', 'comment']),
-      section('View', ['project', 'structure', 'commitTool', 'runTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
+      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'runTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
-      section('Run', ['run', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'preview']),
+      section('Run', ['run', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'preview', 'previewTab']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },

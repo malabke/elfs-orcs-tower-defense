@@ -61,8 +61,11 @@ One interface, one PHP core, two hosts:
   token (`jpi_…`, revocable in the studio). Git push uses your GitHub token through jumphp.net, passed in git's environment,
   never written in the repository.
 - **Web**: `jumphp.net/ide/<project>` serves the same `ui/`; its commands work on the published game with your drafts on top
-  (the same drafts as the online editor); commit = one commit pushed to GitHub, Preview = the game with the drafts, tests run
-  in the playground's sandbox. Branches, log, blame and local runs are desktop only.
+  (the same drafts as the online editor); commit = one commit pushed to GitHub, the **Game** tool window (right, `Shift+F10` / `Alt+5`) plays the game with the
+  drafts beside the code: ⚡ Live puts each save into the running game (hot reload: pictures and sounds in place, code by PHP
+  started again in the scene that was playing), Restart, the game's PHP output in its console; tests run
+  in the playground's sandbox. The engine's classes and SDL / OpenGL / OpenAL functions resolve there too (sources and stubs
+  installed with the IDE by the playground's `bin/ide-install`). Branches, log, blame and local runs are desktop only.
 
 ## Commands
 

@@ -90,7 +90,7 @@ a { color: var(--blue); }
 
 .toolwindow { background: var(--panel); min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .toolwindow.left { width: var(--left-width, 290px); border-right: 1px solid var(--border); }
-.toolwindow.right { width: var(--right-width, 320px); border-left: 1px solid var(--border); }
+.toolwindow.right { width: var(--right-width, 520px); border-left: 1px solid var(--border); }
 .toolwindow.bottom { height: var(--bottom-height, 260px); border-top: 1px solid var(--border); }
 .toolwindow:empty, .toolwindow.closed { display: none; }
 .tw-header { display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 6px 0 12px; flex: none; user-select: none; }
@@ -336,3 +336,23 @@ textarea.input { resize: vertical; font-family: var(--font); }
   .toolwindow.left { width: 220px; }
   .hwidget { max-width: 160px; }
 }
+
+/* the Game tool window (right): the game played beside the code ---------------------------------------------- */
+.game-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.game-screen { flex: 1; min-height: 120px; background: #000; display: flex; }
+.game-screen .placeholder { margin: auto; text-align: center; color: var(--text-2); }
+.game-frame { flex: 1; width: 100%; height: 100%; border: 0; background: #000; }
+.game-status { color: var(--text-3); font-size: 12px; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.game-live { font-size: 13px; filter: grayscale(1); opacity: 0.6; }
+.tw-actions button.on .game-live { filter: none; opacity: 1; }
+.game-console { border-top: 1px solid var(--border); max-height: 45%; display: flex; flex-direction: column; }
+.game-console summary { cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+.game-console.has-errors summary { color: var(--red); }
+.game-console[open] summary { border-bottom: 1px solid var(--border-2); }
+.game-clear { margin-left: auto; background: none; border: 0; color: var(--text-3); cursor: pointer; }
+.game-log { overflow: auto; font: 12px/1.45 var(--mono, monospace); padding: 4px 8px; height: 160px; }
+.game-log pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.game-log pre.err { color: var(--red); }
+.game-sep { color: var(--text-3); font-size: 11px; border-top: 1px dashed var(--border-2); margin: 4px 0; padding-top: 2px; }
+/* an iframe would swallow the mouse while a splitter is dragged */
+body:has(.splitter.drag) iframe { pointer-events: none; }

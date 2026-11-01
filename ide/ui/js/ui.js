@@ -144,18 +144,26 @@ function overlay(dim, onClose) {
 export function menu(items, at) {
   const { layer, close } = overlay(false);
   const box = el('div.popup');
-  const build = (list, container) => {
+  // depth 0 = the menu, 1 = its sub menu: only rows of the menu itself open / close the sub menu
+  const build = (list, container, depth = 0) => {
     for (const item of list) {
       if (item === '-') { container.append(el('div.menu-sep')); continue; }
       if (item.head) { container.append(el('div.menu-head', {}, item.head)); continue; }
       const row = el(`div.menu-item${item.disabled ? '.disabled' : ''}`, {
         onclick: (e) => {
           e.stopPropagation();
-          if (item.items) { submenu(item, row); return; }
+          if (item.items) { clearTimeout(pending); submenu(item, row); return; }
           close();
           item.action && item.action();
         },
-        onmouseenter: () => { if (item.items) submenu(item, row); else closeSub(); },
+        onmouseenter: () => {
+          if (depth > 0) return;
+          clearTimeout(pending);
+          if (subRow === row) return;
+          // a sub menu is open: wait a little, the mouse may only be crossing this row on its way to it
+          const go = () => { if (item.items) submenu(item, row); else closeSub(); };
+          if (sub) pending = setTimeout(go, 250); else go();
+        },
       }, item.checked !== undefined ? el('span.check', {}, item.checked ? '✓' : '') : null,
       item.icon ? (typeof item.icon === 'string' ? icon(item.icon) : item.icon) : null,
       el('span', {}, item.label), item.items ? el('span.sub') : null, item.kbd ? el('span.kbd', {}, item.kbd) : null);
@@ -163,14 +171,23 @@ export function menu(items, at) {
     }
   };
   let sub = null;
-  const closeSub = () => { if (sub) { sub.remove(); sub = null; } };
+  let subRow = null;
+  let pending = 0;
+  const closeSub = () => {
+    if (sub) { sub.remove(); sub = null; }
+    if (subRow) { subRow.classList.remove('sel'); subRow = null; }
+  };
   const submenu = (item, row) => {
     closeSub();
-    sub = el('div.popup');
-    build(item.items, sub);
+    sub = el('div.popup', { onmouseenter: () => clearTimeout(pending) });
+    build(item.items, sub, 1);
     layer.append(sub);
+    subRow = row;
+    row.classList.add('sel');
     const r = row.getBoundingClientRect();
-    place(sub, { x: r.right + 2, y: r.top - 4 });
+    // beside the row; on the left when there is no room on the right
+    const x = r.right + sub.offsetWidth + 4 > innerWidth ? r.left - sub.offsetWidth - 2 : r.right + 2;
+    place(sub, { x, y: r.top - 4 });
   };
   build(items, box);
   layer.append(box);
