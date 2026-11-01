@@ -25,7 +25,7 @@ final class MainTest extends AppTestCase
     {
         $menu = $this->lastSent('menu.set');
         self::assertSame('main', $menu['window']);
-        self::assertSame(['File', 'Edit', 'View'], array_column($menu['menu'], 'text'));
+        self::assertSame(['File', 'Edit', 'View', 'Help'], array_column($menu['menu'], 'text'));
         self::assertSame(['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true], $menu['menu'][2]['items'][0]);
 
         $this->menu('wrap', 'main', false);

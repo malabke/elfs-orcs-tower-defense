@@ -232,8 +232,54 @@ app_export_macos() {
   docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -w /workspace "$DESKTOP_IMAGE" \
     php tools/macos-app.php "games/$app" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
     || die "the .app was not made (see above)"
-  rm -f "$ROOT/$out/$app-macos-arm64" "$ROOT/$out/$app-macos-x86_64"
+  # the two executables stay beside it: app:release offers them as updates of the .app (each Mac replaces its own)
   say "done: $out/$app-macos.zip ($(du -h "$ROOT/$out/$app-macos.zip" | cut -f1)): the .app inside, Apple silicon + Intel"
+}
+
+# app:release <app> --url <base> [--notes "..."] [--linux] [--windows] [--macos]: app:export, then update.json signed
+# with the app's key (~/.jumphp/keys/<id>-update.pem, made the first time; its public half: config/update.pub).
+# Upload dist/standalone/ (the executables + update.json) to <base>; game.yaml app.update.url = <base>/update.json.
+cmd_app_release() {
+  local app="${1:-}"; local dir; dir="$(app_dir "$app")"; shift || true
+  local base="" notes="" flags=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --url) base="${2:-}"; shift ;;
+      --notes) notes="${2:-}"; shift ;;
+      --linux|--windows|--macos) flags+=("$1") ;;
+      *) die "unknown option $1 (--url <base>, --notes <text>, --linux, --windows, --macos)" ;;
+    esac
+    shift
+  done
+  [ -n "$base" ] || die "where the files will be: bin/jumphp app:release $app --url https://example.com/$app"
+  local keys="${JUMPHP_HOME:-$HOME/.jumphp}/keys" id
+  id="$(sed -nE 's/^ *id: *["'"'"']?([a-z0-9-]+).*/\1/p' "$ROOT/$dir/config/game.yaml" | head -1)"
+  id="${id:-$app}"
+  mkdir -p "$keys"; chmod 700 "$keys"
+  # the public key first (the executables carry it: a first run of the tool makes the key, then stops for want
+  # of executables), then the executables, then the signed list of them
+  if [ ! -f "$ROOT/$dir/config/update.pub" ]; then
+    mkdir -p "$ROOT/$dir/dist/standalone"
+    docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
+      php tools/app-release.php "$dir" "/keys/$id-update.pem" "$base" "$notes" >/dev/null 2>&1 || true
+    [ -f "$ROOT/$dir/config/update.pub" ] || die "no key made (see tools/app-release.php)"
+  fi
+  cmd_app_export "$app" ${flags[@]+"${flags[@]}"}
+  # only what was just exported (an older executable left in dist/ is not offered)
+  local platforms="" f
+  [ ${#flags[@]} -gt 0 ] || flags=(--linux)
+  for f in "${flags[@]}"; do
+    case "$f" in
+      --linux) platforms+=",linux-x86_64" ;;
+      --windows) platforms+=",windows-x86_64" ;;
+      --macos) platforms+=",macos-arm64,macos-x86_64" ;;
+    esac
+  done
+  docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
+    php tools/app-release.php "$dir" "/keys/$id-update.pem" "$base" "$notes" "${platforms#,}" || die "update.json not written"
+  say "done: $dir/dist/standalone/update.json: upload dist/standalone/ to $base"
+  echo "  The app checks it when game.yaml has  app: {update: {url: $base/update.json}}  (\$app->updater()->check())." >&2
+  echo "  The signing key: $keys/$id-update.pem: keep a copy (without it, the apps already given can not be updated)." >&2
 }
 
 # run / test / shot of a desktop app's folder: the app:* commands (a game's folder: nothing changes)

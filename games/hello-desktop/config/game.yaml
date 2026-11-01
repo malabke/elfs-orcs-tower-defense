@@ -11,6 +11,7 @@ game:
     pages: ui                   # the folder of the HTML / CSS / JS pages (served as tauri://localhost/)
     tick_hz: 60                 # frames a second when nothing happens (timers, HTTP, tasks)
     native_commands: true       # pages may call jumphp.invoke('native.open' / 'native.message' / ...)
+    # update: {url: https://example.com/hello-desktop/update.json}   # Help > Check for updates (bin/jumphp app:release)
     window:                     # the main window
       url: index.html
       width: 980

@@ -12,6 +12,7 @@ use JumPHP\Native\NullProvider;
 use JumPHP\Native\Shell;
 use JumPHP\Native\UnsupportedFeature;
 use JumPHP\Tauri\App;
+use JumPHP\Tauri\Updater;
 use JumPHP\Tauri\FakeRuntime;
 use JumPHP\Tauri\NativeEvent;
 use JumPHP\Tauri\TauriRuntime;
@@ -269,6 +270,56 @@ final class AppTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->app->setMenu([['text' => 'no id']]);
+    }
+
+    public function testUpdatesAreCheckedThenReplaceTheExecutable(): void
+    {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        self::assertNotFalse($key);
+        $public = (string)openssl_pkey_get_details($key)['key'];
+        $manifest = function (array $signed) use ($key): string {
+            $text = (string)json_encode($signed);
+            openssl_sign($text, $sig, $key, OPENSSL_ALGO_SHA256);
+            return (string)json_encode(['signed' => $text, 'signature' => base64_encode($sig)]);
+        };
+        $updater = $this->app->updater();
+        $id = $this->app->config->id();
+        $newer = ['id' => $id, 'version' => '99.0.0', 'notes' => 'Faster', 'platforms' => ['linux-x86_64' => ['url' => 'https://x/a', 'size' => 3, 'sha256' => hash('sha256', 'new')]]];
+
+        $update = $updater->parse($manifest($newer), $public, 'linux-x86_64');
+        self::assertNotNull($update);
+        self::assertSame(['99.0.0', 'Faster', 'https://x/a'], [$update->version, $update->notes, $update->url]);
+        self::assertNull($updater->parse($manifest($newer), $public, 'windows-x86_64'), 'nothing for this system');
+        self::assertNull($updater->parse($manifest(['version' => '0.0.1'] + $newer), $public, 'linux-x86_64'), 'not newer');
+
+        $forged = json_decode($manifest($newer), true);
+        $forged['signed'] = str_replace('99.0.0', '98.0.0', $forged['signed']);
+        try {
+            $updater->parse((string)json_encode($forged), $public, 'linux-x86_64');
+            self::fail('a changed update.json was accepted');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('wrong signature', $e->getMessage());
+        }
+        try {
+            $updater->parse($manifest(['id' => 'another'] + $newer), $public, 'linux-x86_64');
+            self::fail("another app's update was accepted");
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('another app', $e->getMessage());
+        }
+
+        $exe = sys_get_temp_dir() . '/jumphp-updater-' . getmypid();
+        file_put_contents($exe, 'old');
+        try {
+            Updater::replace($exe, 'new!', hash('sha256', 'new'));
+            self::fail('a download with a wrong SHA-256 was installed');
+        } catch (\RuntimeException $e) {
+            self::assertSame('old', file_get_contents($exe));
+        }
+        Updater::replace($exe, 'new', hash('sha256', 'new'));
+        self::assertSame('new', file_get_contents($exe));
+        self::assertTrue(is_executable($exe));
+        @unlink($exe);
+        self::assertFalse($updater->isInstallable(), 'php app.php is not an exported app');
     }
 
     public function testAGlobalShortcutCallsBack(): void

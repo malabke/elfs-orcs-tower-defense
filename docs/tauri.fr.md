@@ -209,6 +209,21 @@ release de ces sources existe), sinon la compilent. `JUMPHP_TAURI_TRACE=1` affic
 `run`, `test` et `shot` sur le dossier d'une app passent la main à `app:run`, `app:test`, `app:shot` ;
 `pages` ne publie pas les apps (elles n'ont pas de version navigateur).
 
+## Export macOS et mises à jour
+
+`bin/jumphp app:export <app> --macos` (depuis Linux, dans Docker) produit `dist/standalone/<app>-macos.zip` : une
+`<Titre>.app` avec deux exécutables (Apple silicon, Intel), un lanceur qui démarre celui du Mac, `Info.plist` et
+l'icône ; macOS 12 ou plus ; non signée (compte développeur Apple) : la première fois, clic droit > Ouvrir. Le
+workflow `app-export` l'exporte et l'ouvre pour de vrai sur un Mac Apple silicon et un Mac Intel.
+
+Une app exportée se met à jour elle-même (`$app->updater()`) : `bin/jumphp app:release <app> --url <adresse>
+[--notes "..."] [--linux] [--windows] [--macos]` exporte l'app et écrit un `update.json` **signé** (clé ECDSA dans
+`~/.jumphp/keys/<id>-update.pem`, à garder précieusement ; sa moitié publique dans `config/update.pub`, à commiter) ;
+on dépose `dist/standalone/` à cette adresse, et game.yaml `app: {update: {url: <adresse>/update.json}}`.
+`check()` vérifie la signature et la version, `install()` télécharge, vérifie le SHA-256 et remplace l'exécutable,
+`relaunch()` relance. `games/hello-desktop` a Aide > Check for updates (essayé pour de vrai : la 0.1.0 a trouvé,
+installé et relancé la 0.1.1). Détails : [tauri.md](tauri.md#updates).
+
 ## Plateformes
 
 Le workflow `.github/workflows/tauri.yml` (à chaque changement de `tauri/` ou du côté PHP, ou à la main) compile la
@@ -222,9 +237,9 @@ de vrai sur chacun (la page doit se charger et appeler PHP), et publie la releas
 
 Fait : le runtime (Linux, Windows, macOS), PHP qui le pilote depuis son thread principal, fenêtres, pages, page ↔ PHP,
 dialogues / notifications / liens / presse-papiers, menus, icône de zone de notification, raccourcis globaux,
-glisser-déposer, fermeture décidée par PHP, jeux hybrides, tests sans fenêtre et en vraie fenêtre, export Linux et
-Windows.
+glisser-déposer, fermeture décidée par PHP, jeux hybrides, tests sans fenêtre et en vraie fenêtre, export Linux, Windows et
+macOS, mises à jour.
 
-Ensuite : l'export macOS (une `.app` avec PHP, via la chaîne Apple), Android et iOS (la boucle y est pilotée par
+Ensuite : la signature des apps (certificats du développeur), Android et iOS (la boucle y est pilotée par
 l'activité / UIKit : un projet mobile Tauri embarquant le PHP d'Android / iOS de JumPHP, un chantier en soi), le SDL
 dans une fenêtre WebView (une seule fenêtre pour les jeux hybrides), d'autres fonctions natives.

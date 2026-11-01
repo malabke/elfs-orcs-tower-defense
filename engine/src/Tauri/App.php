@@ -65,6 +65,7 @@ final class App extends EventEmitter
     private float $lastTime = 0.0;
     private ?\Throwable $crash = null;
     private ?AppMain $main = null;
+    private ?Updater $updater = null;
     private ?Tasks $tasks = null;
     private ?Http $http = null;
     private ?JsBridge $bridge = null;
@@ -283,6 +284,12 @@ final class App extends EventEmitter
     {
         $this->sendCommand(['cmd' => 'menu.set_item', 'window' => '*', 'item' => $item] + array_intersect_key($changes, ['enabled' => 1, 'checked' => 1, 'text' => 1]));
         return $this;
+    }
+
+    /** The app's updates (an exported app, game.yaml app.update.url; docs/tauri.md "Updates"). */
+    public function updater(): Updater
+    {
+        return $this->updater ??= new Updater($this);
     }
 
     public function tray(string $id = 'main', array $options = []): Tray

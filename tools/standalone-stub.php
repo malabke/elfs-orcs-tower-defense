@@ -68,6 +68,11 @@ if (getenv('SSL_CERT_FILE') === false) {
         }
     }
 }
+// the executable itself (desktop apps' updates replace it: JumPHP\Tauri\Updater); Windows: the one an update moved aside
+define('JUMPHP_EXECUTABLE', (string)realpath(__FILE__));   // micro runs the executable itself as this script
+if ($windows && is_file(JUMPHP_EXECUTABLE . '.old')) {
+    @unlink(JUMPHP_EXECUTABLE . '.old');
+}
 chdir($root);
 require "$root/vendor/autoload.php";
 // what starts it: the game (JumPHP\Kernel\Application), or a desktop app (JumPHP\Tauri\App, docs/tauri.md)

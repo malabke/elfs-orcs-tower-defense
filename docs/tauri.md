@@ -379,6 +379,49 @@ only `libwebkit2gtk-4.1-0` installed (no PHP).
 The game export is untouched: without the apps' variables, `export:standalone` builds and finds the same micro as
 before (same key).
 
+### macOS: an .app
+
+`bin/jumphp app:export <app> --macos` (from Linux, in Docker) makes `dist/standalone/<app>-macos.zip`: `<Title>.app`
+with two executables (Apple silicon, Intel: micro + the app), a launcher that starts the Mac's own, `Info.plist`
+(game.yaml `title`, `version`, `app.identifier`) and the icon (`assets/icon.png` as `.icns`); the universal library
+inside. macOS 12 or newer. The app's cache and data go to `~/Library/Caches/JumPHP` and
+`~/Library/Application Support/<id>`. It is not signed (Apple's developer account): the first time, right click on
+the app > Open. The workflow `app-export` (Actions > app-export) exports an app and opens it for real on an Apple
+silicon Mac and an Intel Mac (and on Ubuntu).
+
+## Updates
+
+An exported app can update itself (`JumPHP\Tauri\Updater`, `$app->updater()`): no installer, the executable is
+replaced by the newer one.
+
+```bash
+bin/jumphp app:release notes --url https://example.com/notes --notes "Faster saving." --linux --windows --macos
+# then upload games/notes/dist/standalone/ (the executables + update.json) to https://example.com/notes
+```
+
+- The first time, it makes the app's signing key (ECDSA P-256) in `~/.jumphp/keys/<id>-update.pem` (never in the
+  project; **keep a copy**: without it the apps already given can not be updated) and writes its public half to
+  `config/update.pub` (commit it: the app checks what it downloads with it).
+- `update.json`: the app's id, its `version` (game.yaml: bump it for each release), the notes, and for each system
+  just exported (`linux-x86_64`, `windows-x86_64`, `macos-arm64`, `macos-x86_64`) the executable's address, size and
+  SHA-256, all signed.
+- The app knows where to look: game.yaml `app: {update: {url: https://example.com/notes/update.json}}`
+  (`JUMPHP_UPDATE_URL` tries another one).
+
+```php
+$app->updater()->check()->then(function (?Update $update) use ($app) {     // null: up to date
+    if ($update !== null && $app->updater()->isInstallable()) {             // false under `php app.php`
+        Dialog::confirm("Version $update->version is out. $update->notes\nInstall it?", 'Notes', 'Install', 'Later')
+            ->then(fn ($yes) => $yes ? $update->install()->then(fn () => $app->updater()->relaunch()) : null);
+    }
+});
+```
+
+`check()` fails on a wrong signature or another app's file; `install()` downloads, refuses a wrong SHA-256, then
+replaces the executable (Windows: the running one is renamed `*.old`, removed at the next start; macOS: the
+executable of the Mac's processor inside the `.app`); `relaunch()` starts it and quits. `games/hello-desktop` has
+Help > Check for updates (tried for real: 0.1.0 found 0.1.1, installed it and restarted as 0.1.1).
+
 ---
 
 ## Commands
@@ -389,7 +432,8 @@ before (same key).
 | `app:run <app>` | the app on your screen (X11, else Wayland; the session bus for notifications; the GPU) |
 | `app:test <app>` | php -l, phpstan, phpunit, then the app for real on Xvfb |
 | `app:shot <app> [frames] [out.png]` | the main window after N frames (default 120) |
-| `app:export <app> [--linux]` | one executable for Linux |
+| `app:export <app> [--linux] [--windows] [--macos]` | one executable for Linux (default), an `.exe` for Windows, an `.app` (zip) for macOS |
+| `app:release <app> --url <base> [--notes "..."] [--linux] [--windows] [--macos]` | exported + a signed `update.json` ([Updates](#updates)) |
 | `tauri:setup` | the `jumphp/tauri` image: the desktop runtime + FFI + Rust + WebKitGTK headers (~5 min) |
 | `tauri:build` | `tauri/` -> `build/tauri/linux-x86_64/libjumphp_tauri.so` (~5 min the first time, Cargo caches in `~/.jumphp/tauri`) |
 | `tauri:download [platform...\|--all]` | the library of these sources of `tauri/` from JumPHP's GitHub releases: `linux-x86_64` (default), `windows-x86_64`, `macos-universal` |
@@ -454,14 +498,14 @@ A PHP *fatal* error (not an exception) during a frame cannot be caught: it ends 
 | runtime library | `libjumphp_tauri.so` | `jumphp_tauri.dll` | `libjumphp_tauri.dylib` (universal) |
 | built and tried by | `tauri:build` here, and the workflow | the workflow | the workflow |
 | `app:run` / `app:test` / `app:shot` | yes (Docker) | — (run `php app.php` with PHP's FFI) | — (same) |
-| one-file export | `app:export` | `app:export --windows` | not yet (no macOS micro) |
+| one-file export | `app:export` | `app:export --windows` | `app:export --macos` (an `.app` in a zip) |
 
 The workflow `.github/workflows/tauri.yml` (on each change of `tauri/` or of the PHP side, or by hand) builds the
 library on the three systems (Ubuntu 22.04, so glibc 2.35+; Windows; macOS, universal), runs
 `games/hello-desktop` for real on each (its page must load and call PHP), and publishes the release
 `tauri-<key>` (`tools/tauri-key.sh`: a hash of `tauri/`'s sources) that `tauri:download` and `app:export` use.
-The micro of desktop apps for Windows is published by the workflow `standalone` run with the input
-`extensions: tools/app-extensions.txt` (`tools/hybrid-extensions.txt`: hybrid games).
+The micro of desktop apps for Windows and macOS is published by the workflow `standalone` run with the input
+`extensions: tools/app-extensions.txt` (`tools/hybrid-extensions.txt`: hybrid games, Linux and Windows).
 
 On Windows and macOS without Docker: a PHP 8.2+ with FFI (`ffi.enable=1`), `composer install` in the app, then
 `JUMPHP_TAURI_LIB=<the library> php app.php`.
@@ -473,10 +517,11 @@ On Windows and macOS without Docker: a PHP 8.2+ with FFI (`ffi.enable=1`), `comp
 Done: the runtime (Linux, Windows, macOS), PHP driving it from its main thread, windows, pages, page <-> PHP both
 ways, native dialogs / notifications / opener / clipboard, menus, tray icon, global shortcuts, drag and drop, closing
 decided by PHP, hybrid games (SDL + Tauri), tests without a window, real-window tests (Xvfb here, the three systems
-on GitHub), one-file export for Linux and Windows.
+on GitHub), one-file export for Linux and Windows, an `.app` for macOS, menus, updates.
 
 Next:
-- **macOS export**: an `.app` / `.dmg` carrying PHP (the Apple pipeline, `bin/jumphp apple`, has the pieces).
+- **Signed apps**: macOS notarization and Windows Authenticode need the developer's certificates (the Apple
+  account, a code signing certificate); unsigned, the systems warn the first time.
 - **Android, iOS**: Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
   does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do; that means a
   Tauri mobile project embedding JumPHP's PHP build for Android / iOS, its own work.

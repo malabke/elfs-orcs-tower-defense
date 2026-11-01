@@ -10,6 +10,7 @@ use JumPHP\Native\Notification;
 use JumPHP\Tauri\App;
 use JumPHP\Tauri\AppMain;
 use JumPHP\Tauri\NativeEvent;
+use JumPHP\Tauri\Update;
 
 /**
  * Hello Desktop: a notepad. The page (ui/) is HTML; everything it does goes through PHP here: the file it edits
@@ -79,9 +80,14 @@ final class Main implements AppMain
             ]],
             ['text' => 'Edit', 'items' => [['role' => 'undo'], ['role' => 'redo'], '-', ['role' => 'cut'], ['role' => 'copy'], ['role' => 'paste'], ['role' => 'select_all']]],
             ['text' => 'View', 'items' => [['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true]]],
+            ['text' => 'Help', 'items' => [['id' => 'update', 'text' => 'Check for updates...']]],
         ]);
         $app->window()->on('menu', function (string $item, ?bool $checked): void {
             $this->menuClicks++;
+            if ($item === 'update') {
+                $this->checkForUpdates();
+                return;
+            }
             $this->app->window()->send('menu', ['item' => $item, 'checked' => $checked]);
         });
 
@@ -163,6 +169,31 @@ final class Main implements AppMain
         FilePicker::save(['title' => 'Save the note', 'file_name' => $this->file !== null ? basename($this->file) : 'note.txt'])
             ->then(fn (mixed $path) => $write(is_string($path) ? $path : null), fn (\Throwable $e) => $result->settle(null, $e));
         return $result;
+    }
+
+    /** Help > Check for updates: an exported app replaces itself (game.yaml app.update.url, bin/jumphp app:release). */
+    private function checkForUpdates(): void
+    {
+        $updater = $this->app->updater();
+        if ($updater->url() === null) {
+            Dialog::message('This app has no update address (game.yaml app.update.url).', 'Hello Desktop');
+            return;
+        }
+        $updater->check()->then(function (?Update $update) use ($updater): void {
+            if ($update === null) {
+                Dialog::message('Hello Desktop ' . $updater->version() . ' is the newest version.', 'Hello Desktop');
+                return;
+            }
+            if (!$updater->isInstallable()) {
+                Dialog::message("Version $update->version is out (run from sources: nothing to replace).", 'Hello Desktop');
+                return;
+            }
+            Dialog::confirm("Version $update->version is out. $update->notes\nInstall it and restart?", 'Hello Desktop', 'Install', 'Later')
+                ->then(fn (mixed $yes) => $yes ? $update->install()->then(
+                    fn () => $updater->relaunch(),
+                    fn (\Throwable $e) => Dialog::message('The update failed: ' . $e->getMessage(), 'Hello Desktop'),
+                ) : null);
+        }, fn (\Throwable $e) => Dialog::message('Cannot check for updates: ' . $e->getMessage(), 'Hello Desktop'));
     }
 
     private function updateTitle(): void
