@@ -105,11 +105,18 @@ final class App extends EventEmitter
             });
         }
         $config = GameConfig::load($root);
+        $main = $config->get('main');
+        // the command line first (AppCli): an exit code stops here, before any window or native library
+        if ($runtime === null && is_string($main) && is_subclass_of($main, AppCli::class)) {
+            $code = $main::cli(array_values(array_slice((array)($_SERVER['argv'] ?? []), 1)), $root);
+            if ($code !== null) {
+                exit($code);
+            }
+        }
         $runtime ??= TauriRuntime::create($root, $config->title()) ?? throw new \RuntimeException(self::missingRuntime($root));
         $app = new self($config, $runtime);
         $window = (array)$app->option('window', []);
         $app->createWindow('main', $window + ['title' => $config->title()]);
-        $main = $config->get('main');
         if ($main !== null) {
             if (!class_exists((string)$main)) {
                 throw new \RuntimeException("game.main: class '$main' not found (namespace / file name?)");

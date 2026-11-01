@@ -224,6 +224,26 @@ await jumphp.invoke('native.notify', {title: 'Done', body: 'Export finished'});
 await jumphp.invoke('native.openUrl', {url: 'https://jumphp.net'});
 ```
 
+### The command line (no window): `AppCli`
+
+A main class that also implements `JumPHP\Tauri\AppCli` gets `static cli(array $args, string $root): ?int` first,
+before the native library is loaded: return an exit code to stop there (`--help`, `--version`, a silent install), or
+`null` to open the window as usual. Blocking is allowed there (no frame runs yet).
+
+```php
+final class Main implements AppMain, AppCli
+{
+    public static function cli(array $args, string $root): ?int
+    {
+        if (in_array('--version', $args, true)) {
+            echo "1.0\n";
+            return 0;
+        }
+        return null;
+    }
+}
+```
+
 ---
 
 ## Native features from PHP: `JumPHP\Native`

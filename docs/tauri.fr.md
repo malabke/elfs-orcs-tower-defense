@@ -106,6 +106,10 @@ await jumphp.invoke('native.open', {filters: {Images: ['png', 'jpg']}});   // sa
                                                          // native.confirm, native.open, native.save, native.notify, native.openUrl
 ```
 
+En ligne de commande (sans fenêtre) : une classe `main` qui implémente aussi `JumPHP\Tauri\AppCli` reçoit d'abord
+`static cli(array $args, string $root): ?int`, avant le chargement de la bibliothèque native : un code de sortie
+s'arrête là (`--help`, `--version`, une installation silencieuse), `null` ouvre la fenêtre comme d'habitude.
+
 ## Fonctions natives depuis PHP : `JumPHP\Native`
 
 Les mêmes appels sur toutes les cibles ; ce qui les réalise dépend de l'endroit où le code tourne :
