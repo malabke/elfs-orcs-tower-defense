@@ -2,14 +2,16 @@
 
 ## Desktop apps (Tauri): the next targets
 
-Done: Linux, Windows, macOS runtime (workflow `tauri`), clipboard, tray, global shortcuts, hybrid games, Linux and
-Windows one-file export (docs/tauri.md).
+Done: Linux, Windows, macOS runtime (workflow `tauri`), clipboard, tray, global shortcuts, menus, hybrid games (two
+windows, or the game inside the Tauri window: `app.embed`), one-file export for Linux and Windows, an `.app` for
+macOS (workflow `app-export` opens it on two Macs), updates (`app:release`, `JumPHP\Tauri\Updater`), the same app
+in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRuntime`). docs/tauri.md.
 
-- macOS export: an .app / .dmg with PHP + the universal library (reuse `bin/jumphp apple`'s pipeline)
-- Android / iOS: Tauri's mobile loop is driven by the activity / UIKit; a Tauri mobile project embedding the PHP
-  build of `docker/android-native` / the Apple apps, calling PHP's frame from there (`run_return` does not exist on iOS)
-- SDL inside a WebView window (one window for hybrid games)
-- auto-update (tauri-plugin-updater: signing keys, an update endpoint), window menus
+- Android / iOS as native Tauri apps (the browser version runs there already, Android through `bin/jumphp twa`):
+  Tauri's mobile loop is driven by the activity / UIKit, so PHP has to be embedded in the app (the PHP builds of
+  `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
+- signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
+- a .dmg for macOS (the zip of the .app works; `hdiutil` only exists on a Mac: the workflow could make it)
 
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 

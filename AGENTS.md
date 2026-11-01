@@ -139,7 +139,7 @@ games/<id>/
 | `bin/jumphp relay up\|down\|logs` | multiplayer relay server on `ws://localhost:8090/ws` |
 | `bin/jumphp export:desktop <id>` | a Docker image that runs the game |
 | `bin/jumphp export:standalone <id> [--linux] [--windows]` | the game as one executable for players (dist/standalone/; docs/standalone.md) |
-| `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them |
+| `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them; `app:export --windows --macos`; `app:release` (updates); `build` = the app in the browser |
 | `bin/jumphp tauri:setup` / `tauri:build` / `tauri:download` | the Tauri image / the runtime library `build/tauri/linux-x86_64/libjumphp_tauri.so`, built or downloaded (done automatically when needed) |
 | `bin/jumphp apple <id>` (`ios <id>`, `macos <id>`) | the game as native Apple apps, built and tried on GitHub's Macs: .dmg (Mac), .ipa (iPhone / iPad), the simulator's app, screenshots (§14, "Apple apps") |
 | `bin/jumphp deploy [id...]` | to the project's server (`.env` `JUMPHP_SERVER`, set by `deploy:setup`): builds, rsync, `docker compose up` (FrankenPHP, or Traefik + FrankenPHP), a game with its own web site (`games/<id>/site/index.html`) gets it at the root and the game in `/play/` (`{{DOMAIN}}` replaced in its pages), then checks that `https://<domain>/` answers (shows the server logs if not). Behind a Traefik already on the server: `bin/jumphp server:traefik` prints its entry points and resolver (`JUMPHP_SERVER_MODE` `traefik-external`, or `traefik-passthrough` when it has no working resolver). Without a server: rsync `dist/web` to `$JUMPHP_DEPLOY_TARGET/<id>/`. Publishing: only when asked |
@@ -996,7 +996,8 @@ background), then ~10.
 ## 16. Desktop apps (Tauri): HTML pages, PHP behind them
 
 Besides games, JumPHP makes **desktop applications**: native windows whose content is HTML / CSS / JS (the system's
-WebView), whose logic is PHP. **Native only** (not in the browser), Linux today. Full guide: `docs/tauri.md`
+WebView), whose logic is PHP. Linux, Windows, macOS, and the same app in the browser / on phones (`bin/jumphp build
+<app>`: PHP in WebAssembly, the native side done in HTML). Full guide: `docs/tauri.md`
 (French: `docs/tauri.fr.md`). Example: `games/hello-desktop`. Nothing of this touches games.
 
 When the user wants "an app", "a desktop application", "a tool with a window", "an HTML interface" (not a game):
@@ -1007,6 +1008,8 @@ bin/jumphp install notes
 bin/jumphp app:test notes            # php -l + phpstan + phpunit (AppTestCase) + the app for real on Xvfb: must pass
 bin/jumphp app:shot notes            # var/screenshots/app.png: OPEN IT and look
 bin/jumphp app:export notes          # dist/standalone/notes-linux-x86_64 (the user's computer needs WebKitGTK 4.1)
+bin/jumphp app:export notes --windows --macos    # + notes-windows-x86_64.exe, notes-macos.zip (an .app, both Macs)
+bin/jumphp build notes               # dist/web/: the same app in a web page (webshot to check it)
 ```
 
 - **PHP is the program**: `app.php` = `exit(JumPHP\Tauri\App::boot(__DIR__)->run());`. PHP starts the Tauri runtime
@@ -1028,11 +1031,21 @@ bin/jumphp app:export notes          # dist/standalone/notes-linux-x86_64 (the u
   Write one per feature as you go, like game tests.
 - Also for apps (and hybrid games): `Clipboard::copy()` / `paste()`, `$app->tray($id, ['menu' => [...]])->on('menu', ...)`,
   `$app->globalShortcut('CmdOrCtrl+Shift+K', fn () => ...)`. `JUMPHP_TAURI_TRACE=1` prints every native command / event.
+- **Menus**: `$app->window()->setMenu([['text' => 'File', 'items' => [['id' => 'open', 'text' => 'Open...',
+  'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]], ...])` (check items: `'checked' => true`; roles: quit
+  copy cut paste undo redo select_all...), `$app->window()->on('menu', fn (string $item, ?bool $checked) => ...)`,
+  `setMenuItem()`; `$app->setMenu()` for the whole app. Test: `$this->menu('open')` in an AppTestCase.
+- **Updates** of an exported app: `bin/jumphp app:release <app> --url <base> [--linux] [--windows] [--macos]` (signed
+  update.json; the key stays in `~/.jumphp/keys`, `config/update.pub` is committed), game.yaml
+  `app: {update: {url: <base>/update.json}}`, `$app->updater()->check()->then(fn (?Update $u) => $u?->install()
+  ->then(fn () => $app->updater()->relaunch()))`. Bump game.yaml `version` for each release.
 - **Hybrid games** (`ui: hybrid` in a game's game.yaml, `main: App\Desktop` optional, `app.window` optional): an SDL
   game that also gets all this and HTML windows beside its own (`games/hello-hybrid`). Headless / browser / phones:
-  a plain game, so scenes must check `Native::supports()` and use `App::current()?->send(...)`.
-- Platforms: Linux (Docker commands), Windows and macOS (the workflow `tauri` builds and tries the library there;
-  `app:export --windows`). `tauri:download` fetches the library of these sources.
+  a plain game, so scenes must check `Native::supports()` and use `App::current()?->send(...)`. `app: {embed: true}`:
+  the game drawn **inside** the Tauri window (one window, `JumPHP\Tauri\EmbeddedGame`; not for OpenGL games).
+- Platforms: Linux (Docker commands), Windows and macOS (the workflow `tauri` builds and tries the library there,
+  `app-export` opens the exported .app on two Macs). `tauri:download` fetches the library of these sources. In the
+  browser: windows become frames, menus a bar, dialogs HTML, save = download, no tray / global shortcuts.
 - Don'ts: no SDL / `Engine` in an app (it has no SDL window); no blocking calls; never write outside `var/` (the
   user's data folder once exported) except files the user chose in a dialog.
 
