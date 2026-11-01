@@ -18,7 +18,13 @@ export class ProjectTree {
   actions() {
     return [
       el('button', { title: 'New file (Alt+Insert)', onclick: () => this.newFile(this.targetDir()) }, icon('plus')),
-      el('button', { title: 'Select opened file', onclick: () => this.reveal(this.app.editors.activePath()) }, icon('eye')),
+      el('button', { title: 'Select Opened File (Alt+F1)', onclick: () => this.reveal(this.app.editors.activePath(), true) }, icon('eye')),
+      el(`label.tw-check${prefs.get('autoscroll', false) ? '.on' : ''}`, { title: 'Always Select Opened File: the Project view follows the file you are on' },
+        el('input', { type: 'checkbox', checked: prefs.get('autoscroll', false), onchange: (e) => {
+          prefs.set('autoscroll', e.target.checked);
+          e.target.parentNode.classList.toggle('on', e.target.checked);
+          if (e.target.checked) this.reveal(this.app.editors.activePath());
+        } }), 'Follow'),
       el('button', { title: 'Collapse all', onclick: () => { this.open.clear(); this.save(); this.render(); } }, icon('collapse')),
       el('button', { title: 'Refresh', onclick: () => this.refresh() }, icon('refresh')),
     ];
@@ -171,10 +177,28 @@ export class ProjectTree {
     for (const r of this.node.querySelectorAll('.row')) r.classList.toggle('sel', r.dataset.path === path);
   }
 
-  /** Opens the folders down to a file and selects it. */
-  reveal(path) {
-    if (!path || path.startsWith('/')) return;
-    this.app.showTool?.('project');
+  /** Opens the folders down to a file and selects it (a file of the project, or of an external library). */
+  async reveal(path, show = false) {
+    if (!path) return;
+    if (show || this.app.open?.left !== 'project') {
+      if (!show && this.app.open?.left !== 'project') return;     // following: only when the Project view is shown
+      this.app.showTool?.('project');
+    }
+    const lib = (this.libraries || []).find((l) => path.startsWith(l.dir + '/') && (l.external || !this.files.includes(path)));
+    if (lib) {
+      if (!lib.files) lib.files = await backend.invoke('libraries.files', { dir: lib.dir }).catch(() => []);
+      const parts = path.slice(lib.dir.length + 1).split('/');
+      this.open.add('lib:');
+      this.open.add('lib:' + lib.dir);
+      for (let i = 1; i < parts.length; i++) this.open.add('lib:' + lib.dir + '/' + parts.slice(0, i).join('/'));
+      this.save();
+      this.selected = path;
+      this.render();
+      this.node.querySelector(`.row[data-path="${CSS.escape(path)}"]`)?.classList.add('sel');
+      this.node.querySelector(`.row[data-path="${CSS.escape(path)}"]`)?.scrollIntoView({ block: 'center' });
+      return;
+    }
+    if (path.startsWith('/')) return;
     const parts = path.split('/');
     for (let i = 1; i < parts.length; i++) this.open.add(parts.slice(0, i).join('/'));
     this.save();

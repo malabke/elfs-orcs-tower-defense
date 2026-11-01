@@ -391,3 +391,6 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .claude-input { resize: vertical; min-height: 54px; font: inherit; }
 .claude-bar { display: flex; gap: 6px; align-items: center; }
 .claude-empty { margin: auto; text-align: center; }
+.tw-check { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); cursor: pointer; padding: 0 4px; border-radius: 4px; }
+.tw-check input { margin: 0; width: 12px; height: 12px; }
+.tw-check.on { color: var(--text); }

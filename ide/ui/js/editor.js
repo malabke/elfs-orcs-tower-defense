@@ -723,6 +723,8 @@ export class Editors {
 
   /** The editor's context menu: Play (PHP files of a game), then PhpStorm's entries. */
   editorMenu(group, e) {
+    e.event?.preventDefault?.();
+    e.event?.stopPropagation?.();
     const ed = group.editor;
     const tab = this.activeTab();
     if (!tab || tab.kind !== 'text') return;
@@ -738,7 +740,7 @@ export class Editors {
     menu([
       play ? { label: play.label, icon: colorIcon('play', 'green'), kbd: 'Ctrl+Shift+F10', action: () => this.app.playFile(tab.path) } : null,
       play ? '-' : null,
-      this.app.claude ? { label: ed.getSelection()?.isEmpty() ? 'Ask Claude about This File' : 'Ask Claude about the Selection', icon: 'star', action: () => {
+      this.app.claude ? { label: ed.getSelection()?.isEmpty() ? 'Ask Claude about This File' : 'Ask Claude about the Selection', icon: 'claude', action: () => {
         const sel = ed.getSelection();
         this.app.claude.ask(sel && !sel.isEmpty() ? `In ${tab.path} (lines ${sel.startLineNumber}-${sel.endLineNumber}):\n\`\`\`\n${ed.getModel().getValueInRange(sel)}\n\`\`\`\n` : `@${tab.path} `);
       } } : null,

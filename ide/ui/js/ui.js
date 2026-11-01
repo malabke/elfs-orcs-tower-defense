@@ -21,6 +21,8 @@ const ICONS = {
   folder: '<path d="M1.5 4a1 1 0 0 1 1-1h3.6l1.5 1.6H13.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/>',
   file: '<path d="M4 1.8h5.2L12.5 5v9.2H4z M9 1.8V5h3.5"/>',
   structure: '<path d="M3 3h4M3 8h4M3 13h4M9 3h4M9 8h4M9 13h4"/>',
+  // Claude's little character (pixel art, in its orange)
+  claude: '<g fill="#d97757" stroke="none"><rect x="3" y="4" width="10" height="6"/><rect x="1" y="6" width="2" height="2"/><rect x="13" y="6" width="2" height="2"/><rect x="4" y="10" width="1" height="3"/><rect x="6" y="10" width="1" height="3"/><rect x="9" y="10" width="1" height="3"/><rect x="11" y="10" width="1" height="3"/></g><g fill="#1e1f22" stroke="none"><rect x="5" y="6" width="1" height="2"/><rect x="10" y="6" width="1" height="2"/></g>',
   hierarchy: '<rect x="6" y="1.5" width="4" height="3" rx="0.5"/><rect x="1.5" y="11.5" width="4" height="3" rx="0.5"/><rect x="10.5" y="11.5" width="4" height="3" rx="0.5"/><path d="M8 4.5V8M3.5 11.5V8h9v3.5"/>',
   library: '<path d="M2.5 2.5h3v11h-3zM6.5 2.5h3v11h-3zM10.3 3l2.9-.8 2.3 10.6-2.9.8z"/>',
   problems: '<circle cx="8" cy="8" r="6"/><path d="M8 4.8v4M8 11.2v.1"/>',

@@ -33,6 +33,8 @@ class App {
 
   async start() {
     hydrateIcons();
+    // the browser's own context menu never shows over the IDE (the IDE has its menus), but in text fields
+    document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, .claude-log, .console, .game-log')) e.preventDefault(); });
     document.documentElement.dataset.theme = prefs.get('theme', 'dark');
     try {
       await loadMonaco();
@@ -110,7 +112,7 @@ class App {
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
-    if (this.claude) T('claude', 'right', 'Claude', 'star', this.claude, 'Alt+8');
+    if (this.claude) T('claude', 'right', 'Claude', 'claude', this.claude, 'Alt+8');
     if (caps.log) T('git', 'bottom', 'Git', 'log', { title: () => 'Git', node: this.git.logNode, actions: () => [el('button', { title: 'Refresh', onclick: () => this.git.showLog() }, icon('refresh'))] }, 'Alt+9');
   }
 
@@ -371,7 +373,7 @@ class App {
     a.add('problemsTool', 'Problems Tool Window', () => this.toggleTool('problems'), { kbd: 'Alt+6', icon: 'problems' });
     a.add('findTool', 'Find Tool Window', () => this.toggleTool('find'), { kbd: 'Alt+3' });
     a.add('hideTools', 'Hide All Tool Windows', () => { this.closeSide('left'); this.closeSide('bottom'); }, { kbd: 'Ctrl+Shift+F12' });
-    a.add('selectInProject', 'Select Opened File in Project', () => this.tree.reveal(this.editors.activePath()), { kbd: 'Alt+F1' });
+    a.add('selectInProject', 'Select Opened File in Project', () => this.tree.reveal(this.editors.activePath(), true), { kbd: 'Alt+F1' });
     if (caps.git) {
       a.add('commit', 'Commit…', () => this.showTool('commit'), { kbd: 'Ctrl+K', icon: 'commit' });
       a.add('commitTool', 'Commit Tool Window', () => this.toggleTool('commit'), { kbd: 'Alt+0', icon: 'commit' });
@@ -400,7 +402,7 @@ class App {
       a.add('test', 'Run Tests on jumphp.net', () => this.runner.remoteTests(), { kbd: 'Ctrl+Shift+F10', icon: 'test' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
     }
-    if (this.claude) a.add('claudeTool', 'Claude', () => this.toggleTool('claude'), { kbd: 'Alt+8', icon: 'star' });
+    if (this.claude) a.add('claudeTool', 'Claude', () => this.toggleTool('claude'), { kbd: 'Alt+8', icon: 'claude' });
     if (caps.preview) {
       a.add('preview', 'Play the Game', () => this.game.play(), { kbd: 'Shift+F10', icon: 'play' });
       a.add('gameTool', 'Game', () => this.toggleTool('game'), { kbd: 'Alt+5', icon: 'game' });
@@ -476,7 +478,7 @@ class App {
   projectMenu(at) {
     const items = [{ head: this.project.name }];
     if (this.project.root) items.push({ label: this.project.root, disabled: true });
-    for (const m of this.project.modules || []) items.push({ label: `${m.title} (${m.kindLabel})`, icon: { app: 'app', hybrid: 'hybrid', cpc: 'disk', port: 'fork' }[m.kind] || 'game', action: () => this.tree.reveal(m.dir || '') });
+    for (const m of this.project.modules || []) items.push({ label: `${m.title} (${m.kindLabel})`, icon: { app: 'app', hybrid: 'hybrid', cpc: 'disk', port: 'fork' }[m.kind] || 'game', action: () => this.tree.reveal(m.dir || '', true) });
     if (backend.kind === 'native') items.push('-', { label: 'Open Another Project…', icon: 'folder', action: () => this.switchProject() }, { label: 'Close Project', icon: 'close', action: () => backend.invoke('projects.close').then(() => location.reload()) });
     else if (backend.config.project?.repoUrl) items.push('-', { label: 'Repository on GitHub', icon: 'globe', action: () => this.openUrl(backend.config.project.repoUrl) }, { label: 'All my projects', icon: 'folder', action: () => { location.href = '/ide'; } });
     menu(items, at);
@@ -504,7 +506,7 @@ class App {
     // the desktop: this computer's Claude can answer the web IDE (jumphp.net/ide), ClaudeBridge
     const bridge = backend.kind === 'native' && user ? await backend.invoke('bridge.status').catch(() => null) : null;
     menu(user ? [{ head: user.login }, { label: 'My page on jumphp.net', icon: 'globe', action: () => this.openUrl(user.url || 'https://jumphp.net') },
-      bridge ? { label: 'Claude for jumphp.net (the web IDE uses this computer\'s Claude)', icon: 'star', checked: bridge.on,
+      bridge ? { label: 'Claude for jumphp.net (the web IDE uses this computer\'s Claude)', icon: 'claude', checked: bridge.on,
         action: () => backend.invoke('bridge.enable', { on: !bridge.on }).then((s) => notify(s.on ? 'jumphp.net/ide now uses the Claude of this computer, while the JumPHP IDE is open.' : 'Claude for jumphp.net is off.', 'info', { title: 'Claude' })) } : null,
       backend.kind === 'native' ? { label: 'Sign out', icon: 'logout', action: () => backend.invoke('session.logout').then(() => location.reload()) } : null].filter(Boolean)
       : [{ label: 'Sign in with jumphp.net', icon: 'user', action: () => backend.invoke('projects.close').then(() => location.reload()) }], at);
