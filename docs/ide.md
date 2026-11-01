@@ -92,10 +92,14 @@ in the page once loaded: checks and screenshots).
 
 **Releases**: `bin/jumphp app:export ide --linux --windows --macos`, the three files (`ide-linux-x86_64`,
 `ide-windows-x86_64.exe`, `ide-macos.zip`) attached to a GitHub release tagged `ide-v<version>` (game.yaml `version`),
-then bump `games/ide/installer/version.json` (the newest version for the installers) and add the installers to the same
-release: `tools/github-release.sh davidnurdin/jumPhp <abs>/games/ide/installer ide-v<version>` from a
-[jumphp2installer](https://github.com/davidnurdin/jumphp2installer) clone (`JumPHP-IDE-setup.exe`, `-setup-linux-x86_64`,
-`-setup-macos.zip`: they always install the newest IDE). `games/ide/tools/installer-banner.php` remakes its pictures.
+then bump `games/ide/installer/version.json` on main: the installers (`JumPHP-IDE-setup.exe`, `-setup-linux-x86_64`,
+`-setup-macos.zip`, [jumphp2installer](https://github.com/davidnurdin/jumphp2installer)) read `games/ide/installer/` on
+main through raw.githubusercontent.com, so the ones already given install the new version: no need to remake them.
+Not `tools/github-release.sh` (it points them to the repository's newest release, which is JumPHP's, not the IDE's).
+Remaking them (another installer version, pictures, `install.yaml`): from a jumphp2installer clone, with the package
+folder copied into it and its base installers in `bases/` (`gh release download installer-v… -p 'jumphp2installer-*'`):
+`bin/jumphp php . tools/package-release.php <pkg> https://raw.githubusercontent.com/davidnurdin/jumPhp/main/games/ide/installer/ bases out`,
+then `gh release upload ide-v<version> out/JumPHP-IDE-setup*`. `games/ide/tools/installer-banner.php` remakes its pictures.
 
 The IDE's own files: `~/.local/share/ide` (exported) or `games/ide/var/` (session, recent projects, PHP index cache).
 A project's IDE settings: `.jumphp/ide.json` (its jumphp.net project, a CPC disc path), kept out of git
