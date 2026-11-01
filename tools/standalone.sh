@@ -12,7 +12,8 @@
 #   JUMPHP_STANDALONE_BOOT        the class whose boot($root)->run() starts it (default JumPHP\Kernel\Application)
 #   JUMPHP_STANDALONE_NATIVE      a native library carried in the package, at native/<target>/<its name>
 #   JUMPHP_STANDALONE_NATIVE_DIR  its folder instead of <target> (macOS: macos-universal, one library for both)
-#   JUMPHP_STANDALONE_INI         php.ini lines injected in the executable (StaticPHP's micro ini section)
+#   JUMPHP_STANDALONE_INI         php.ini lines injected in the executable (StaticPHP's micro ini section), plus
+#                                 game.yaml php_ini: "a=1\nb=2" (the game's own settings)
 set -euo pipefail
 
 say() { printf '\033[1;36m==> %s\033[0m\n' "$*" >&2; }
@@ -84,10 +85,14 @@ php -d phar.readonly=0 -r '
 # 3. one file
 mkdir -p "$OUT"
 # php.ini lines for this executable: StaticPHP's micro reads them between itself and the PHAR (micro:combine's format)
+# + game.yaml `php_ini: "a=1\nb=2"` (one line, \n between settings): the game's own (get_cfg_var() reads them)
 ini=/tmp/stage/ini.part
 : > "$ini"
-if [ -n "${JUMPHP_STANDALONE_INI:-}" ]; then
-  php -r '$ini = getenv("JUMPHP_STANDALONE_INI") . "\n"; echo "\xfd\xf6\x69\xe6", pack("N", strlen($ini)), $ini;' > "$ini"
+INI_EXTRA="$(php -r 'if (preg_match("/^[ \t]*php_ini:[ \t]*\"((?:[^\"\\\\]|\\\\.)*)\"/m", (string)@file_get_contents($argv[1]), $m)) echo stripcslashes($m[1]);' "$GAME_DIR/config/game.yaml")"
+INI="${JUMPHP_STANDALONE_INI:-}${INI_EXTRA:+${JUMPHP_STANDALONE_INI:+
+}$INI_EXTRA}"
+if [ -n "$INI" ]; then
+  INI="$INI" php -r '$ini = getenv("INI") . "\n"; echo "\xfd\xf6\x69\xe6", pack("N", strlen($ini)), $ini;' > "$ini"
 fi
 cat "$micro" "$ini" /tmp/stage/game.phar > "$OUT/$FILE"
 chmod 755 "$OUT/$FILE"
