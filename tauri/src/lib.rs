@@ -33,7 +33,7 @@ use tauri_plugin_dialog::{DialogExt, FilePath, MessageDialogButtons, MessageDial
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -200,6 +200,75 @@ fn path_string(p: FilePath) -> String {
         Ok(path) => path.to_string_lossy().into_owned(),
         Err(e) => format!("{e}"),
     }
+}
+
+// --- window / application menus ------------------------------------------------------------------------------
+// The items' ids are "\u{1e}<window>\u{1f}<item>" (window "*": the application's menu), so their clicks are told
+// apart from the tray's ("<tray>\u{1f}<item>") and PHP gets {type: menu, window, item, checked}.
+
+fn menu_items() -> &'static Mutex<HashMap<String, MenuItemKind<Wry>>> {
+    static ITEMS: OnceLock<Mutex<HashMap<String, MenuItemKind<Wry>>>> = OnceLock::new();
+    ITEMS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn build_menu_items(handle: &AppHandle<Wry>, prefix: &str, items: &[Value]) -> Result<Vec<MenuItemKind<Wry>>, String> {
+    let s = |e: tauri::Error| e.to_string();
+    let mut out = Vec::new();
+    for item in items {
+        let text = str_of(item, "text");
+        let enabled = bool_of(item, "enabled").unwrap_or(true);
+        let kind = if bool_of(item, "separator").unwrap_or(false) {
+            MenuItemKind::Predefined(PredefinedMenuItem::separator(handle).map_err(s)?)
+        } else if let Some(role) = str_of(item, "role") {
+            MenuItemKind::Predefined(
+                match role {
+                    "quit" => PredefinedMenuItem::quit(handle, text),
+                    "about" => PredefinedMenuItem::about(handle, text, None),
+                    "copy" => PredefinedMenuItem::copy(handle, text),
+                    "cut" => PredefinedMenuItem::cut(handle, text),
+                    "paste" => PredefinedMenuItem::paste(handle, text),
+                    "select_all" => PredefinedMenuItem::select_all(handle, text),
+                    "undo" => PredefinedMenuItem::undo(handle, text),
+                    "redo" => PredefinedMenuItem::redo(handle, text),
+                    "minimize" => PredefinedMenuItem::minimize(handle, text),
+                    "maximize" => PredefinedMenuItem::maximize(handle, text),
+                    "fullscreen" => PredefinedMenuItem::fullscreen(handle, text),
+                    "hide" => PredefinedMenuItem::hide(handle, text),
+                    "hide_others" => PredefinedMenuItem::hide_others(handle, text),
+                    "show_all" => PredefinedMenuItem::show_all(handle, text),
+                    "close_window" => PredefinedMenuItem::close_window(handle, text),
+                    "services" => PredefinedMenuItem::services(handle, text),
+                    other => return Err(format!("unknown menu role '{other}'")),
+                }
+                .map_err(s)?,
+            )
+        } else if let Some(children) = item.get("items").and_then(Value::as_array) {
+            let built = build_menu_items(handle, prefix, children)?;
+            let refs: Vec<&dyn IsMenuItem<Wry>> = built.iter().map(|k| k as &dyn IsMenuItem<Wry>).collect();
+            MenuItemKind::Submenu(Submenu::with_items(handle, text.unwrap_or(""), enabled, &refs).map_err(s)?)
+        } else {
+            let id = format!("{prefix}{}", str_of(item, "id").unwrap_or(""));
+            let label = text.or_else(|| str_of(item, "id")).unwrap_or("");
+            let accel = str_of(item, "accelerator");
+            let kind = match bool_of(item, "checked") {
+                Some(checked) => MenuItemKind::Check(CheckMenuItem::with_id(handle, id.clone(), label, enabled, checked, accel).map_err(s)?),
+                None => MenuItemKind::MenuItem(MenuItem::with_id(handle, id.clone(), label, enabled, accel).map_err(s)?),
+            };
+            if let Ok(mut map) = menu_items().lock() {
+                map.insert(id, kind.clone());
+            }
+            kind
+        };
+        out.push(kind);
+    }
+    Ok(out)
+}
+
+fn on_menu(id: &str) {
+    let Some(rest) = id.strip_prefix('\u{1e}') else { return };
+    let Some((window, item)) = rest.split_once('\u{1f}') else { return };
+    let checked = menu_items().lock().ok().and_then(|m| m.get(id).and_then(|k| k.as_check_menuitem().and_then(|c| c.is_checked().ok())));
+    push_event(json!({"type": "menu", "window": window, "item": item, "checked": checked}));
 }
 
 fn run_command(handle: &AppHandle<Wry>, name: &str, c: &Value) -> Result<(), String> {
@@ -376,6 +445,45 @@ fn run_command(handle: &AppHandle<Wry>, name: &str, c: &Value) -> Result<(), Str
             push_event(json!({"type": "result", "id": id, "result": text}));
             Ok(())
         }
+        "menu.set" => {
+            // window "*" (or none): the application's menu (macOS: the menu bar; elsewhere: every window's)
+            let target = str_of(c, "window").unwrap_or("*");
+            let prefix = format!("\u{1e}{target}\u{1f}");
+            if let Ok(mut map) = menu_items().lock() {
+                map.retain(|k, _| !k.starts_with(&prefix));
+            }
+            let items = c.get("menu").and_then(Value::as_array).cloned().unwrap_or_default();
+            let built = build_menu_items(handle, &prefix, &items)?;
+            let refs: Vec<&dyn IsMenuItem<Wry>> = built.iter().map(|k| k as &dyn IsMenuItem<Wry>).collect();
+            let menu = Menu::with_items(handle, &refs).map_err(|e| e.to_string())?;
+            if target == "*" || cfg!(target_os = "macos") {
+                handle.set_menu(menu).map(|_| ()).map_err(|e| e.to_string())
+            } else {
+                window(handle, c)?.set_menu(menu).map(|_| ()).map_err(|e| e.to_string())
+            }
+        }
+        "menu.remove" => {
+            let target = str_of(c, "window").unwrap_or("*");
+            if target == "*" || cfg!(target_os = "macos") {
+                handle.remove_menu().map(|_| ()).map_err(|e| e.to_string())
+            } else {
+                window(handle, c)?.remove_menu().map(|_| ()).map_err(|e| e.to_string())
+            }
+        }
+        "menu.set_item" => {
+            let full = format!("\u{1e}{}\u{1f}{}", str_of(c, "window").unwrap_or("*"), str_of(c, "item").unwrap_or(""));
+            let kind = menu_items().lock().ok().and_then(|m| m.get(&full).cloned()).ok_or("no such menu item")?;
+            let s = |e: tauri::Error| e.to_string();
+            if let Some(item) = kind.as_menuitem() {
+                if let Some(v) = bool_of(c, "enabled") { item.set_enabled(v).map_err(s)?; }
+                if let Some(v) = str_of(c, "text") { item.set_text(v).map_err(s)?; }
+            } else if let Some(item) = kind.as_check_menuitem() {
+                if let Some(v) = bool_of(c, "enabled") { item.set_enabled(v).map_err(s)?; }
+                if let Some(v) = str_of(c, "text") { item.set_text(v).map_err(s)?; }
+                if let Some(v) = bool_of(c, "checked") { item.set_checked(v).map_err(s)?; }
+            }
+            Ok(())
+        }
         "tray.create" => {
             let tray_id = str_of(c, "tray").unwrap_or("main").to_string();
             let _ = handle.remove_tray_by_id(&tray_id);
@@ -528,6 +636,7 @@ fn run(config: Value) -> Result<i32, String> {
                 })
                 .build(),
         )
+        .on_menu_event(|_app, event| on_menu(event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![jumphp_invoke, jumphp_emit])
         .setup(|app| {
             let _ = HANDLE.set(app.handle().clone());

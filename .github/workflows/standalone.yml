@@ -125,7 +125,8 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: '12.0'
         run: |
           printf 'php-version: ${{ needs.key.outputs.php }}\nextensions: %s\nsapi:\n  - micro\n' "$(cat ../jumphp/${{ inputs.extensions }})" > craft.yml
-          ./bin/spc doctor --auto-fix
+          # its tools are downloaded: once more if the network failed
+          ./bin/spc doctor --auto-fix || { sleep 20; ./bin/spc doctor --auto-fix; }
           ./bin/spc craft
           mkdir -p ../out
           cp buildroot/bin/micro.sfx ../out/micro-macos-${{ matrix.arch }}.sfx

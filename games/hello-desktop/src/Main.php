@@ -23,6 +23,7 @@ final class Main implements AppMain
     private ?string $file = null;
     private bool $dirty = false;
     private int $saves = 0;
+    private int $menuClicks = 0;
 
     public function boot(App $app): void
     {
@@ -67,6 +68,23 @@ final class Main implements AppMain
                 ->then(fn (mixed $yes) => $yes ? $this->app->quit() : null);
         });
 
+        // the window's menu (on macOS, the menu bar): the page does what the items say (it holds the text)
+        $app->window()->setMenu([
+            ['text' => 'File', 'items' => [
+                ['id' => 'open', 'text' => 'Open...', 'accelerator' => 'CmdOrCtrl+O'],
+                ['id' => 'save', 'text' => 'Save', 'accelerator' => 'CmdOrCtrl+S'],
+                ['id' => 'saveAs', 'text' => 'Save as...', 'accelerator' => 'CmdOrCtrl+Shift+S'],
+                '-',
+                ['role' => 'quit'],
+            ]],
+            ['text' => 'Edit', 'items' => [['role' => 'undo'], ['role' => 'redo'], '-', ['role' => 'cut'], ['role' => 'copy'], ['role' => 'paste'], ['role' => 'select_all']]],
+            ['text' => 'View', 'items' => [['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true]]],
+        ]);
+        $app->window()->on('menu', function (string $item, ?bool $checked): void {
+            $this->menuClicks++;
+            $this->app->window()->send('menu', ['item' => $item, 'checked' => $checked]);
+        });
+
         $app->on('ready', fn () => $this->updateTitle());
     }
 
@@ -87,6 +105,11 @@ final class Main implements AppMain
     public function file(): ?string
     {
         return $this->file;
+    }
+
+    public function menuClicks(): int
+    {
+        return $this->menuClicks;
     }
 
     public function isDirty(): bool

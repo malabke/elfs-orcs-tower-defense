@@ -1,0 +1,68 @@
+# A desktop app exported as players get it (bin/jumphp app:export, docs/tauri.md), then started for real on each
+# system with nothing of JumPHP installed: the .app on an Apple silicon Mac and on an Intel Mac, the Linux executable
+# on Ubuntu (+ WebKitGTK). Its page must load and call PHP (JUMPHP_SMOKE). Run by hand (Actions > app-export).
+name: app-export
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'The app (games/<app>, ui: webview)'
+        default: hello-desktop
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bin/jumphp app:export --linux --macos
+        env:
+          JUMPHP_GAME: ${{ inputs.app }}
+        run: |
+          bin/jumphp install "${{ inputs.app }}"
+          bin/jumphp app:export "${{ inputs.app }}" --linux --macos
+          ls -la "games/${{ inputs.app }}/dist/standalone"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exported
+          path: games/${{ inputs.app }}/dist/standalone/
+
+  macos:
+    needs: export
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: exported
+      - name: The .app, for real
+        env:
+          JUMPHP_SMOKE: '1'
+          JUMPHP_MAX_FRAMES: '300'
+        run: |
+          ditto -x -k "${{ inputs.app }}-macos.zip" .
+          app="$(ls -d *.app)"
+          uname -m; ls -la "$app/Contents/MacOS"
+          exe="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")"
+          "$exe" 2>&1 | tee run.log
+          grep -q 'smoke test OK' run.log
+
+  linux:
+    needs: export
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: exported
+      - name: The executable, for real (WebKitGTK only)
+        env:
+          JUMPHP_SMOKE: '1'
+          JUMPHP_MAX_FRAMES: '300'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq libwebkit2gtk-4.1-0 xvfb >/dev/null
+          chmod +x "${{ inputs.app }}-linux-x86_64"
+          xvfb-run -a "./${{ inputs.app }}-linux-x86_64" 2>&1 | tee run.log
+          grep -q 'smoke test OK' run.log

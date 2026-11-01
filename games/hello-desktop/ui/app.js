@@ -41,6 +41,13 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); $('open').click(); }
 });
 
+// the window's menu (src/Main.php): PHP tells which item was picked
+jumphp.on('menu', ({item, checked}) => {
+  if (item === 'open') $('open').click();
+  if (item === 'save' || item === 'saveAs') save(item === 'saveAs');
+  if (item === 'wrap') $('text').style.whiteSpace = checked ? 'pre-wrap' : 'pre';
+});
+
 $('greet').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('greeting').textContent = await jumphp.invoke('greet', {name: $('name').value});

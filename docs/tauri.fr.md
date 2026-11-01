@@ -123,6 +123,17 @@ Native::supports('open');                                      // avant d'appele
 $app->tray('main', ['tooltip' => 'Notes', 'menu' => [['id' => 'show', 'text' => 'Afficher'], '-', ['id' => 'quit', 'text' => 'Quitter']]])
     ->on('menu', fn (string $item) => $item === 'quit' ? $app->quit() : $app->window()->show());
 $app->globalShortcut('CmdOrCtrl+Shift+K', fn () => $app->window()->show()->focus());
+
+// menus (JumPHP\Tauri\Menu) : d'une fenêtre ($app->window()->setMenu()) ou de toute l'app ($app->setMenu()) ;
+// éléments avec id (et raccourci), à cocher ('checked'), séparateurs ('-'), sous-menus ('items'), éléments du
+// système ('role' : quit, about, copy, cut, paste, select_all, undo, redo, minimize, fullscreen, hide...).
+// Sur macOS il n'y a qu'une barre de menus : celui d'une fenêtre devient celui de l'app.
+$app->window()->setMenu([
+    ['text' => 'Fichier', 'items' => [['id' => 'open', 'text' => 'Ouvrir...', 'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]],
+    ['text' => 'Affichage', 'items' => [['id' => 'wrap', 'text' => 'Retour à la ligne', 'checked' => true]]],
+]);
+$app->window()->on('menu', fn (string $item, ?bool $coche) => ...);   // aussi $app->on('menu', fn ($item, $fenetre, $coche))
+$app->window()->setMenuItem('wrap', ['checked' => false]);
 ```
 
 | Cible | Fournisseur | Fonctions |
@@ -210,11 +221,10 @@ de vrai sur chacun (la page doit se charger et appeler PHP), et publie la releas
 ## Feuille de route
 
 Fait : le runtime (Linux, Windows, macOS), PHP qui le pilote depuis son thread principal, fenêtres, pages, page ↔ PHP,
-dialogues / notifications / liens / presse-papiers, icône de zone de notification, raccourcis globaux,
+dialogues / notifications / liens / presse-papiers, menus, icône de zone de notification, raccourcis globaux,
 glisser-déposer, fermeture décidée par PHP, jeux hybrides, tests sans fenêtre et en vraie fenêtre, export Linux et
 Windows.
 
 Ensuite : l'export macOS (une `.app` avec PHP, via la chaîne Apple), Android et iOS (la boucle y est pilotée par
 l'activité / UIKit : un projet mobile Tauri embarquant le PHP d'Android / iOS de JumPHP, un chantier en soi), le SDL
-dans une fenêtre WebView (une seule fenêtre pour les jeux hybrides), d'autres fonctions natives (mise à jour
-automatique, menus de fenêtre).
+dans une fenêtre WebView (une seule fenêtre pour les jeux hybrides), d'autres fonctions natives.

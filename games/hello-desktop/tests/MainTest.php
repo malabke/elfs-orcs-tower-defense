@@ -21,6 +21,21 @@ final class MainTest extends AppTestCase
         self::assertSame('Hello Ada, this is PHP ' . PHP_VERSION . '.', $this->invoke('greet', ['name' => 'Ada']));
     }
 
+    public function testTheWindowHasAMenuWhoseItemsReachThePage(): void
+    {
+        $menu = $this->lastSent('menu.set');
+        self::assertSame('main', $menu['window']);
+        self::assertSame(['File', 'Edit', 'View'], array_column($menu['menu'], 'text'));
+        self::assertSame(['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true], $menu['menu'][2]['items'][0]);
+
+        $this->menu('wrap', 'main', false);
+        self::assertSame(['name' => 'menu', 'payload' => ['item' => 'wrap', 'checked' => false]],
+            array_intersect_key($this->lastSent('webview.emit'), ['name' => 1, 'payload' => 1]));
+        $main = $this->app->main();
+        self::assertInstanceOf(\App\Main::class, $main);
+        self::assertSame(1, $main->menuClicks());
+    }
+
     public function testThePageLearnsWhereItRuns(): void
     {
         $info = $this->invoke('info');

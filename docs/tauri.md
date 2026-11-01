@@ -73,7 +73,7 @@ Config of `jt_run`: `identifier`, `product_name`, `version`, `root` (the pages' 
 Events: `ready`, `resumed`, `invoke {id, window, name, payload}`, `page {window, name, payload}`,
 `window {window, event: close-requested | destroyed | focus | blur | resized {width, height} | moved {x, y} | drop {paths}}`,
 `dialog {id, result}`, `result {id, result | error}` (the answer of a command PHP waits for; a command with an `id`
-that fails answers `error` there), `tray {tray, event: menu {item} | click {button}}`,
+that fails answers `error` there), `tray {tray, event: menu {item} | click {button}}`, `menu {window, item, checked}` (window `*`: the app's menu),
 `shortcut {accelerator, state: pressed | released}`, `exit-requested`, `error {cmd, message}`.
 
 Commands: `window.create {window, url, title, width, height, min_width, min_height, x, y, center, resizable,
@@ -86,6 +86,8 @@ fullscreen, maximized, decorations, always_on_top, visible, devtools, icon, data
 `notification.show {title, body}`, `opener.url {url}`, `opener.path {path}`, `opener.reveal {path}`,
 `clipboard.write {text}`, `clipboard.read {id}`, `tray.create {tray, icon, tooltip, title, menu: [{id, text, enabled} |
 {separator}], menu_on_left_click}`, `tray.set_tooltip {tray, tooltip}`, `tray.remove {tray}`,
+`menu.set {window, menu: [{id, text, accelerator, enabled, checked} | {separator} | {role, text} | {text, items}]}`
+(window `*` or none: the application's menu), `menu.remove {window}`, `menu.set_item {window, item, enabled, checked, text}`,
 `shortcut.register {accelerator}`, `shortcut.unregister {accelerator}`, `shortcut.unregister_all`,
 `app.emit {name, payload}` (Tauri events, for pages using `@tauri-apps/api`), `app.tick {hz}`, `app.exit {code}`.
 
@@ -265,6 +267,17 @@ $app->tray('main', ['tooltip' => 'Notes', 'menu' => [['id' => 'show', 'text' => 
 
 // a shortcut of the whole system, even without the focus (Linux: X11, not Wayland)
 $app->globalShortcut('CmdOrCtrl+Shift+K', fn () => $app->window()->show()->focus());
+
+// menus (JumPHP\Tauri\Menu): a window's ($app->window()->setMenu()) or the whole app's ($app->setMenu());
+// items with an id (and an accelerator), check items ('checked'), separators ('-'), submenus ('items') and the
+// system's own items ('role': quit about copy cut paste select_all undo redo minimize maximize fullscreen hide
+// hide_others show_all close_window services). On macOS there is one menu bar: a window's menu becomes the app's.
+$app->window()->setMenu([
+    ['text' => 'File', 'items' => [['id' => 'open', 'text' => 'Open...', 'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]],
+    ['text' => 'View', 'items' => [['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true]]],
+]);
+$app->window()->on('menu', fn (string $item, ?bool $checked) => ...);      // also $app->on('menu', fn ($item, $window, $checked))
+$app->window()->setMenuItem('wrap', ['checked' => false, 'enabled' => true, 'text' => 'Wrap']);
 ```
 
 Lower levels stay available: PHP's **FFI** for any C library of the system (the desktop app's PHP has it), and
@@ -402,7 +415,7 @@ Where `TauriRuntime` looks for the library: `JUMPHP_TAURI_LIB`; `<app>/native/<p
 | Path | |
 |---|---|
 | `tauri/` | the runtime (Rust crate `jumphp-tauri`, a `cdylib`): `src/lib.rs` (C API, commands, events, assets), `src/bridge.js` (`window.jumphp`), `include/jumphp_tauri.h`, `tauri.conf.json` (a minimal config: windows are made by PHP), `Cargo.lock` |
-| `engine/src/Tauri/` | `App`, `Window`, `Tray`, `AppMain`, `Hybrid`, `Invocation`, `NativeEvent`, `NativeCommands`, `NativeRuntime`, `TauriRuntime` (FFI), `FakeRuntime` |
+| `engine/src/Tauri/` | `App`, `Window`, `Menu`, `Tray`, `AppMain`, `Hybrid`, `Invocation`, `NativeEvent`, `NativeCommands`, `NativeRuntime`, `TauriRuntime` (FFI), `FakeRuntime` |
 | `engine/src/Native/` | `Native`, `Dialog`, `FilePicker`, `Notification`, `Shell`, `Clipboard`, providers (`TauriProvider`, `SdlProvider`, `BrowserProvider`, `NullProvider`), `UnsupportedFeature` |
 | `engine/src/Testing/AppTestCase.php` | tests without a window |
 | `skeleton-app/` | the app template (`app:new`) |
@@ -458,7 +471,7 @@ On Windows and macOS without Docker: a PHP 8.2+ with FFI (`ffi.enable=1`), `comp
 ## Roadmap
 
 Done: the runtime (Linux, Windows, macOS), PHP driving it from its main thread, windows, pages, page <-> PHP both
-ways, native dialogs / notifications / opener / clipboard, tray icon, global shortcuts, drag and drop, closing
+ways, native dialogs / notifications / opener / clipboard, menus, tray icon, global shortcuts, drag and drop, closing
 decided by PHP, hybrid games (SDL + Tauri), tests without a window, real-window tests (Xvfb here, the three systems
 on GitHub), one-file export for Linux and Windows.
 
@@ -468,4 +481,4 @@ Next:
   does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do; that means a
   Tauri mobile project embedding JumPHP's PHP build for Android / iOS, its own work.
 - **SDL inside a WebView window** (one window instead of two for hybrid games).
-- More native features as Tauri plugins + `JumPHP\Native` providers (auto-update, menus of the window).
+- More native features as Tauri plugins + `JumPHP\Native` providers.

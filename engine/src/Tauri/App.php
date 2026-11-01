@@ -64,6 +64,7 @@ final class App extends EventEmitter
     private float $time = 0.0;
     private float $lastTime = 0.0;
     private ?\Throwable $crash = null;
+    private ?AppMain $main = null;
     private ?Tasks $tasks = null;
     private ?Http $http = null;
     private ?JsBridge $bridge = null;
@@ -116,9 +117,16 @@ final class App extends EventEmitter
             if (!$object instanceof AppMain) {
                 throw new \RuntimeException("game.main: $main must implement " . AppMain::class);
             }
+            $app->main = $object;
             $object->boot($app);
         }
         return $app;
+    }
+
+    /** The object of game.yaml `main` (tests: its state), null without one. */
+    public function main(): ?AppMain
+    {
+        return $this->main;
     }
 
     /** The running app (for code that has no access to it: JumPHP\Native). */
@@ -254,6 +262,29 @@ final class App extends EventEmitter
      * Its events: 'menu' (string $itemId), 'click' (string $button: not sent on Linux, where the menu is the way).
      * Linux needs libayatana-appindicator3 (and a desktop that shows tray icons).
      */
+    /**
+     * The application's menu (Menu: items, roles, check items): on macOS the menu bar, elsewhere the menu of every
+     * window that has none of its own. Clicks: $app->on('menu', fn (string $item, string $window, ?bool $checked)).
+     */
+    public function setMenu(array $menu): self
+    {
+        $this->sendCommand(['cmd' => 'menu.set', 'window' => '*', 'menu' => Menu::normalize($menu)]);
+        return $this;
+    }
+
+    public function removeMenu(): self
+    {
+        $this->sendCommand(['cmd' => 'menu.remove', 'window' => '*']);
+        return $this;
+    }
+
+    /** Changes one item of the application's menu: ['enabled' => bool, 'checked' => bool, 'text' => string]. */
+    public function setMenuItem(string $item, array $changes): self
+    {
+        $this->sendCommand(['cmd' => 'menu.set_item', 'window' => '*', 'item' => $item] + array_intersect_key($changes, ['enabled' => 1, 'checked' => 1, 'text' => 1]));
+        return $this;
+    }
+
     public function tray(string $id = 'main', array $options = []): Tray
     {
         $tray = $this->trays[$id] ??= new Tray($this, $id);
@@ -427,6 +458,12 @@ final class App extends EventEmitter
                 } else {
                     $tray?->emit('click', [(string)($event['button'] ?? 'left')]);
                 }
+                break;
+            case 'menu':
+                $item = (string)($event['item'] ?? '');
+                $checked = isset($event['checked']) ? (bool)$event['checked'] : null;
+                $window?->emit('menu', [$item, $checked]);
+                $this->emit('menu', [$item, (string)($event['window'] ?? '*'), $checked]);
                 break;
             case 'shortcut':
                 $accel = (string)($event['accelerator'] ?? '');

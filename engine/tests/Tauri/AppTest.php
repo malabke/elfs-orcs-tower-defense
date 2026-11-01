@@ -241,6 +241,36 @@ final class AppTest extends TestCase
         self::assertSame(['quit'], $picked);
     }
 
+    public function testMenusAreSentAndTheirClicksComeBack(): void
+    {
+        $this->app->setMenu([['text' => 'File', 'items' => [['id' => 'open', 'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]]]);
+        $cmd = $this->runtime->sentOf('menu.set')[0];
+        self::assertSame('*', $cmd['window']);
+        self::assertSame([['text' => 'File', 'items' => [['id' => 'open', 'accelerator' => 'CmdOrCtrl+O'], ['separator' => true], ['role' => 'quit']]]], $cmd['menu']);
+
+        $this->app->createWindow('tools');
+        $this->app->window('tools')->setMenu([['id' => 'grid', 'text' => 'Grid', 'checked' => false]]);
+        self::assertSame('tools', $this->runtime->sentOf('menu.set')[1]['window']);
+
+        $seen = [];
+        $this->app->on('menu', function (string $item, string $window, ?bool $checked) use (&$seen) {
+            $seen[] = [$item, $window, $checked];
+        });
+        $this->app->window('tools')->on('menu', function (string $item, ?bool $checked) use (&$seen) {
+            $seen[] = ['tools:' . $item, $checked];
+        });
+        $this->runtime->push(['type' => 'menu', 'window' => '*', 'item' => 'open', 'checked' => null]);
+        $this->runtime->push(['type' => 'menu', 'window' => 'tools', 'item' => 'grid', 'checked' => true]);
+        $this->runtime->frame();
+        self::assertSame([['open', '*', null], ['tools:grid', true], ['grid', 'tools', true]], $seen);
+
+        $this->app->window('tools')->setMenuItem('grid', ['checked' => false, 'bogus' => 1]);
+        self::assertSame(['cmd' => 'menu.set_item', 'window' => 'tools', 'item' => 'grid', 'checked' => false], $this->runtime->sentOf('menu.set_item')[0]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->app->setMenu([['text' => 'no id']]);
+    }
+
     public function testAGlobalShortcutCallsBack(): void
     {
         $count = 0;

@@ -105,6 +105,13 @@ abstract class AppTestCase extends TestCase
         $this->frames(1);
     }
 
+    /** The user picks $item in the menu of $window ('*': the application's menu); $checked: a check item's new state. */
+    protected function menu(string $item, string $window = 'main', ?bool $checked = null): void
+    {
+        $this->runtime->push(['type' => 'menu', 'window' => $window, 'item' => $item, 'checked' => $checked]);
+        $this->frames(1);
+    }
+
     /** The user answers the last dialog PHP opened ($answer: bool, a path, a list of paths, null = cancel). */
     protected function answerDialog(mixed $answer): void
     {
