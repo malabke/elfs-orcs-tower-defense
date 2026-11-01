@@ -79,6 +79,9 @@ a { color: var(--blue); }
 
 /* body: stripes, tool windows, editors ---------------------------------------------------------------- */
 .body { display: grid; grid-template-columns: 40px auto auto 1fr auto auto 40px; min-height: 0; }
+/* fixed columns: a closed window (display: none) must not shift the others into its column */
+#leftStripe { grid-column: 1; } #leftPanel { grid-column: 2; } #leftSplitter { grid-column: 3; } #center { grid-column: 4; }
+#rightSplitter { grid-column: 5; } #rightPanel { grid-column: 6; } #rightStripe { grid-column: 7; }
 .stripe { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; background: var(--panel); border-right: 1px solid var(--border); }
 .stripe.right { border-right: 0; border-left: 1px solid var(--border); }
 .stripe .sep { flex: 1; }
@@ -356,3 +359,10 @@ textarea.input { resize: vertical; font-family: var(--font); }
 .game-sep { color: var(--text-3); font-size: 11px; border-top: 1px dashed var(--border-2); margin: 4px 0; padding-top: 2px; }
 /* an iframe would swallow the mouse while a splitter is dragged */
 body:has(.splitter.drag) iframe { pointer-events: none; }
+
+/* Play (green), External Libraries, the Hierarchy window ------------------------------------------------------ */
+.ico.green, .green .ico { color: var(--green); }
+.row.ext .label { color: var(--yellow); }
+.row.ext-root .label { color: var(--text-2); font-style: italic; }
+.tree-head { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px 2px; }
+.placeholder.small { font-size: 12px; padding: 4px 30px; text-align: left; }

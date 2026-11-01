@@ -4,7 +4,7 @@
 // started again in the same engine, in the scene that was playing); no answer in 4 s: the game is relaunched.
 // What the game's PHP writes (jumphp:output) goes to the console under it.
 import { backend } from './backend.js';
-import { el, clear, icon, notify, prefs } from './ui.js';
+import { el, clear, icon, menu, notify, prefs } from './ui.js';
 
 export class GamePanel {
   constructor(app) {
@@ -35,19 +35,29 @@ export class GamePanel {
         prefs.set('gameLive', this.live);
         this.app.refreshToolHeader('game');
       } }, el('span.game-live', {}, '⚡')),
-      el('button', { title: 'Restart the game', onclick: () => this.play() }, icon('refresh')),
+      el('button', { title: this.scene ? `Restart (${this.scene.split('\\').pop()})` : 'Restart the game', onclick: () => this.play({ scene: this.scene }) }, icon('refresh')),
       el('button', { title: 'Open in a new tab', onclick: () => this.url && this.app.openUrl(this.url) }, icon('globe')),
       el('button', { title: 'Stop', onclick: () => this.stop() }, icon('stop')),
+      el('button', { title: 'Options: where the Game window goes', onclick: (e) => menu([
+        { label: 'Dock Right', checked: this.app.tools.game.side === 'right', action: () => this.app.moveTool('game', 'right') },
+        { label: 'Dock Bottom', checked: this.app.tools.game.side === 'bottom', action: () => this.app.moveTool('game', 'bottom') },
+        '-',
+        { label: 'Live Reload on Save', checked: this.live, action: () => { this.live = !this.live; prefs.set('gameLive', this.live); this.app.refreshToolHeader('game'); } },
+        { label: 'Play the Whole Game', action: () => this.play() },
+      ], e.currentTarget) }, icon('more')),
     ];
   }
 
-  /** Starts (or starts again) the game with what is saved. */
-  async play() {
-    if (this.app.open.right !== 'game') this.app.showTool('game');
+  /** Starts (or starts again) the game with what is saved; scene: a scene class to start in (Play on src/Scene/*.php). */
+  async play({ scene = null } = {}) {
+    this.scene = scene;
+    const side = this.app.tools.game.side;
+    if (this.app.open[side] !== 'game') this.app.showTool('game');
+    this.app.refreshToolHeader('game');
     await this.app.editors.saveAll(true);
     this.say('starting…');
     try {
-      this.url = (await backend.invoke('preview.url')).url;
+      this.url = (await backend.invoke('preview.url', scene ? { scene } : {})).url;
     } catch (e) {
       this.say('');
       notify(e.message, 'error', { title: 'Game' });
@@ -61,7 +71,7 @@ export class GamePanel {
       this.frame = el('iframe.game-frame', { allow: 'autoplay; fullscreen; gamepad; clipboard-write', title: 'Game' });
       this.screen.append(this.frame);
     }
-    this.separator('game started');
+    this.separator(scene ? `started in ${scene}` : 'game started');
     this.frame.src = this.url;
   }
 
@@ -86,11 +96,11 @@ export class GamePanel {
   hot() {
     if (!this.frame) return;
     if (!this.ready || this.hotWait) {
-      if (!this.hotWait) this.play();
+      if (!this.hotWait) this.play({ scene: this.scene });
       return;
     }
     this.say('reloading…');
-    this.hotWait = setTimeout(() => { this.hotWait = null; this.play(); }, 4000);
+    this.hotWait = setTimeout(() => { this.hotWait = null; this.play({ scene: this.scene }); }, 4000);
     this.frame.contentWindow.postMessage({ type: 'jumphp:hot' }, '*');
   }
 

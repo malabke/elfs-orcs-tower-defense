@@ -1,7 +1,7 @@
 // The desktop app's welcome screen (no project open): sign in with jumphp.net, your playground projects (clone and
 // open), recent projects, open a folder, and New Project (game, desktop app, hybrid, Amstrad CPC remake, port).
 import { backend } from './backend.js';
-import { el, clear, icon, notify, dialog, timeAgo, confirm } from './ui.js';
+import { el, clear, icon, notify, dialog, timeAgo, confirm, basename } from './ui.js';
 
 const KINDS = [
   { id: 'original', icon: 'game', title: 'Game', text: 'An original retro game in PHP: desktop, browser, phones. Published on jumphp.net.', playground: true },
@@ -130,10 +130,20 @@ export class Welcome {
     const extra = el('div');
     let category = null;
     if (kind.id === 'cpc') {
+      // the disc (required), and the CPC ROMs only when the game needs the firmware (AGENTS.md §12): kept on this computer
+      const pick = async (input, options) => { const f = await backend.invoke('native.open', options).catch(() => null); if (f) { input.value = f; input.dispatchEvent(new Event('input')); } return f; };
       const dsk = el('input.input', { placeholder: '/home/me/discs/game.dsk' });
-      extra.append(el('label.field', {}, el('span', {}, 'The .dsk disc on this computer (it is never published)'), el('div', { style: { display: 'flex', gap: '6px' } }, dsk,
-        el('button.btn', { onclick: async () => { const f = await backend.invoke('native.open', { filters: { 'CPC disc': ['dsk'] } }).catch(() => null); if (f) dsk.value = f; } }, 'Choose…'))));
+      const roms = el('input.input', { placeholder: 'Optional: a folder with the CPC 6128 ROMs, only if the game needs the firmware' });
+      if (!title.value) dsk.addEventListener('input', () => { if (!title.value.trim()) title.value = basename(dsk.value).replace(/\.dsk$/i, '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); });
+      extra.append(
+        el('label.field', {}, el('span', {}, 'The .dsk disc (on this computer: never published, never committed)'), el('div', { style: { display: 'flex', gap: '6px' } }, dsk,
+          el('button.btn.primary', { onclick: () => pick(dsk, { filters: { 'Amstrad CPC disc': ['dsk', 'DSK'] } }) }, icon('disk'), 'Choose the .dsk…'))),
+        el('label.field', {}, el('span', {}, 'CPC ROMs (optional)'), el('div', { style: { display: 'flex', gap: '6px' } }, roms,
+          el('button.btn', { onclick: () => pick(roms, { folder: true }) }, 'Choose…'))),
+        el('p', { style: { color: 'var(--text-3)', fontSize: '12px', margin: '0' } }, 'The extraction (graphics, maps, music) is done with dsk2jumphp, from the disc: your Claude finds both paths in .jumphp/ide.json.'));
       extra.dsk = dsk;
+      extra.roms = roms;
+      extra.pick = () => pick(dsk, { filters: { 'Amstrad CPC disc': ['dsk', 'DSK'] } });
     }
     if (kind.id === 'port') {
       const source = el('input.input', { placeholder: 'https://github.com/someone/their-game' });
@@ -161,17 +171,19 @@ export class Welcome {
         ? 'Creates the GitHub repository through jumphp.net (from the JumPHP template, with BRIEF.md), clones it here and opens it.'
         : 'Makes a JumPHP project in a new folder (git clone of the template + bin/jumphp app:new), then opens it. It can be pushed to GitHub later.'),
       el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('button.btn.primary', { onclick: async (e) => {
+        const button = e.currentTarget;
+        if (extra.dsk && !extra.dsk.value.trim() && !(await extra.pick())) { notify('Choose the .dsk disc of the game to remake.', 'warning', { title: 'Amstrad CPC remake' }); return; }
         if (!title.value.trim()) { title.focus(); return; }
-        e.currentTarget.disabled = true;
+        button.disabled = true;
         this.progress = el('span', { style: { color: 'var(--text-2)', fontSize: '12px' } }, 'Creating…');
-        e.currentTarget.after(this.progress);
+        button.after(this.progress);
         try {
           const result = await backend.invoke('projects.create', { kind: kind.id, title: title.value.trim(), description: description.value.trim(), brief: brief.value.trim(),
-            category: category?.value, folder: folder.value.trim(), dsk: extra.dsk?.value, source: extra.source?.value });
+            category: category?.value, folder: folder.value.trim(), dsk: extra.dsk?.value, roms: extra.roms?.value || undefined, source: extra.source?.value });
           await this.app.projectOpened(result);
         } catch (err) {
           notify(err.message, 'error', { title: 'New project' });
-          e.target.disabled = false;
+          button.disabled = false;
           this.progress?.remove();
         }
       } }, 'Create')));

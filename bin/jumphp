@@ -50,7 +50,7 @@ Games (<game> = a folder of games/, e.g. pong)
   install <game>            composer install (engine linked from engine/)
   composer <game> <args>    any composer command in the game
   run <game>                play on desktop (window + sound)
-  test <game>               lint + phpstan (if configured) + phpunit (if tests/) + headless smoke test
+  test <game> [tests/X.php]  lint + phpstan (if configured) + phpunit (if tests/) + headless smoke test; a test file: only its tests
   shot <game> [frames] [out.png]   headless screenshot after N frames (default 120) -> var/screenshots/
   build <game>              browser build -> games/<game>/dist/web (static files)
   build:remote <game>       the game as a remote game (shared engine, files one by one) -> dist/remote
@@ -95,7 +95,8 @@ Desktop apps (Tauri: native windows with HTML / CSS / JS pages, driven by PHP; n
   app:shot <app> [frames] [out.png]  the app's window after N frames (default 120) -> var/screenshots/app.png
   app:export <app> [--linux] [--windows] [--macos]  the app as one executable: dist/standalone/<app>-linux-x86_64
                                 (--windows: .exe; --macos: <app>-macos.zip, an .app for Apple silicon + Intel)
-  ide [--install]                           the JumPHP IDE on this computer (natively, with your git and Docker); --install: menu launcher
+  ide [--build] [--install]                 the JumPHP IDE on this computer (natively, no Docker: this checkout's IDE sources in
+                                            its executable, built once); --build: build it again; --install: menu launcher
   app:release <app> --url <base> [--notes "..."] [--linux] [--windows] [--macos]
                                 exported + a signed update.json for the apps' updates (docs/tauri.md "Updates")
                             (needs WebKitGTK 4.1) / <app>-windows-x86_64.exe (WebView2)
@@ -715,6 +716,14 @@ cmd_test() {
   local dir; dir="$(game_dir "$target")"
   ensure_vendor "$dir"
   live_announce
+  # one test file (the IDE's Play on a test): only its PHPUnit tests
+  if [ -n "${2:-}" ]; then
+    local only="${2#"$dir"/}"
+    [ -f "$ROOT/$dir/$only" ] || die "no test file $dir/$only"
+    say "$dir: phpunit $only"
+    php_run "$dir" -e SDL_VIDEODRIVER=dummy -e SDL_AUDIODRIVER=dummy -- /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox "$only"
+    return
+  fi
   say "$dir: php -l"
   php_run "$dir" -- sh -c 'find src app.php -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null'
   if [ -f "$ROOT/$dir/phpstan.neon" ] && [ -x "$ROOT/engine/vendor/bin/phpstan" ]; then

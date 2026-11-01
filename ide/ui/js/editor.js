@@ -1,7 +1,7 @@
 // The editor area: Monaco, editor groups (split) with tabs, text / image / diff / designer views, saving, and the
 // PHP language features answered by the IDE's PHP side (completion, definition, usages, rename, hover...).
 import { backend } from './backend.js';
-import { el, clear, icon, basename, dirname, extension, fileIcon, notify, debounce, prefs, menu, kbd } from './ui.js';
+import { el, clear, icon, colorIcon, basename, dirname, extension, fileIcon, notify, debounce, prefs, menu, kbd } from './ui.js';
 
 export let monaco = null;
 
@@ -103,6 +103,7 @@ export class Editors {
     group.editor.onDidChangeCursorPosition((e) => { if (this.focused === group) this.emit('cursor', e.position, group); this.updateCrumbs(group); });
     group.editor.onDidFocusEditorText(() => this.focus(group));
     this.addEditorActions(group.editor);
+    group.editor.onContextMenu((e) => this.editorMenu(group, e));
     this.groups.push(group);
     this.root.append(group.node);
     this.focus(group);
@@ -120,6 +121,7 @@ export class Editors {
       wordBasedSuggestions: 'currentDocument', parameterHints: { enabled: true }, fixedOverflowWidgets: true, mouseWheelZoom: true,
       definitionLinkOpensInPeek: false, gotoLocation: { multiple: 'peek' }, occurrencesHighlight: 'singleFile', renderWhitespace: 'selection',
       folding: true, showFoldingControls: 'mouseover', 'semanticHighlighting.enabled': false, linkedEditing: true, padding: { top: 6 },
+      contextmenu: false, // the IDE's own menu (Play, PhpStorm's entries): editorMenu()
     };
   }
 
@@ -719,6 +721,44 @@ export class Editors {
     });
   }
 
+  /** The editor's context menu: Play (PHP files of a game), then PhpStorm's entries. */
+  editorMenu(group, e) {
+    const ed = group.editor;
+    const tab = this.activeTab();
+    if (!tab || tab.kind !== 'text') return;
+    const file = this.files.get(tab.path);
+    const position = e.target?.position;
+    if (position && !ed.getSelection()?.containsPosition(position)) ed.setPosition(position);
+    this.focus(group);
+    ed.focus();
+    const run = (id) => () => { ed.focus(); ed.trigger('menu', id, null); };
+    const php = tab.path.endsWith('.php');
+    const writable = !file?.readOnly;
+    const play = this.app.playTarget?.(tab.path);
+    menu([
+      play ? { label: play.label, icon: colorIcon('play', 'green'), kbd: 'Ctrl+Shift+F10', action: () => this.app.playFile(tab.path) } : null,
+      play ? '-' : null,
+      php ? { label: 'Go to Declaration', kbd: 'Ctrl+B', action: run('editor.action.revealDefinition') } : null,
+      php ? { label: 'Go to Implementation(s)', kbd: 'Ctrl+Alt+B', action: run('editor.action.goToImplementation') } : null,
+      php ? { label: 'Find Usages', icon: 'find', kbd: 'Alt+F7', action: () => this.app.findUsages?.() } : null,
+      php ? { label: 'Type Hierarchy', icon: 'structure', kbd: 'Ctrl+H', action: () => this.app.typeHierarchy?.() } : null,
+      php ? '-' : null,
+      php && writable ? { label: 'Rename…', kbd: 'Shift+F6', action: run('editor.action.rename') } : null,
+      writable ? { label: 'Reformat Code', kbd: 'Ctrl+Alt+L', action: run('editor.action.formatDocument') } : null,
+      writable ? { label: 'Comment with Line Comment', kbd: 'Ctrl+/', action: run('editor.action.commentLine') } : null,
+      writable ? '-' : null,
+      writable ? { label: 'Cut', kbd: 'Ctrl+X', action: () => { const text = ed.getModel().getValueInRange(ed.getSelection()); navigator.clipboard?.writeText(text); ed.executeEdits('cut', [{ range: ed.getSelection(), text: '' }]); } } : null,
+      { label: 'Copy', kbd: 'Ctrl+C', action: () => navigator.clipboard?.writeText(ed.getModel().getValueInRange(ed.getSelection())) },
+      writable ? { label: 'Paste', kbd: 'Ctrl+V', action: async () => { const text = await navigator.clipboard?.readText?.().catch(() => null); if (text != null) { ed.focus(); ed.executeEdits('paste', [{ range: ed.getSelection(), text, forceMoveMarkers: true }]); } } } : null,
+      '-',
+      this.app.git?.enabled ? { label: 'Git', icon: 'branch', items: [
+        { label: 'Annotate with Git Blame', action: () => this.app.git.toggleBlame() },
+        { label: 'Show Diff with HEAD', icon: 'diff', action: () => this.app.git.diff(tab.path) },
+      ] } : null,
+      { label: 'Command Palette…', kbd: 'F1', action: run('editor.action.quickCommand') },
+    ].filter(Boolean), { x: e.event.posx, y: e.event.posy });
+  }
+
   /** PhpStorm's keys on top of Monaco's. */
   addEditorActions(editor) {
     const K = monaco.KeyMod;
@@ -741,6 +781,8 @@ export class Editors {
     add('structure', 'File Structure', [K.CtrlCmd | C.F12], () => this.app.fileStructure?.());
     add('comment', 'Comment with Line Comment', [K.CtrlCmd | C.Slash], run('editor.action.commentLine'));
     add('save', 'Save All', [K.CtrlCmd | C.KeyS], () => this.saveAll());
+    add('playFile', 'Play', [K.CtrlCmd | K.Shift | C.F10], () => { const p = this.activePath(); if (p) this.app.playFile?.(p); });
+    add('hierarchy', 'Type Hierarchy', [K.CtrlCmd | C.KeyH], () => this.app.typeHierarchy?.());
     add('close', 'Close Tab', [K.CtrlCmd | C.F4], () => { const t = this.activeTab(); if (t) this.closeTab(this.focused, t); });
     add('back', 'Back', [K.CtrlCmd | K.Alt | C.LeftArrow], () => this.back());
     add('forward', 'Forward', [K.CtrlCmd | K.Alt | C.RightArrow], () => this.forward());

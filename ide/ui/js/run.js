@@ -49,12 +49,13 @@ export class Runner {
     if (config) this.start(config);
   }
 
-  async start(config) {
+  async start(config, env = {}) {
     if (!this.caps.run) return;
     await this.app.editors.saveAll(true);
     try {
-      const { id, label } = await backend.invoke('run.start', { id: config.id, command: config.id === 'adhoc' ? config.command : undefined });
-      const run = { id, label, config, output: `$ ${config.command.join(' ')}\n`, started: Date.now() };
+      const { id, label } = await backend.invoke('run.start', { id: config.id, command: config.id === 'adhoc' ? config.command : undefined, kind: config.kind, env });
+      const shown = Object.entries(env).map(([k, v]) => `${k}=${v} `).join('');
+      const run = { id, label: config.label || label, config, output: `$ ${shown}${config.command.join(' ')}\n`, started: Date.now() };
       this.runs = [run, ...this.runs.filter((r) => r.code === undefined || r.config.id !== config.id)].slice(0, 8);
       this.active = id;
       this.app.showTool('run');
@@ -209,15 +210,16 @@ export class Runner {
     } catch (e) { notify(e.message, 'error', { title: 'Preview' }); }
   }
 
-  async remoteTests() {
+  async remoteTests(only = null) {
     await this.app.editors.saveAll(true);
-    const run = { id: 'remote-' + Date.now(), label: 'Tests on jumphp.net', config: { id: 'remote', kind: 'test', command: ['tests'] }, output: 'Running the tests in the playground sandbox…\n' };
+    const run = { id: 'remote-' + Date.now(), label: only ? `${basename(only)} on jumphp.net` : 'Tests on jumphp.net', config: { id: 'remote', kind: 'test', command: ['tests'] },
+      output: `Running ${only || 'the tests'} in the playground sandbox, with your drafts…\n` };
     this.runs.unshift(run);
     this.active = run.id;
     this.app.showTool('run');
     this.render();
     try {
-      const { id } = await backend.invoke('tests.run');
+      const { id } = await backend.invoke('tests.run', only ? { only } : {});
       for (;;) {
         await new Promise((r) => setTimeout(r, 2000));
         const result = await backend.invoke('tests.result', { id });
@@ -294,5 +296,54 @@ export class Structure {
       }
     }
     if (!outline.length) this.node.append(el('div.placeholder', {}, 'Nothing declared in this file.'));
+  }
+}
+
+/** The Hierarchy tool window (Ctrl+H): the class under the cursor, its ancestors as a tree, the classes under it. */
+export class Hierarchy {
+  constructor(app) {
+    this.app = app;
+    this.node = el('div.tree', { tabIndex: 0 });
+    this.pinned = null;           // a class chosen by a click on a subtype: its hierarchy, until the editor moves
+  }
+
+  title() { return 'Hierarchy'; }
+
+  actions() {
+    return [el('button', { title: 'Refresh (the class at the cursor)', onclick: () => { this.pinned = null; this.update(true); } }, icon('refresh'))];
+  }
+
+  async update(atCursor = false) {
+    const tab = this.app.editors.activeTab();
+    let data = null;
+    if (this.pinned && !atCursor) {
+      data = await backend.invoke('php.hierarchy', { class: this.pinned }).catch(() => null);
+    } else if (tab && tab.kind === 'text' && tab.path.endsWith('.php')) {
+      const editor = this.app.editors.editor();
+      const model = this.app.editors.files.get(tab.path)?.model;
+      const pos = editor?.getPosition() || { lineNumber: 1, column: 1 };
+      if (model) data = await backend.invoke('php.hierarchy', { path: tab.path, text: model.getValue(), line: pos.lineNumber, column: pos.column }).catch(() => null);
+      this.pinned = null;
+    }
+    clear(this.node);
+    if (!data) { this.node.append(el('div.placeholder', {}, 'Open a PHP class (or put the cursor on a class name, Ctrl+H) to see its hierarchy.')); return; }
+    const open = (n) => { if (n.path) this.app.editors.open(n.path, { line: n.line || 1, col: n.col || 1 }); };
+    const row = (n, depth, extra) => el(`div.row${n.unknown || n.internal ? '.dim' : ''}${n.path?.startsWith('/') ? '.ext' : ''}`, {
+      style: { paddingLeft: 6 + depth * 16 + 'px' }, title: n.path || (n.internal ? 'built into PHP' : 'not found'), onclick: () => open(n),
+    }, el('span.twisty.leaf'), symbolIcon(n.kind === 'interface' ? 'interface' : n.kind === 'trait' ? 'trait' : n.kind === 'enum' ? 'enum' : 'class'),
+    el('span.label', {}, n.name.split('\\').pop()), el('span.hint', {}, [extra, n.name.includes('\\') ? n.name.slice(0, n.name.lastIndexOf('\\')) : ''].filter(Boolean).join('  ')));
+    this.node.append(el('div.tree-head', {}, 'Supertypes'));
+    const supers = (n, depth) => {
+      this.node.append(row(n, depth, depth ? n.relation : ''));
+      for (const s of n.supers || []) supers(s, depth + 1);
+    };
+    supers(data, 0);
+    this.node.append(el('div.tree-head', {}, `Subtypes (${(data.subs || []).length})`));
+    if (!data.subs?.length) this.node.append(el('div.placeholder.small', {}, 'No class extends or implements it in the project.'));
+    for (const s of data.subs || []) {
+      const r = row(s, 1, s.direct ? '' : 'indirect');
+      r.addEventListener('dblclick', () => { this.pinned = s.name; this.update(); });
+      this.node.append(r);
+    }
   }
 }

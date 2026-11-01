@@ -502,6 +502,41 @@ final class Index
         }
     }
 
+    /**
+     * The libraries the project's classes come from (PSR-4 folders outside its own sources): the engine, vendor/
+     * packages, what the host added.
+     *
+     * @return list<array{prefix: string, dir: string, external: bool}>
+     */
+    public function libraries(): array
+    {
+        if (!$this->psr4) {
+            $this->findLibraries();
+        }
+        $out = [];
+        foreach ($this->psr4 as $prefix => $dirs) {
+            foreach ($dirs as $dir) {
+                if (str_starts_with($prefix, 'App\\') || str_starts_with($prefix, 'Tests\\')) {
+                    continue;
+                }
+                $out[] = ['prefix' => rtrim($prefix, '\\'), 'dir' => $dir, 'external' => str_starts_with($dir, '/')];
+            }
+        }
+        usort($out, fn ($a, $b) => [!str_starts_with($a['prefix'], 'JumPHP'), $a['prefix']] <=> [!str_starts_with($b['prefix'], 'JumPHP'), $b['prefix']]);
+        return $out;
+    }
+
+    /** @return list<string> the PHP files of a library folder (one of libraries()), relative to it */
+    public function libraryListing(string $dir): array
+    {
+        foreach ($this->psr4 as $dirs) {
+            if (in_array($dir, $dirs, true)) {
+                return $this->libraryFiles($dir);
+            }
+        }
+        return [];
+    }
+
     /** @var array<string, list<string>> */
     private array $libraryListing = [];
 

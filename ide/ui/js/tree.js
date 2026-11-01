@@ -1,7 +1,7 @@
 // The Project tool window: the project's files as a tree, with Git colours, a context menu (new, rename,
 // delete, copy path...), keyboard navigation and drag and drop to move files.
 import { backend } from './backend.js';
-import { el, clear, icon, basename, dirname, fileIcon, folderIcon, menu, prompt, confirm, notify, prefs } from './ui.js';
+import { el, clear, icon, colorIcon, basename, dirname, fileIcon, folderIcon, menu, prompt, confirm, notify, prefs } from './ui.js';
 
 export class ProjectTree {
   constructor(app) {
@@ -27,6 +27,7 @@ export class ProjectTree {
   async refresh() {
     const { files } = await backend.invoke('files.list', { all: this.showAll });
     this.files = files.map((f) => f.path);
+    if (!this.libraries) this.libraries = await backend.invoke('libraries.list').catch(() => []);
     this.render();
   }
 
@@ -64,7 +65,59 @@ export class ProjectTree {
     const rootRow = this.row(root, 0, true);
     this.node.append(rootRow);
     this.renderChildren(root, 1);
+    this.renderLibraries();
     if (this.node.parentNode && scroll) this.node.parentNode.scrollTop = scroll;
+  }
+
+  // External Libraries (PhpStorm's): the engine and the packages the project's classes come from, read only --------
+
+  renderLibraries() {
+    const libs = (this.libraries || []).filter((l) => l.external || !this.files.some((f) => f.startsWith(l.dir + '/')));
+    if (!libs.length) return;
+    const key = 'lib:';
+    const open = this.open.has(key);
+    this.node.append(el(`div.row.ext-root${open ? '.open' : ''}`, { style: { paddingLeft: '6px' }, title: 'Classes the project uses from outside its folder (read only)',
+      onclick: () => this.toggle(key) }, el('span.twisty'), icon('library'), el('span.label', {}, 'External Libraries')));
+    if (!open) return;
+    for (const lib of libs) {
+      const libKey = key + lib.dir;
+      const isOpen = this.open.has(libKey);
+      this.node.append(el(`div.row.ext${isOpen ? '.open' : ''}`, { style: { paddingLeft: '22px' }, title: lib.dir, onclick: () => this.toggleLibrary(lib) },
+        el('span.twisty'), icon('package'), el('span.label', {}, lib.prefix === 'JumPHP' ? 'JumPHP (engine)' : lib.prefix), el('span.hint', {}, lib.external ? '' : lib.dir)));
+      if (isOpen && lib.files) this.renderLibraryDir(lib, this.libraryTree(lib), 2);
+    }
+  }
+
+  async toggleLibrary(lib) {
+    if (!lib.files) lib.files = await backend.invoke('libraries.files', { dir: lib.dir }).catch(() => []);
+    this.toggle('lib:' + lib.dir);
+  }
+
+  libraryTree(lib) {
+    if (lib.tree) return lib.tree;
+    const root = { children: new Map() };
+    for (const file of lib.files) {
+      let node = root;
+      file.split('/').forEach((part, i, parts) => {
+        if (!node.children.has(part)) node.children.set(part, { name: part, path: parts.slice(0, i + 1).join('/'), dir: i < parts.length - 1, children: new Map() });
+        node = node.children.get(part);
+      });
+    }
+    return (lib.tree = root);
+  }
+
+  renderLibraryDir(lib, dir, depth) {
+    const children = [...dir.children.values()].sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
+    for (const child of children) {
+      const key = 'lib:' + lib.dir + '/' + child.path;
+      const full = lib.dir + '/' + child.path;
+      const isOpen = this.open.has(key);
+      this.node.append(el(`div.row.ext${child.dir && isOpen ? '.open' : ''}`, {
+        style: { paddingLeft: 6 + depth * 16 + 'px' }, dataset: { path: full },
+        onclick: () => (child.dir ? this.toggle(key) : this.app.editors.open(full, { preview: prefs.get('previewTabs', true) })),
+      }, el(`span.twisty${child.dir ? '' : '.leaf'}`), child.dir ? folderIcon() : fileIcon(child.name), el('span.label', {}, child.name)));
+      if (child.dir && isOpen) this.renderLibraryDir(lib, child, depth + 1);
+    }
   }
 
   renderChildren(dir, depth) {
@@ -150,6 +203,8 @@ export class ProjectTree {
         module ? { label: 'Game Test', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'tests', '.php', 'Test class name (JumpTest…)', 'Test') } : null,
       ].filter(Boolean) },
       '-',
+      !node.dir && this.app.playTarget?.(node.path) ? { label: this.app.playTarget(node.path).label, icon: colorIcon('play', 'green'), kbd: 'Ctrl+Shift+F10', action: () => this.app.playFile(node.path) } : null,
+      !node.dir && this.app.playTarget?.(node.path) ? '-' : null,
       !node.dir ? { label: 'Open', action: () => this.app.editors.open(node.path) } : null,
       !node.dir ? { label: 'Open to the Right', icon: 'split', action: () => { this.app.editors.split(); this.app.editors.open(node.path); } } : null,
       { label: 'Find in Directory…', icon: 'find', action: () => this.app.findInFiles?.({ include: dir ? dir + '/*' : '' }) },

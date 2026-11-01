@@ -7,7 +7,7 @@ import { Editors, loadMonaco, monaco } from './editor.js';
 import { ProjectTree } from './tree.js';
 import { searchEverywhere, recentFiles, fileStructure, FindPanel } from './search.js';
 import { Git } from './git.js';
-import { Runner, Problems, Structure } from './run.js';
+import { Runner, Problems, Structure, Hierarchy } from './run.js';
 import { Welcome } from './welcome.js';
 import { GamePanel } from './game.js';
 
@@ -76,6 +76,7 @@ class App {
     this.runner = new Runner(this);
     this.problems = new Problems(this);
     this.structure = new Structure(this);
+    this.hierarchy = new Hierarchy(this);
     this.find = new FindPanel(this);
     if (this.project.capabilities?.preview) this.game = new GamePanel(this);
     this.console = { append: (source, text) => { if (this.gitConsole) this.gitConsole.textContent += text; } };
@@ -100,28 +101,16 @@ class App {
     T('project', 'left', 'Project', 'folder', this.tree, 'Alt+1');
     if (caps.git) T('commit', 'left', 'Commit', 'commit', { title: () => 'Commit', node: this.git.commitNode, actions: () => [] }, 'Alt+0');
     T('structure', 'left', 'Structure', 'structure', this.structure, 'Alt+7');
+    T('hierarchy', 'left', 'Hierarchy', 'hierarchy', this.hierarchy, 'Ctrl+H');
     if (caps.run || caps.tests) T('run', 'bottom', 'Run', 'play', this.runner, 'Alt+4');
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
-    if (this.game) T('game', 'right', 'Game', 'game', this.game, 'Alt+5');
+    if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
     if (caps.log) T('git', 'bottom', 'Git', 'log', { title: () => 'Git', node: this.git.logNode, actions: () => [el('button', { title: 'Refresh', onclick: () => this.git.showLog() }, icon('refresh'))] }, 'Alt+9');
   }
 
   layoutTools() {
-    const left = $('leftStripe');
-    const right = $('rightStripe');
-    clear(left);
-    clear(right);
-    const button = (tool) => {
-      const b = el('button', { title: `${tool.label} (${kbd(tool.key)})`, dataset: { tool: tool.id }, onclick: () => this.toggleTool(tool.id) }, icon(tool.icon));
-      tool.button = b;
-      return b;
-    };
-    for (const t of Object.values(this.tools).filter((t) => t.side === 'left')) left.append(button(t));
-    left.append(el('div.sep'));
-    for (const t of Object.values(this.tools).filter((t) => t.side === 'bottom')) left.append(button(t));
-    for (const t of Object.values(this.tools).filter((t) => t.side === 'right')) right.append(button(t));
-    right.append(el('button', { title: 'Notifications', onclick: () => this.showNotifications() }, icon('bell')));
+    this.renderStripes();
     const root = document.documentElement;
     for (const v of ['--left-width', '--bottom-height', '--right-width']) { const saved = prefs.get('size' + v); if (saved) root.style.setProperty(v, saved); }
     splitter($('leftSplitter'), '--left-width', { min: 160, max: 700, onEnd: () => prefs.set('size--left-width', getComputedStyle(root).getPropertyValue('--left-width')) });
@@ -132,6 +121,37 @@ class App {
     const bottom = prefs.get('tool:bottom', null);
     if (bottom && this.tools[bottom]) this.showTool(bottom, true); else this.closeSide('bottom');
     this.closeSide('right');
+  }
+
+  /** The tool window buttons, on the left (left and bottom tools) and the right stripe. */
+  renderStripes() {
+    const left = $('leftStripe');
+    const right = $('rightStripe');
+    clear(left);
+    clear(right);
+    const button = (tool) => {
+      const b = el('button', { title: `${tool.label} (${kbd(tool.key)})`, dataset: { tool: tool.id }, onclick: () => this.toggleTool(tool.id) }, icon(tool.icon));
+      tool.button = b;
+      b.classList.toggle('on', this.open?.[tool.side] === tool.id);
+      return b;
+    };
+    for (const t of Object.values(this.tools).filter((t) => t.side === 'left')) left.append(button(t));
+    left.append(el('div.sep'));
+    for (const t of Object.values(this.tools).filter((t) => t.side === 'bottom')) left.append(button(t));
+    for (const t of Object.values(this.tools).filter((t) => t.side === 'right')) right.append(button(t));
+    right.append(el('button', { title: 'Notifications', onclick: () => this.showNotifications() }, icon('bell')));
+  }
+
+  /** Moves a tool window to another side (the Game window: right or bottom), remembered. */
+  moveTool(id, side) {
+    const tool = this.tools[id];
+    if (!tool || tool.side === side) return;
+    if (this.open[tool.side] === id) this.closeSide(tool.side);
+    tool.header = null;
+    tool.side = side;
+    if (id === 'game') prefs.set('gameSide', side);
+    this.renderStripes();
+    this.showTool(id);
   }
 
   toggleTool(id) {
@@ -167,6 +187,7 @@ class App {
     }
     for (const t of Object.values(this.tools)) t.button?.classList.toggle('on', this.open[t.side] === t.id);
     if (id === 'structure') this.structure.update();
+    if (id === 'hierarchy') this.hierarchy.update();
     if (id === 'git' && !this.git.logNode.firstChild) this.git.showLog();
     if (id === 'problems') this.problems.render();
     if (!quiet && id === 'project') this.tree.node.focus();
@@ -261,6 +282,7 @@ class App {
     $('sbLanguage').textContent = tab?.kind === 'text' ? (this.editors.files.get(path)?.model.getLanguageId() || '').toUpperCase() : '';
     $('sbBreadcrumbs').textContent = path;
     if (this.open?.left === 'structure') this.structure.update();
+    if (this.open?.left === 'hierarchy') this.hierarchy.update();
     if (tab && prefs.get('autoscroll', false)) this.tree.reveal(path);
   }
 
@@ -470,6 +492,63 @@ class App {
   findInFiles(options = {}) {
     const selection = this.editors.editor()?.getModel() && this.editors.editor().getModel().getValueInRange(this.editors.editor().getSelection());
     this.find.show({ query: options.query ?? (selection && !selection.includes('\n') ? selection : ''), replace: !!options.replace, include: options.include });
+  }
+
+  // Play: the game, the scene of a file, the tests of a test file ----------------------------------------------
+
+  /** The game module a project path belongs to. */
+  moduleOf(path) {
+    return [...(this.project.modules || [])].sort((a, b) => (b.dir || '').length - (a.dir || '').length)
+      .find((m) => !m.dir || path.startsWith(m.dir + '/')) || null;
+  }
+
+  /** What Play does on a file: {kind: 'test'|'scene'|'game', label, module, relative, scene} or null. */
+  playTarget(path) {
+    if (!path || path.startsWith('/') || !path.endsWith('.php')) return null;
+    const caps = this.project.capabilities || {};
+    const module = this.moduleOf(path);
+    if (!module || !['game', 'hybrid', 'cpc', 'port', 'app'].includes(module.kind)) return null;
+    const relative = module.dir ? path.slice(module.dir.length + 1) : path;
+    const name = basename(path).replace(/\.php$/, '');
+    if (/^tests\/.+Test\.php$/.test(relative)) {
+      return caps.run || caps.tests ? { kind: 'test', label: `Run '${name}'`, module, relative } : null;
+    }
+    if (!caps.run && !caps.preview) return null;
+    if (/^src\/Scene\/.+\.php$/.test(relative) && module.kind !== 'app') {
+      return { kind: 'scene', label: `Play '${name}'`, module, relative, scene: this.classOf(path) };
+    }
+    return { kind: 'game', label: `Play '${module.title || module.id}'`, module, relative };
+  }
+
+  /** The class a PHP file declares (namespace + first class), from its open model or its name. */
+  classOf(path) {
+    const text = this.editors.files.get(path)?.model?.getValue() || '';
+    // not open: App\ + its path under src/ (PSR-4, as every JumPHP game)
+    if (!text) return 'App\\' + path.replace(/^.*?\bsrc\//, '').replace(/\.php$/, '').split('/').join('\\');
+    const ns = text.match(/^\s*namespace\s+([\w\\]+)\s*;/m)?.[1];
+    const cls = text.match(/^\s*(?:final\s+|abstract\s+|readonly\s+)*class\s+(\w+)/m)?.[1] || basename(path).replace(/\.php$/, '');
+    return ns ? `${ns}\\${cls}` : cls;
+  }
+
+  async playFile(path) {
+    const target = this.playTarget(path);
+    if (!target) { notify('Nothing to play in ' + basename(path), 'info'); return; }
+    const caps = this.project.capabilities || {};
+    await this.editors.saveAll(true);
+    if (target.kind === 'test') {
+      if (caps.run) this.runner.start({ id: 'adhoc', kind: 'test', label: basename(path).replace(/\.php$/, ''), command: ['bin/jumphp', 'test', target.module.id, target.relative] });
+      else this.runner.remoteTests(target.relative);
+      return;
+    }
+    if (this.game) { this.game.play({ scene: target.kind === 'scene' ? target.scene : null }); return; }
+    // the desktop: the game in its own window, at the scene of the file
+    const env = target.kind === 'scene' ? { JUMPHP_SCENE: target.scene } : {};
+    this.runner.start({ id: 'adhoc', kind: 'run', label: target.label.replace(/^Play /, ''), command: ['bin/jumphp', 'run', target.module.id] }, env);
+  }
+
+  typeHierarchy() {
+    this.showTool('hierarchy');
+    this.hierarchy.update(true);
   }
 
   async findUsages() {

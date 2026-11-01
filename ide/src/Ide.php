@@ -212,6 +212,10 @@ final class Ide
         $this->register('php.complete', fn (array $p) => $this->php->complete(...$at($p)));
         $this->register('php.definition', fn (array $p) => $this->php->definition(...$at($p)));
         $this->register('php.references', fn (array $p) => $this->php->references(...[...$at($p), $p['declarations'] ?? true]));
+        $this->register('php.hierarchy', fn (array $p) => isset($p['class']) ? $this->php->hierarchyOf((string)$p['class'])
+            : $this->php->typeHierarchy(...$at($p)));
+        $this->register('libraries.list', fn () => $this->index->libraries());
+        $this->register('libraries.files', fn (array $p) => $this->index->libraryListing((string)($p['dir'] ?? '')));
         $this->register('php.implementations', fn (array $p) => $this->php->implementations(...$at($p)));
         $this->register('php.hover', fn (array $p) => $this->php->hover(...$at($p)));
         $this->register('php.signature', fn (array $p) => $this->php->signatureHelp(...$at($p)));

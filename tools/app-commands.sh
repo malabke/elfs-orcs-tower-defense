@@ -314,15 +314,21 @@ hybrid_export_env() {
 # ide/ and games/ide/), started outside Docker so it has the user's git and Docker. `ide --install`: also a launcher in
 # the desktop's menu (~/.local/share/applications) and the command jumphp-ide (~/.local/bin).
 cmd_ide() {
-  local exe="games/ide/dist/standalone/ide-linux-x86_64"
-  if [ ! -f "$ROOT/$exe" ] || [ -n "$(find "$ROOT/ide/src" "$ROOT/ide/ui" "$ROOT/games/ide/src" "$ROOT/games/ide/config" -newer "$ROOT/$exe" -not -path '*/vendor/*' -print -quit 2>/dev/null)" ]; then
-    say "JumPHP IDE: building the executable ($exe)"
+  # The IDE runs natively, without Docker: the executable (built once, or with --build) is only its runtime (PHP,
+  # Tauri); the IDE's sources of this checkout are copied into the folder it unpacked itself to, so a git pull or a
+  # change of the IDE never asks for a new build (which takes a while, in Docker)
+  local exe="games/ide/dist/standalone/ide-linux-x86_64" build=""
+  if [ "${1:-}" = "--build" ]; then build=1; shift; fi
+  if [ -n "$build" ] || [ ! -f "$ROOT/$exe" ]; then
+    say "JumPHP IDE: building the executable ($exe), once (Docker, several minutes)"
     cmd_app_export ide
   fi
   if [ "${1:-}" = "--install" ]; then
     local bin="$HOME/.local/bin" apps="$HOME/.local/share/applications" icons="$HOME/.local/share/icons/hicolor/256x256/apps"
     mkdir -p "$bin" "$apps" "$icons"
-    install -m 755 "$ROOT/$exe" "$bin/jumphp-ide"
+    # the launcher goes through bin/jumphp ide: the sources of this checkout, always the current ones
+    printf '#!/bin/sh\nexec %q ide "$@"\n' "$ROOT/bin/jumphp" > "$bin/jumphp-ide"
+    chmod 755 "$bin/jumphp-ide"
     cp "$ROOT/games/ide/assets/icon.png" "$icons/jumphp-ide.png"
     cat > "$apps/jumphp-ide.desktop" <<DESKTOP
 [Desktop Entry]
@@ -337,6 +343,18 @@ StartupWMClass=jumphp-ide
 DESKTOP
     say "installed: $bin/jumphp-ide and JumPHP IDE in the applications menu"
     return
+  fi
+  local cache="${XDG_CACHE_HOME:-$HOME/.cache}/jumphp" root
+  root="$(ls -dt "$cache"/ide-*/ 2>/dev/null | head -1)"
+  if [ -n "$root" ] && [ -f "$root/.unpacked" ] && command -v rsync >/dev/null; then
+    root="${root%/}"
+    rsync -a --delete "$ROOT/ide/src/" "$root/vendor/jumphp/ide/src/"
+    rsync -a --delete --exclude=/vendor "$ROOT/ide/ui/" "$root/vendor/jumphp/ide/ui/"
+    rsync -a --delete "$ROOT/engine/src/" "$root/vendor/jumphp/engine/src/"
+    rsync -a --delete "$ROOT/games/ide/src/" "$root/src/"
+    rsync -a --delete "$ROOT/games/ide/config/" "$root/config/"
+    # the folders older builds unpacked to
+    find "$cache" -maxdepth 1 -name 'ide-*' -type d ! -path "$root" -mtime +7 -exec rm -rf {} + 2>/dev/null || true
   fi
   say "JumPHP IDE"
   exec "$ROOT/$exe" "$@"

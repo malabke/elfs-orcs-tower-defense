@@ -21,6 +21,8 @@ const ICONS = {
   folder: '<path d="M1.5 4a1 1 0 0 1 1-1h3.6l1.5 1.6H13.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/>',
   file: '<path d="M4 1.8h5.2L12.5 5v9.2H4z M9 1.8V5h3.5"/>',
   structure: '<path d="M3 3h4M3 8h4M3 13h4M9 3h4M9 8h4M9 13h4"/>',
+  hierarchy: '<rect x="6" y="1.5" width="4" height="3" rx="0.5"/><rect x="1.5" y="11.5" width="4" height="3" rx="0.5"/><rect x="10.5" y="11.5" width="4" height="3" rx="0.5"/><path d="M8 4.5V8M3.5 11.5V8h9v3.5"/>',
+  library: '<path d="M2.5 2.5h3v11h-3zM6.5 2.5h3v11h-3zM10.3 3l2.9-.8 2.3 10.6-2.9.8z"/>',
   problems: '<circle cx="8" cy="8" r="6"/><path d="M8 4.8v4M8 11.2v.1"/>',
   terminal: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4 6l2.5 2L4 10M8 10.5h4"/>',
   log: '<circle cx="5" cy="3.5" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="5" cy="12.5" r="1.4"/><path d="M5 4.9v1.7M5 9.4v1.7M8.5 3.5H14M8.5 8H14M8.5 12.5H14"/>',
@@ -53,6 +55,13 @@ export function icon(name) {
   const i = document.createElement('i');
   i.className = 'ico';
   i.innerHTML = `<svg viewBox="0 0 16 16">${ICONS[name] || ICONS.file}</svg>`;
+  return i;
+}
+
+/** An icon in a colour of the theme (green Play, red Stop...). */
+export function colorIcon(name, color) {
+  const i = icon(name);
+  i.classList.add(color);
   return i;
 }
 

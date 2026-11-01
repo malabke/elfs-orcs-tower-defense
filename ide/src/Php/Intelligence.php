@@ -1058,6 +1058,50 @@ final class Intelligence
         return $out;
     }
 
+    /**
+     * The type hierarchy of the class under the cursor (else of the file's first class): its ancestors as a tree
+     * (parent, interfaces, traits) and the classes that extend or implement it (the project and the libraries read).
+     *
+     * @return array<string, mixed>|null {name, kind, path, line, col, library, supers: [...], subs: [...]}
+     */
+    public function typeHierarchy(string $path, string $text, int $line, int $column): ?array
+    {
+        $symbol = $this->symbolAt($path, $text, $line, $column);
+        $fqn = ($symbol['kind'] ?? null) === 'class' ? $symbol['name'] : null;
+        if ($fqn === null) {
+            $classes = Analyzer::analyze($text)['classes'];
+            $fqn = $classes ? reset($classes)['name'] : null;
+        }
+        return $fqn !== null ? $this->hierarchyOf($fqn) : null;
+    }
+
+    /** @return array<string, mixed> */
+    public function hierarchyOf(string $fqn, int $depth = 0): array
+    {
+        $found = $this->index->findClass($fqn);
+        if ($found === null) {
+            return ['name' => ltrim($fqn, '\\'), 'kind' => 'class', 'path' => null, 'unknown' => true, 'supers' => [], 'subs' => []];
+        }
+        [$path, $info] = $found;
+        $node = ['name' => $info['name'], 'kind' => $info['kind'], 'path' => $path !== '' ? $path : null, 'line' => $info['line'] ?? 1,
+            'col' => $info['col'] ?? 1, 'internal' => $path === '', 'supers' => [], 'subs' => []];
+        if ($depth < 12) {
+            foreach ([...$info['extends'], ...$info['implements'], ...$info['traits']] as $super) {
+                $child = $this->hierarchyOf($super, $depth + 1);
+                $child['relation'] = in_array($super, $info['traits'], true) ? 'uses' : (in_array($super, $info['implements'], true) ? 'implements' : 'extends');
+                $node['supers'][] = $child;
+            }
+        }
+        if ($depth === 0) {
+            foreach ($this->index->subclasses($info['name']) as [$p, $sub]) {
+                $node['subs'][] = ['name' => $sub['name'], 'kind' => $sub['kind'], 'path' => $p, 'line' => $sub['line'], 'col' => $sub['col'],
+                    'direct' => in_array(strtolower($info['name']), array_map(fn ($n) => strtolower(ltrim($n, '\\')), [...$sub['extends'], ...$sub['implements'], ...$sub['traits']]), true)];
+            }
+            usort($node['subs'], fn ($a, $b) => [!$a['direct'], $a['name']] <=> [!$b['direct'], $b['name']]);
+        }
+        return $node;
+    }
+
     // formatting helpers -----------------------------------------------------------------------------------
 
     /** @param array<string, mixed> $function */

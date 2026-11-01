@@ -199,5 +199,16 @@ final class CoreTest extends TestCase
         $file = $ide->handle('file.read', ['path' => $definition[0]['path']]);
         self::assertTrue($file['readOnly']);
         self::assertStringContainsString('class MenuScene', $file['content']);
+
+        // the Project view lists the engine under External Libraries, the Hierarchy view climbs into it
+        $library = $ide->handle('libraries.list', [])[0];
+        self::assertSame(['JumPHP', true], [$library['prefix'], $library['external']]);
+        self::assertContains('Ui/MenuScene.php', $ide->handle('libraries.files', ['dir' => $library['dir']]));
+        $tree = $ide->handle('php.hierarchy', ['path' => 'src/Scene/TitleScene.php', 'text' => $text, 'line' => 9, 'column' => 5]);
+        self::assertSame('App\\Scene\\TitleScene', $tree['name']);
+        self::assertSame(['JumPHP\\Ui\\MenuScene', 'extends'], [$tree['supers'][0]['name'], $tree['supers'][0]['relation']]);
+        self::assertSame('JumPHP\\Scene\\AbstractScene', $tree['supers'][0]['supers'][0]['name']);
+        $scene = $ide->handle('php.hierarchy', ['class' => 'JumPHP\\Ui\\MenuScene']);
+        self::assertContains('App\\Scene\\TitleScene', array_column($scene['subs'], 'name'));
     }
 }

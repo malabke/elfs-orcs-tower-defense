@@ -51,7 +51,7 @@ final class Creator
                 return $this->main->cloneProject((string)$project['cloneUrl'], (string)$project['slug'], $this->folder($p))
                     ->then(function (string $path) use ($p, $kind) {
                         if ($kind === 'cpc' && !empty($p['dsk'])) {
-                            $this->main->saveProjectSettings($path, ['dsk' => (string)$p['dsk']]);
+                            $this->main->saveProjectSettings($path, array_filter(['dsk' => (string)$p['dsk'], 'roms' => (string)($p['roms'] ?? '')]));
                         }
                         return $this->main->openProject($path);
                     });
@@ -92,9 +92,14 @@ final class Creator
         $this->progress('Getting the JumPHP template…');
         return $this->run(['git', 'clone', '--depth', '1', self::TEMPLATE, $root], $parent)
             ->then(function () use ($root) {
-                // a fresh history: the project is the user's
+                // a fresh history: the project is the user's (remote jumphp: bin/jumphp update brings new versions)
                 exec('rm -rf ' . escapeshellarg("$root/.git"));
-                return $this->run(['git', 'init', '-q', '-b', 'main'], $root);
+                // one project, one game or app: not JumPHP's examples (the playground's projects start the same way)
+                foreach (glob("$root/games/*", GLOB_ONLYDIR) ?: [] as $example) {
+                    exec('rm -rf ' . escapeshellarg($example));
+                }
+                return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
+                    ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root));
             })
             ->then(function () use ($root, $id, $title, $kind) {
                 $this->progress($kind === 'app' ? "bin/jumphp app:new {$id}…" : "bin/jumphp new {$id}…");
