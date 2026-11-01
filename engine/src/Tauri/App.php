@@ -149,19 +149,54 @@ final class App extends EventEmitter
     }
 
     /** Runs until the app quits. @return int exit code */
-    public function run(): int
+    /** The page's bridge (browser: the one BrowserRuntime reads, so HTTP answers and the app's events both arrive). */
+    private function bridge(): JsBridge
+    {
+        return $this->bridge ??= $this->runtime instanceof BrowserRuntime ? $this->runtime->bridge : new JsBridge();
+    }
+
+    /**
+     * In a web page (BrowserRuntime): starts the app without blocking; the page then calls frame() at each of
+     * its frames (engine/bootstrap/wasm.php). Desktop: run().
+     */
+    public function start(): void
     {
         $this->running = true;
         $this->lastTime = Time::now();
-        $config = [
+        $this->runtime->run($this->runtimeConfig(), fn () => $this->frame());
+    }
+
+    /** In a web page: the page's events between two frames (the tab hidden, the page closing). */
+    public function events(): void
+    {
+        try {
+            foreach ($this->runtime->poll() as $event) {
+                $this->dispatch($event);
+            }
+        } catch (\Throwable $e) {
+            $this->crashed($e);
+        }
+    }
+
+    /** @return array<string, mixed> what the native side starts with */
+    private function runtimeConfig(): array
+    {
+        return [
             'identifier' => (string)$this->option('identifier', 'net.jumphp.' . preg_replace('/[^a-z0-9]+/', '', strtolower($this->config->id()))),
             'product_name' => $this->config->title(),
             'version' => (string)$this->config->get('version', '0.1.0'),
             'root' => $this->pagesDir(),
             'tick_hz' => (float)$this->option('tick_hz', 60),
             'engine_pages' => dirname(__DIR__, 2) . '/web/tauri',     // served as /__jumphp/ (the embedded game's page)
+            'title' => $this->config->title(),
         ];
-        $code = $this->runtime->run($config, fn () => $this->frame());
+    }
+
+    public function run(): int
+    {
+        $this->running = true;
+        $this->lastTime = Time::now();
+        $code = $this->runtime->run($this->runtimeConfig(), fn () => $this->frame());
         $this->running = false;
         $this->tasks?->shutdown();
         Loop::stop();   // no ReactPHP auto-run at the end of the script
@@ -369,7 +404,7 @@ final class App extends EventEmitter
     /** Asynchronous HTTP (curl), as in games. */
     public function http(): Http
     {
-        return $this->http ??= new Http($this->bridge ??= new JsBridge());
+        return $this->http ??= new Http($this->bridge());
     }
 
     /** The folder of the pages (game.yaml app.pages, default ui/). */

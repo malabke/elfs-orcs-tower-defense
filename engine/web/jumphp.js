@@ -280,7 +280,10 @@ function startTasks(FS, wasmBinary, remote) {
 
 const modules = {};
 async function loadModules() {
-	for (const [name, file] of [['device', 'jumphp-device.js'], ['http', 'jumphp-http.js'], ['pwa', 'jumphp-pwa.js'], ['gamepad', 'jumphp-gamepad.js']]) {
+	const list = [['device', 'jumphp-device.js'], ['http', 'jumphp-http.js'], ['pwa', 'jumphp-pwa.js'], ['gamepad', 'jumphp-gamepad.js']];
+	// a desktop app (game.yaml ui: webview): its pages and native side in HTML (JumPHP\Tauri\BrowserRuntime)
+	if (GAME.ui === 'webview') list.push(['app', 'jumphp-app.js']);
+	for (const [name, file] of list) {
 		try {
 			modules[name] = (await import('./' + versioned(file))).install(moduleApi) || {};
 		} catch (e) { console.error(`[${file}]`, e); }
@@ -383,6 +386,8 @@ async function main() {
 	window.JumPHPTouch?.start();
 	notifyParent({ type: 'jumphp:ready', game: GAME.id });
 
+	// a desktop app shows its pages at once (no sound to unlock, the pages take the focus themselves)
+	if (GAME.ui === 'webview') return;
 	// browsers start audio and keyboard focus after a user gesture: one click / tap / key on the overlay
 	const overlay = $('overlay');
 	overlay.style.display = 'flex';

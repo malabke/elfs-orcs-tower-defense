@@ -413,6 +413,33 @@ inside. macOS 12 or newer. The app's cache and data go to `~/Library/Caches/JumP
 the app > Open. The workflow `app-export` (Actions > app-export) exports an app and opens it for real on an Apple
 silicon Mac and an Intel Mac (and on Ubuntu).
 
+## In the browser, on phones
+
+The same app also runs in a web page: `bin/jumphp build <app>` makes `dist/web/` (static files, like a game's),
+`bin/jumphp serve <app>` / `webshot <app>` try it. Its pages are the same files (copied to `app/`, each with
+`jumphp-app-frame.js` first: the same `window.jumphp`); its PHP runs in JumPHP's WebAssembly engine
+(`JumPHP\Tauri\BrowserRuntime`, `engine/bootstrap/wasm.php` starts an `App` for `ui: webview`), and
+`engine/web/jumphp-app.js` does in HTML what Tauri does on the desktop:
+
+| On the desktop | In the browser |
+|---|---|
+| windows | the main one fills the page; the others float over it (title bar, drag, close) |
+| menus, their shortcuts, check items | a menu bar at the top (roles copy / paste / undo... act on the page) |
+| `Dialog::message()` / `confirm()` | an HTML dialog |
+| `FilePicker::open()` / `folder()` | the browser's file picker; the files are copied into PHP's `/tmp/open/` (their paths come back) |
+| `FilePicker::save()` | a path in `/tmp/save/`: what PHP writes there is downloaded right after |
+| `Notification::show()` | the Notification API (else a message in the corner) |
+| `Shell::openUrl()`, `Clipboard` | a new tab, `navigator.clipboard` |
+| files dropped on a page | copied into `/tmp/drop/` |
+| tray icon, system-wide shortcuts, opening paths | nothing (shortcuts work while the page has the focus) |
+
+The app's own files (`$app->storage`, options) live in the browser (IndexedDB), as games' saves. Phones: the page
+works there as it is; as an Android app, `bin/jumphp twa <app> --url <its page online>` (game.yaml `pwa: true`); on an
+iPhone, Safari's "Add to Home Screen" (PWA). Tried in headless Chrome with `games/hello-desktop`: the greeting from
+PHP, the View menu's check item, the confirm dialog, "Save as" downloading the note PHP wrote, no error.
+A native Tauri app on Android / iOS (the phone's own WebView driving PHP inside the app) is not done: Tauri's mobile
+loop belongs to the activity / UIKit there, PHP would have to be embedded in it.
+
 ## Updates
 
 An exported app can update itself (`JumPHP\Tauri\Updater`, `$app->updater()`): no installer, the executable is
@@ -546,7 +573,7 @@ on GitHub), one-file export for Linux and Windows, an `.app` for macOS, menus, u
 Next:
 - **Signed apps**: macOS notarization and Windows Authenticode need the developer's certificates (the Apple
   account, a code signing certificate); unsigned, the systems warn the first time.
-- **Android, iOS**: Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
+- **Android, iOS as native Tauri apps** (the browser version above runs there already): Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
   does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do; that means a
   Tauri mobile project embedding JumPHP's PHP build for Android / iOS, its own work.
 - More native features as Tauri plugins + `JumPHP\Native` providers.

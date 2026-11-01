@@ -10,7 +10,7 @@ OUT="$GAME_DIR/dist/web"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
-cp "$STAGE".web/* "$OUT/"
+cp -R "$STAGE".web/. "$OUT/"
 cp "$ENGINE/php-web.mjs" "$ENGINE/php-web.wasm" "$ENGINE/php-wasm-network.js" "$ENGINE/engine.json" "$OUT/"
 
 cd "$OUT"

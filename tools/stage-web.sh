@@ -25,6 +25,7 @@ COMPOSER_MIRROR_PATH_REPOS=1 composer install --no-dev --optimize-autoloader --c
 rm -rf vendor/jumphp/engine/vendor vendor/jumphp/engine/tests vendor/jumphp/engine/web vendor/jumphp/engine/stubs \
        vendor/jumphp/engine/composer.lock vendor/jumphp/engine/phpstan.neon vendor/jumphp/engine/phpunit.xml*
 
-php /workspace/tools/dump-container.php "$STAGE"
+# desktop apps (ui: webview) have no service container
+grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$STAGE/config/game.yaml" || php /workspace/tools/dump-container.php "$STAGE"
 php /workspace/tools/render-web.php "$STAGE" "$WEB" /workspace/engine/web /workspace/build/engine
 echo "staged: $STAGE"

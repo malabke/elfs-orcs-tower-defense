@@ -215,6 +215,19 @@ release de ces sources existe), sinon la compilent. `JUMPHP_TAURI_TRACE=1` affic
 `run`, `test` et `shot` sur le dossier d'une app passent la main à `app:run`, `app:test`, `app:shot` ;
 `pages` ne publie pas les apps (elles n'ont pas de version navigateur).
 
+## Dans le navigateur, sur téléphone
+
+La même app tourne aussi dans une page web : `bin/jumphp build <app>` produit `dist/web/` (fichiers statiques, comme un
+jeu). Ses pages sont les mêmes (même `window.jumphp`), son PHP tourne dans le moteur WebAssembly de JumPHP
+(`JumPHP\Tauri\BrowserRuntime`), et `engine/web/jumphp-app.js` fait en HTML ce que Tauri fait sur le bureau :
+fenêtres (la principale remplit la page, les autres flottent), barre de menus et raccourcis, dialogues HTML,
+sélecteur de fichiers du navigateur (copiés dans `/tmp/open/` de PHP), enregistrement = téléchargement (ce que PHP
+écrit dans `/tmp/save/`), notifications, presse-papiers ; icône de zone de notification et raccourcis globaux : rien.
+Sur téléphone : la page telle quelle, `bin/jumphp twa <app> --url ...` pour Android (`pwa: true`), « Sur l'écran
+d'accueil » sur iPhone. Essayé dans Chrome sans écran avec `games/hello-desktop` (salutation par PHP, menu, dialogue,
+enregistrement téléchargé, aucune erreur). Une vraie app Tauri native Android / iOS (PHP embarqué dans l'app) n'est
+pas faite : la boucle y appartient à l'activité / UIKit.
+
 ## Export macOS et mises à jour
 
 `bin/jumphp app:export <app> --macos` (depuis Linux, dans Docker) produit `dist/standalone/<app>-macos.zip` : une
