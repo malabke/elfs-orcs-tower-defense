@@ -90,6 +90,13 @@ Environment: `JUMPHP_IDE_SERVER` (another jumphp.net, e.g. `http://jumphp.localh
 projects are cloned, default `~/JumPHP-Projects`), `JUMPHP_IDE_PROJECT` (open this folder), `JUMPHP_IDE_EVAL` (JavaScript run
 in the page once loaded: checks and screenshots).
 
+**Releases**: `bin/jumphp app:export ide --linux --windows --macos`, the three files (`ide-linux-x86_64`,
+`ide-windows-x86_64.exe`, `ide-macos.zip`) attached to a GitHub release tagged `ide-v<version>` (game.yaml `version`),
+then bump `games/ide/installer/version.json` (the newest version for the installers) and add the installers to the same
+release: `tools/github-release.sh davidnurdin/jumPhp <abs>/games/ide/installer ide-v<version>` from a
+[jumphp2installer](https://github.com/davidnurdin/jumphp2installer) clone (`JumPHP-IDE-setup.exe`, `-setup-linux-x86_64`,
+`-setup-macos.zip`: they always install the newest IDE). `games/ide/tools/installer-banner.php` remakes its pictures.
+
 The IDE's own files: `~/.local/share/ide` (exported) or `games/ide/var/` (session, recent projects, PHP index cache).
 A project's IDE settings: `.jumphp/ide.json` (its jumphp.net project, a CPC disc path), kept out of git
 (`.git/info/exclude`); custom run configurations: `.jumphp/run.json` (`[{"label": "…", "command": ["…"]}]`).
@@ -102,4 +109,4 @@ routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Beare
 ## Roadmap
 
 Debugger (Xdebug in the desktop image), terminal tool window, PHP formatting, local history, more refactorings (extract
-method / variable, move class), a tile map editor for games, multiple projects in one window, macOS / Windows exports.
+method / variable, move class), a tile map editor for games, multiple projects in one window, signed macOS / Windows executables.

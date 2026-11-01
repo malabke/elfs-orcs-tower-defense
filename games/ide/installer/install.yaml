@@ -1,0 +1,48 @@
+# The JumPHP IDE's installers (jumphp2installer, docs/ide.md). The executables are in the JumPHP repository's
+# releases tagged ide-v<version> (bin/jumphp app:export ide --linux --windows --macos); version.json, on the main
+# branch, says which one is the newest: bump it with each IDE release.
+installer: 1
+
+app:
+  name: JumPHP IDE
+  publisher: JumPHP
+  icon: jumphp-ide-icon.png
+  banner: jumphp-ide-banner.png
+
+version:
+  latest: https://raw.githubusercontent.com/davidnurdin/jumPhp/main/games/ide/installer/version.json
+
+pages:
+  - welcome
+  - folder: "{programs}/{app}"
+  - options:
+      desktop: A shortcut on the desktop
+  - install
+  - finish:
+      run:
+        windows: "{folder}/jumphp-ide.exe"
+        linux: "{folder}/jumphp-ide"
+        macos: "{folder}/JumPHP IDE.app"
+
+steps:
+  # Windows and Linux: one executable
+  - download: https://github.com/davidnurdin/jumPhp/releases/download/ide-v{version}/ide-windows-x86_64.exe
+    os: windows
+  - download: https://github.com/davidnurdin/jumPhp/releases/download/ide-v{version}/ide-linux-x86_64
+    os: linux
+  - copy: {from: "{download}", to: "{folder}/jumphp-ide{exe}"}
+    os: [windows, linux]
+  - executable: "{folder}/jumphp-ide"
+    os: linux
+  - shortcut: {target: "{folder}/jumphp-ide{exe}", where: both}
+    if: desktop
+    os: [windows, linux]
+  # macOS: the .app (JumPHP IDE.app in the zip)
+  - download: https://github.com/davidnurdin/jumPhp/releases/download/ide-v{version}/ide-macos.zip
+    os: macos
+  - extract: "{folder}"
+    os: macos
+  - shortcut: {target: "{folder}/JumPHP IDE.app", where: desktop}
+    if: desktop
+    os: macos
+  - uninstaller
