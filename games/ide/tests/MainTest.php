@@ -91,6 +91,27 @@ final class MainTest extends AppTestCase
         $this->frames(2);
     }
 
+    public function testClaudeForJumphpNetSendsBackWhatClaudeChangedInTheGame(): void
+    {
+        $call = fn (string $method, mixed ...$args) => (new \ReflectionMethod(\App\ClaudeBridge::class, $method))->invoke(null, ...$args);
+        $game = $this->project . '/games/demo';
+        $before = $call('snapshot', $game);
+        file_put_contents("$game/src/Scene/PlayScene.php", "<?php // faster\n");
+        file_put_contents("$game/src/Hero.php", "<?php\n");
+        unlink("$game/config/game.yaml");
+        mkdir("$game/vendor");
+        file_put_contents("$game/vendor/x.php", 'ignored');
+        $changes = $call('changes', $game, $before);
+        ksort($changes);
+        self::assertSame(['config/game.yaml' => null, 'src/Hero.php' => base64_encode("<?php\n"), 'src/Scene/PlayScene.php' => base64_encode("<?php // faster\n")], $changes);
+        // what the web IDE shows: paths in the game folder, not this computer's
+        $event = $call('relative', ['type' => 'assistant', 'message' => ['content' => [['type' => 'tool_use', 'name' => 'Edit', 'input' => ['file_path' => "$game/src/Hero.php"]]]]],
+            $this->project, 'games/demo');
+        self::assertSame('src/Hero.php', $event['message']['content'][0]['input']['file_path']);
+        // the switch, signed out: it asks to sign in first (the browser)
+        self::assertFalse($this->ide('bridge.status')['signedIn']);
+    }
+
     public function testClosingTheProjectShowsTheWelcomeScreenNextTime(): void
     {
         $this->ide('projects.close');

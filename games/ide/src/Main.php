@@ -35,6 +35,8 @@ final class Main implements AppMain
     private array $commands = [];
 
     private float $nextScan = 0;
+
+    private ClaudeBridge $bridge;
     private string $filesSignature = '';
 
     public function boot(App $app): void
@@ -46,7 +48,16 @@ final class Main implements AppMain
         $this->session = (array)$app->storage->readJson('session.json', []);
         $server = (string)(getenv('JUMPHP_IDE_SERVER') ?: ($this->session['server'] ?? Playground::DEFAULT_SERVER));
         $this->playground = new Playground($app->http(), $server, $this->session['token'] ?? null);
+        $this->bridge = new ClaudeBridge($this, $this->playground, $this->processes);
         $this->registerCommands();
+        // bin/jumphp claude:connect, or the option kept from last time: this computer's Claude answers the web IDE
+        if (getenv('JUMPHP_IDE_BRIDGE') === '1' || $app->options->get('claudeBridge', false)) {
+            if (!empty($this->session['token'])) {
+                $this->bridge->enable(true);
+            } elseif (getenv('JUMPHP_IDE_BRIDGE') === '1') {
+                $this->login()->then(fn () => $this->bridge->enable(true), fn () => null);
+            }
+        }
 
         $app->command('ide', function (mixed $payload) {
             $payload = is_array($payload) ? $payload : [];
@@ -92,6 +103,7 @@ final class Main implements AppMain
     {
         $this->processes->poll();
         $this->loopback?->poll();
+        $this->bridge->tick();
         if ($this->ide === null) {
             return;
         }
@@ -144,6 +156,7 @@ final class Main implements AppMain
             return true;
         };
         $c['session.logout'] = function () {
+            $this->bridge->enable(false);
             $this->session = ['server' => $this->playground->server()];
             $this->app->storage->writeJson('session.json', $this->session);
             $this->playground->setToken(null);
@@ -151,6 +164,16 @@ final class Main implements AppMain
             return true;
         };
         $c['session.user'] = fn () => $this->session['user'] ?? null;
+        // Claude for jumphp.net (ClaudeBridge): the web IDE uses this computer's Claude
+        $c['bridge.status'] = fn () => $this->bridge->status() + ['signedIn' => !empty($this->session['token'])];
+        $c['bridge.enable'] = function (array $p) {
+            $on = !empty($p['on']);
+            $this->app->options->set('claudeBridge', $on);
+            if ($on && empty($this->session['token'])) {
+                return $this->login()->then(fn () => $this->bridge->enable(true));
+            }
+            return $this->bridge->enable($on);
+        };
 
         $c['projects.remote'] = fn () => self::deferred($this->playground->projects())->then(fn (array $list) => array_map(function (array $p) {
             $p['localPath'] = $this->localPathOf($p);

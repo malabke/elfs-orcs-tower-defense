@@ -313,6 +313,14 @@ hybrid_export_env() {
 # The JumPHP IDE (docs/ide.md) on this computer, natively: the exported executable (built when missing or older than
 # ide/ and games/ide/), started outside Docker so it has the user's git and Docker. `ide --install`: also a launcher in
 # the desktop's menu (~/.local/share/applications) and the command jumphp-ide (~/.local/bin).
+cmd_claude_connect() {
+  # the web IDE (jumphp.net/ide) uses the Claude Code of this computer: the JumPHP IDE with "Claude for jumphp.net"
+  # on (it signs in through the browser the first time: allow it there), answering while it is open
+  command -v claude >/dev/null || [ -x "$HOME/.local/bin/claude" ] || die "Claude Code is not installed on this computer: https://claude.com/claude-code"
+  say "Claude for jumphp.net: the JumPHP IDE answers jumphp.net/ide with this computer's Claude while it is open"
+  JUMPHP_IDE_BRIDGE=1 cmd_ide "$@"
+}
+
 cmd_ide() {
   # The IDE runs natively, without Docker: the executable (built once, or with --build) is only its runtime (PHP,
   # Tauri); the IDE's sources of this checkout are copied into the folder it unpacked itself to, so a git pull or a

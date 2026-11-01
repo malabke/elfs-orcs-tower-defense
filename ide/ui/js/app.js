@@ -45,6 +45,8 @@ class App {
     backend.on('index.progress', (p) => this.indexProgress(p));
     backend.on('files.changed', debounce(() => { this.tree?.refresh(); this.git?.refresh(); this.editors?.reloadFromDisk(); }, 300));
     backend.on('project.closed', () => location.reload());
+    backend.on('bridge.status', (st) => this.bridgeStatus(st));
+    if (backend.kind === 'native') backend.invoke('bridge.status').then((st) => this.bridgeStatus(st)).catch(() => null);
     if (backend.kind === 'native') {
       const state = await backend.invoke('session.state');
       this.session = state;
@@ -486,9 +488,24 @@ class App {
       '-', { label: 'Welcome screen…', icon: 'star', action: () => backend.invoke('projects.close').then(() => location.reload()) }], { placeholder: 'Open a recent project' });
   }
 
-  userMenu(at) {
+  /** The status bar shows when this computer's Claude answers the web IDE. */
+  bridgeStatus(st) {
+    let item = document.getElementById('sbBridge');
+    if (!st?.on) { item?.remove(); return; }
+    if (!item) {
+      item = el('span.sb-item', { id: 'sbBridge', title: 'Claude for jumphp.net: the web IDE uses the Claude of this computer (account menu to turn it off)' });
+      $('sbTask').before(item);
+    }
+    item.textContent = st.state === 'working' ? `✦ Claude for jumphp.net: working on ${st.project}…` : '✦ Claude for jumphp.net';
+  }
+
+  async userMenu(at) {
     const user = this.session?.user || backend.config.user;
+    // the desktop: this computer's Claude can answer the web IDE (jumphp.net/ide), ClaudeBridge
+    const bridge = backend.kind === 'native' && user ? await backend.invoke('bridge.status').catch(() => null) : null;
     menu(user ? [{ head: user.login }, { label: 'My page on jumphp.net', icon: 'globe', action: () => this.openUrl(user.url || 'https://jumphp.net') },
+      bridge ? { label: 'Claude for jumphp.net (the web IDE uses this computer\'s Claude)', icon: 'star', checked: bridge.on,
+        action: () => backend.invoke('bridge.enable', { on: !bridge.on }).then((s) => notify(s.on ? 'jumphp.net/ide now uses the Claude of this computer, while the JumPHP IDE is open.' : 'Claude for jumphp.net is off.', 'info', { title: 'Claude' })) } : null,
       backend.kind === 'native' ? { label: 'Sign out', icon: 'logout', action: () => backend.invoke('session.logout').then(() => location.reload()) } : null].filter(Boolean)
       : [{ label: 'Sign in with jumphp.net', icon: 'user', action: () => backend.invoke('projects.close').then(() => location.reload()) }], at);
   }

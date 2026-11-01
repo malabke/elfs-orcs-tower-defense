@@ -35,11 +35,21 @@ export class ClaudePanel {
     if (!this.history.length) this.placeholder();
     backend.on('claude.event', (p) => this.event(p));
     backend.on('claude.exit', (p) => this.exit(p));
-    backend.invoke('claude.status').then((s) => {
-      this.available = s.available;
-      this.say(s.available ? (s.version || 'Claude Code') : 'not installed');
-      if (!s.available) this.notInstalled();
-    }).catch(() => null);
+    this.remote = !!app.project.capabilities?.claudeRemote;     // the web IDE: the Claude of the user's computer
+    this.checkStatus();
+  }
+
+  async checkStatus() {
+    const s = await backend.invoke('claude.status').catch(() => null);
+    if (!s) return;
+    const was = this.available;
+    this.available = s.available;
+    this.say(s.available ? (s.version || 'Claude Code') : (this.remote ? 'not connected' : 'not installed'));
+    if (!s.available) this.notInstalled();
+    else if (was === false) { clear(this.log); for (const item of this.history) this.renderItem(item); if (!this.history.length) this.placeholder(); }
+    // the web IDE: keep looking for the computer while it is not connected
+    clearTimeout(this.statusTimer);
+    if (this.remote && !s.available) this.statusTimer = setTimeout(() => this.checkStatus(), 5000);
   }
 
   title() { return 'Claude'; }
@@ -67,6 +77,15 @@ export class ClaudePanel {
 
   notInstalled() {
     clear(this.log);
+    if (this.remote) {
+      const command = 'bin/jumphp claude:connect';
+      this.log.append(el('div.placeholder.claude-empty', {}, el('p', {}, 'Use the Claude Code of your computer here.'),
+        el('p', { style: { fontSize: '12px' } }, 'In your JumPHP project, on your computer, run:'),
+        el('pre.claude-code', { title: 'Click to copy', style: { cursor: 'copy' }, onclick: () => { navigator.clipboard?.writeText(command); notify('Copied', 'info'); } }, command),
+        el('p', { style: { fontSize: '12px' } }, 'It opens the JumPHP IDE and asks you, in your browser, to allow it (or in the JumPHP IDE: your account menu › Claude for jumphp.net). Claude then works on a copy of this project on your computer; what it changes comes back here as drafts.'),
+        el('p', { style: { fontSize: '12px', color: 'var(--text-3)' } }, 'Waiting for your computer…')));
+      return;
+    }
     this.log.append(el('div.placeholder.claude-empty', {}, el('p', {}, 'Claude Code is not installed on this computer.'),
       el('button.btn.primary', { onclick: () => this.app.openUrl('https://claude.com/claude-code') }, 'Install Claude Code'),
       el('p', { style: { fontSize: '12px' } }, 'Then sign in once in a terminal (claude), and come back.')));
@@ -125,6 +144,7 @@ export class ClaudePanel {
     try {
       const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: this.mode });
       this.run = { id, started: Date.now(), tools: 0 };
+      if (this.remote) this.pollRemote(id, 0);
       this.sendBtn.textContent = 'Stop';
       this.thinking = el('div.claude-thinking', {}, el('span.spinner'), 'Claude is working…');
       this.log.append(this.thinking);
@@ -133,6 +153,14 @@ export class ClaudePanel {
     } catch (e) {
       this.add({ role: 'error', text: e.message });
     }
+  }
+
+  /** The web IDE: the events of the computer's Claude, through jumphp.net (they arrive as claude.event / claude.exit). */
+  async pollRemote(id, after) {
+    if (!this.run || this.run.id !== id) return;
+    const r = await backend.invoke('claude.poll', { id, after }).catch(() => null);
+    if (!this.run || this.run.id !== id) return;
+    setTimeout(() => this.pollRemote(id, r ? r.next : after), r ? 700 : 3000);
   }
 
   stop() {
@@ -165,9 +193,10 @@ export class ClaudePanel {
     this.save();
   }
 
-  exit({ id, code, error }) {
+  exit({ id, code, error, changed }) {
     if (!this.run || id !== this.run.id) return;
     if (code !== 0 && error) this.add({ role: 'error', text: error });
+    if (changed?.length) this.add({ role: 'note', text: `Saved as drafts here: ${changed.join(', ')}` });
     this.run = null;
     this.thinking?.remove();
     this.sendBtn.textContent = 'Send';

@@ -71,8 +71,14 @@ final class Playground
         return $this->call('GET', '/api/ide/github-token');
     }
 
+    /** Any call of the IDE's API (the Claude bridge's long polls: a longer timeout). */
+    public function request(string $method, string $path, ?array $body = null, float $timeout = 30.0): Task
+    {
+        return $this->call($method, $path, $body, $timeout);
+    }
+
     /** A JSON call: resolves with the decoded body, rejects with the server's error message. */
-    private function call(string $method, string $path, ?array $body = null): Task
+    private function call(string $method, string $path, ?array $body = null, float $timeout = 30.0): Task
     {
         if ($this->token === null) {
             $task = new Task();
@@ -81,7 +87,7 @@ final class Playground
         }
         $headers = ['Authorization' => 'Bearer ' . $this->token, 'Accept' => 'application/json', 'User-Agent' => 'jumphp-ide'];
         $out = new Task();
-        $this->http->request($method, $this->server . $path, $body, $headers, 30.0)->then(function (HttpResponse $response) use ($out) {
+        $this->http->request($method, $this->server . $path, $body, $headers, $timeout)->then(function (HttpResponse $response) use ($out) {
             $data = $response->json();
             if (!$response->ok()) {
                 $message = is_array($data) && isset($data['error']) ? (string)$data['error'] : "jumphp.net answered HTTP $response->status";

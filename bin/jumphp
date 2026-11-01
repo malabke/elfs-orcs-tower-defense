@@ -97,6 +97,8 @@ Desktop apps (Tauri: native windows with HTML / CSS / JS pages, driven by PHP; n
                                 (--windows: .exe; --macos: <app>-macos.zip, an .app for Apple silicon + Intel)
   ide [--build] [--install]                 the JumPHP IDE on this computer (natively, no Docker: this checkout's IDE sources in
                                             its executable, built once); --build: build it again; --install: menu launcher
+  claude:connect                            the web IDE (jumphp.net/ide) uses this computer's Claude Code: the JumPHP IDE with
+                                            "Claude for jumphp.net" on (authorized once in the browser)
   app:release <app> --url <base> [--notes "..."] [--linux] [--windows] [--macos]
                                 exported + a signed update.json for the apps' updates (docs/tauri.md "Updates")
                             (needs WebKitGTK 4.1) / <app>-windows-x86_64.exe (WebView2)
@@ -1122,6 +1124,7 @@ main() {
     app:shot) cmd_app_shot "$@" ;;
     app:export) cmd_app_export "$@" ;;
     ide) cmd_ide "$@" ;;
+    claude:connect) cmd_claude_connect "$@" ;;
     app:release) cmd_app_release "$@" ;;
     lint) cmd_lint ;;
     doctor) cmd_doctor ;;
