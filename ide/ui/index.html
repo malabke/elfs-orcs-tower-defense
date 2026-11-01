@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JumPHP IDE</title>
+  <link rel="icon" href="img/icon.png">
+  <link rel="stylesheet" href="css/ide.css">
+  <link rel="stylesheet" href="css/designer.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="header" id="header">
+      <button class="hbtn menu-btn" id="mainMenu" title="Main menu (Alt+\)"></button>
+      <button class="hwidget" id="projectWidget" title="Projects"><span class="avatar-letter" id="projectLetter">J</span><span id="projectName">JumPHP IDE</span><i class="chev"></i></button>
+      <button class="hwidget" id="branchWidget" title="Git branches" hidden><i class="ico" data-icon="branch"></i><span id="branchName">main</span><i class="chev"></i></button>
+      <div class="hspacer"></div>
+      <div class="run-widget" id="runWidget" hidden>
+        <button class="hwidget" id="runConfig" title="Run configurations"><i class="ico" data-icon="play"></i><span id="runConfigName">Run</span><i class="chev"></i></button>
+        <button class="hbtn run" id="runBtn" title="Run (Shift+F10)"><i class="ico" data-icon="play"></i></button>
+        <button class="hbtn" id="testBtn" title="Test (Ctrl+Shift+F10)"><i class="ico" data-icon="test"></i></button>
+        <button class="hbtn stop" id="stopBtn" title="Stop (Ctrl+F2)" disabled><i class="ico" data-icon="stop"></i></button>
+      </div>
+      <div class="hgroup" id="gitButtons" hidden>
+        <button class="hbtn" id="pullBtn" title="Update project (Ctrl+T)"><i class="ico" data-icon="pull"></i></button>
+        <button class="hbtn" id="commitBtn" title="Commit (Ctrl+K)"><i class="ico" data-icon="commit"></i></button>
+        <button class="hbtn" id="pushBtn" title="Push (Ctrl+Shift+K)"><i class="ico" data-icon="push"></i></button>
+      </div>
+      <button class="hbtn" id="previewBtn" title="Preview the game" hidden><i class="ico" data-icon="globe"></i></button>
+      <button class="hbtn" id="publishBtn" title="Publish on jumphp.net" hidden><i class="ico" data-icon="upload"></i></button>
+      <button class="hbtn" id="searchBtn" title="Search Everywhere (Double Shift)"><i class="ico" data-icon="search"></i></button>
+      <button class="hbtn" id="settingsBtn" title="Settings"><i class="ico" data-icon="settings"></i></button>
+      <button class="huser" id="userWidget" title="Account"></button>
+    </header>
+
+    <div class="body" id="body">
+      <nav class="stripe left" id="leftStripe"></nav>
+      <aside class="toolwindow left" id="leftPanel"></aside>
+      <div class="splitter v" id="leftSplitter"></div>
+      <main class="center" id="center">
+        <div class="editors" id="editors"></div>
+        <div class="splitter h" id="bottomSplitter"></div>
+        <section class="toolwindow bottom" id="bottomPanel"></section>
+      </main>
+      <div class="splitter v" id="rightSplitter"></div>
+      <aside class="toolwindow right" id="rightPanel"></aside>
+      <nav class="stripe right" id="rightStripe"></nav>
+    </div>
+
+    <footer class="statusbar" id="statusbar">
+      <span class="sb-item" id="sbBreadcrumbs"></span>
+      <span class="sb-spacer"></span>
+      <span class="sb-item" id="sbTask"></span>
+      <span class="sb-item" id="sbIndex"></span>
+      <span class="sb-item clickable" id="sbPosition"></span>
+      <span class="sb-item" id="sbLanguage"></span>
+      <span class="sb-item" id="sbEncoding">UTF-8</span>
+      <span class="sb-item clickable" id="sbBranch"></span>
+      <span class="sb-item clickable" id="sbNotifications" title="Notifications"><i class="ico" data-icon="bell"></i></span>
+    </footer>
+
+    <section class="welcome" id="welcome" hidden></section>
+  </div>
+  <div id="overlays"></div>
+
+  <script>
+    // Monaco's loader (AMD), served from the IDE's own folder: offline in the desktop app
+    window.MonacoEnvironment = {
+      getWorkerUrl() {
+        const base = new URL('vendor/monaco/', document.baseURI).href;
+        return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(
+          `self.MonacoEnvironment = {baseUrl: '${base}'}; importScripts('${base}vs/base/worker/workerMain.js');`);
+      },
+    };
+  </script>
+  <script src="vendor/monaco/vs/loader.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

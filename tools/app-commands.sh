@@ -309,3 +309,35 @@ hybrid_export_env() {
   export JUMPHP_STANDALONE_EXTENSIONS=tools/hybrid-extensions.txt JUMPHP_STANDALONE_SPC=spc-hybrid \
     JUMPHP_STANDALONE_NATIVE="$TAURI_LIB" JUMPHP_STANDALONE_INI=$'ffi.enable=1'
 }
+
+# The JumPHP IDE (docs/ide.md) on this computer, natively: the exported executable (built when missing or older than
+# ide/ and games/ide/), started outside Docker so it has the user's git and Docker. `ide --install`: also a launcher in
+# the desktop's menu (~/.local/share/applications) and the command jumphp-ide (~/.local/bin).
+cmd_ide() {
+  local exe="games/ide/dist/standalone/ide-linux-x86_64"
+  if [ ! -f "$ROOT/$exe" ] || [ -n "$(find "$ROOT/ide/src" "$ROOT/ide/ui" "$ROOT/games/ide/src" "$ROOT/games/ide/config" -newer "$ROOT/$exe" -not -path '*/vendor/*' -print -quit 2>/dev/null)" ]; then
+    say "JumPHP IDE: building the executable ($exe)"
+    cmd_app_export ide
+  fi
+  if [ "${1:-}" = "--install" ]; then
+    local bin="$HOME/.local/bin" apps="$HOME/.local/share/applications" icons="$HOME/.local/share/icons/hicolor/256x256/apps"
+    mkdir -p "$bin" "$apps" "$icons"
+    install -m 755 "$ROOT/$exe" "$bin/jumphp-ide"
+    cp "$ROOT/games/ide/assets/icon.png" "$icons/jumphp-ide.png"
+    cat > "$apps/jumphp-ide.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=JumPHP IDE
+Comment=Edit your JumPHP games and apps
+Exec=$bin/jumphp-ide
+Icon=jumphp-ide
+Terminal=false
+Categories=Development;IDE;
+StartupWMClass=jumphp-ide
+DESKTOP
+    say "installed: $bin/jumphp-ide and JumPHP IDE in the applications menu"
+    return
+  fi
+  say "JumPHP IDE"
+  exec "$ROOT/$exe" "$@"
+}

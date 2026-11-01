@@ -1,0 +1,23 @@
+{
+    "name": "jumphp/ide",
+    "description": "JumPHP IDE: the core (workspace, PHP code intelligence, search, Git, run configurations) and the HTML interface shared by the desktop app (games/ide) and the playground's web IDE.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "nikic/php-parser": "^5.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5",
+        "phpstan/phpstan": "^2.1"
+    },
+    "autoload": {
+        "psr-4": { "JumPHP\\Ide\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "JumPHP\\Ide\\Tests\\": "tests/" }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

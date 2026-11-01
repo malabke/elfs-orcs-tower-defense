@@ -1,0 +1,25 @@
+{
+    "name": "jumphp-apps/ide",
+    "description": "JumPHP IDE: the desktop app (Tauri). Its core and interface are the package jumphp/ide (../../ide), shared with jumphp.net/ide.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "jumphp/engine": "@dev",
+        "jumphp/ide": "@dev"
+    },
+    "repositories": [
+        { "type": "path", "url": "../../engine" },
+        { "type": "path", "url": "../../ide" },
+        { "type": "vcs", "url": "https://github.com/davidnurdin/php-wasm-network" }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": { "psr-4": { "App\\": "src/" } },
+    "autoload-dev": { "psr-4": { "Tests\\": "tests/" } },
+    "scripts": {
+        "post-install-cmd": ["bash vendor/jumphp/ide/tools/fetch-vendor.sh"],
+        "post-update-cmd": ["bash vendor/jumphp/ide/tools/fetch-vendor.sh"]
+    },
+    "config": { "sort-packages": true, "platform-check": false }
+}

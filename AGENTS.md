@@ -53,6 +53,8 @@ engine/                 the framework: composer package jumphp/engine, namespace
 skeleton/               template of a game, copied by `bin/jumphp new`
 skeleton-app/           template of a desktop app (Tauri), copied by `bin/jumphp app:new` (§16)
 tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C library PHP loads with FFI; §16)
+ide/                    JumPHP IDE: package jumphp/ide, PHP core (JumPHP\Ide\) + HTML interface, shared by games/ide
+                        (the desktop app) and jumphp.net/ide (docs/ide.md)
 games/<id>/             the games (games/pong = the reference game: read it)
 docker/                 engine-wasm (WebAssembly build), desktop (runtime), desktop-async (PHP 8.6 ZTS + TrueAsync),
                         relay (network server), web (FrankenPHP), ext (php-opengl.patch, jumphp-xvfb: shared by them),
@@ -986,6 +988,8 @@ background), then ~10.
 - `skeleton/` — platformer: tiles, slopes, one-way platforms, camera, coins, sprite from pixel strings.
 - `games/hello-hybrid/` — a hybrid game (§16): SDL balls + an HTML control panel, native file chooser / dialog, tray
   menu, global shortcut.
+- `games/ide/` + `ide/` — the JumPHP IDE (docs/ide.md): a big desktop app, its core tested with PHPUnit
+  (`bin/jumphp php ide vendor/bin/phpunit`), its interface checked with `games/ide/tools/shot.sh`.
 - `games/hello-desktop/` — a desktop app (Tauri, §16): a notepad, HTML page + PHP (files, native dialogs, PHP clock,
   drag and drop, quit confirmation), tested with `AppTestCase`.
 - `engine/stubs/sdl.stub.php` — every raw SDL / SDL_image / SDL_mixer / SDL_ttf function and constant.

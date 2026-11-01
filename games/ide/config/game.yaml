@@ -1,0 +1,23 @@
+# JumPHP IDE: a desktop app (docs/tauri.md). The pages are the IDE's interface, shared with jumphp.net/ide.
+game:
+  id: ide
+  title: "JumPHP IDE"
+  version: 0.1.0
+  description: "An IDE for PHP games and apps (JumPHP): code intelligence, Git, run and tests, visual HTML editor."
+  lang: en
+  ui: webview
+  main: App\Main
+  app:
+    identifier: net.jumphp.ide
+    pages: vendor/jumphp/ide/ui     # ide/ui through Composer's path repository
+    tick_hz: 60
+    native_commands: true
+    window:
+      url: index.html
+      width: 1280
+      height: 820
+      min_width: 900
+      min_height: 560
+      resizable: true
+      maximized: false
+      devtools: false

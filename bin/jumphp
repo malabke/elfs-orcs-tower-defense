@@ -95,6 +95,7 @@ Desktop apps (Tauri: native windows with HTML / CSS / JS pages, driven by PHP; n
   app:shot <app> [frames] [out.png]  the app's window after N frames (default 120) -> var/screenshots/app.png
   app:export <app> [--linux] [--windows] [--macos]  the app as one executable: dist/standalone/<app>-linux-x86_64
                                 (--windows: .exe; --macos: <app>-macos.zip, an .app for Apple silicon + Intel)
+  ide [--install]                           the JumPHP IDE on this computer (natively, with your git and Docker); --install: menu launcher
   app:release <app> --url <base> [--notes "..."] [--linux] [--windows] [--macos]
                                 exported + a signed update.json for the apps' updates (docs/tauri.md "Updates")
                             (needs WebKitGTK 4.1) / <app>-windows-x86_64.exe (WebView2)
@@ -1111,6 +1112,7 @@ main() {
     app:test) cmd_app_test "$@" ;;
     app:shot) cmd_app_shot "$@" ;;
     app:export) cmd_app_export "$@" ;;
+    ide) cmd_ide "$@" ;;
     app:release) cmd_app_release "$@" ;;
     lint) cmd_lint ;;
     doctor) cmd_doctor ;;
