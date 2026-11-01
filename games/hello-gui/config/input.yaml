@@ -1,0 +1,2 @@
+# Forms read the mouse, the touch screen and the keyboard themselves: no action is needed.
+actions: {}

@@ -47,6 +47,9 @@ Setup
 
 Games (<game> = a folder of games/, e.g. pong)
   new <game> [title]        create games/<game> from skeleton/
+  gui:new <app> [title] [--mobile]  a graphic PHP app (forms of the IDE's visual editor, JumPHP\Gui: no HTML)
+                            from skeleton-gui/; --mobile: a phone app (portrait). run / test / shot / build / export as games
+  video <app> <file.mp4> [name] [fps]  a film as frames for the Video widget: assets/videos/<name>/ (+ audio.ogg)
   install <game>            composer install (engine linked from engine/)
   composer <game> <args>    any composer command in the game
   run <game>                play on desktop (window + sound)
@@ -285,6 +288,41 @@ cmd_new() {
   cp -r skeleton "games/$name"
   php_run "games/$name" -- php /workspace/tools/new-game.php "$name" "$title"
   say "games/$name created. Next: bin/jumphp install $name && bin/jumphp run $name"
+}
+
+cmd_gui_new() {
+  local name="${1:-}" title="" mobile=0
+  shift || true
+  for a in "$@"; do
+    case "$a" in
+      --mobile) mobile=1 ;;
+      *) [ -z "$title" ] && title="$a" ;;
+    esac
+  done
+  [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "app name: lower case letters, digits and dashes (e.g. contacts)"
+  [ -e "games/$name" ] && die "games/$name already exists"
+  [ -n "$title" ] || title="$(echo "$name" | tr '-' ' ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2)} 1')"
+  mkdir -p games
+  cp -r skeleton-gui "games/$name"
+  php_run "games/$name" -- php /workspace/tools/new-gui.php "$name" "$title" "$mobile"
+  say "games/$name created. Next: bin/jumphp install $name && bin/jumphp run $name (forms/*.form.yaml: the IDE's visual editor)"
+}
+
+# a film -> numbered pictures + its sound, for JumPHP\Gui\Video (SDL's binding decodes no video)
+cmd_video() {
+  local game="${1:-}" file="${2:-}"; local dir; dir="$(game_dir "$game")"
+  [ -f "$file" ] || die "usage: bin/jumphp video <app> <film.mp4> [name] [fps]"
+  local name="${3:-$(basename "${file%.*}" | tr '[:upper:] ' '[:lower:]-')}" fps="${4:-25}"
+  local out="$dir/assets/videos/$name" abs
+  abs="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+  mkdir -p "$ROOT/$out"
+  docker image inspect jumphp/ffmpeg:dev >/dev/null 2>&1 || docker build -q -t jumphp/ffmpeg:dev "$ROOT/docker/ffmpeg" >/dev/null
+  say "frames of $(basename "$file") at $fps fps -> $out"
+  docker run --rm -u "$(id -u):$(id -g)" -v "$abs:/in/$(basename "$file"):ro" -v "$ROOT/$out:/out" jumphp/ffmpeg:dev \
+    -loglevel error -y -i "/in/$(basename "$file")" -vf "fps=$fps,scale='min(1280,iw)':-2" -q:v 4 /out/%05d.jpg
+  docker run --rm -u "$(id -u):$(id -g)" -v "$abs:/in/$(basename "$file"):ro" -v "$ROOT/$out:/out" jumphp/ffmpeg:dev \
+    -loglevel error -y -i "/in/$(basename "$file")" -vn -c:a libvorbis -q:a 4 /out/audio.ogg 2>/dev/null || rm -f "$ROOT/$out/audio.ogg"
+  say "done: {type: video, src: assets/videos/$name, fps: $fps}"
 }
 
 # the game as an Android app (tools/twa.sh in docker/twa); asks what it does not know, remembers it in
@@ -1050,8 +1088,8 @@ cmd_pages() {
 }
 
 cmd_lint() {
-  say "php -l (engine, skeleton, games)"
-  php_run . -- sh -c 'find engine/src engine/bootstrap engine/tests skeleton skeleton-app games tools -name "*.php" -not -path "*/vendor/*" -not -path "*/.build/*" -print0 | xargs -0 -n1 php -l >/dev/null'
+  say "php -l (engine, skeletons, games)"
+  php_run . -- sh -c 'find engine/src engine/bootstrap engine/tests skeleton skeleton-app skeleton-gui games tools -name "*.php" -not -path "*/vendor/*" -not -path "*/.build/*" -print0 | xargs -0 -n1 php -l >/dev/null'
   say "forbidden words"
   bash tools/check-forbidden-words.sh
   say "lint OK"
@@ -1094,6 +1132,8 @@ main() {
     setup) cmd_setup "$@" ;;
     engine:build) cmd_engine_build "$@" ;;
     new) cmd_new "$@" ;;
+    gui:new) cmd_gui_new "$@" ;;
+    video) cmd_video "$@" ;;
     install) local d; d="$(game_dir "${1:-}")"; php_run "$d" -- composer install --no-interaction ;;
     composer) local d; d="$(game_dir "${1:-}")"; shift; php_run "$d" -- composer "$@" ;;
     run) cmd_run "$@" ;;

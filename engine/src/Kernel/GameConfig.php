@@ -18,6 +18,7 @@ final class GameConfig
         'width' => 320,          // virtual resolution: everything is drawn at this size, then scaled
         'height' => 180,
         'scale' => 3,            // initial window size = width * scale (desktop)
+        'view' => 'fixed',       // 'window': the view is the window's size, pixel for pixel (apps made of JumPHP\Gui forms)
         'fullscreen' => false,
         'vsync' => true,
         'max_fps' => 120,        // desktop frame cap (vsync usually paces first)

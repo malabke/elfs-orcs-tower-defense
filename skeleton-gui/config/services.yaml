@@ -1,0 +1,10 @@
+# Symfony dependency injection: every class of src/ is a service, constructors are autowired.
+# Forms (JumPHP\Gui\Form) are scenes: SceneManager fetches them by class name.
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  App\:
+    resource: '../src/*'

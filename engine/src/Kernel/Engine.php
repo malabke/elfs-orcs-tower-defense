@@ -178,6 +178,13 @@ class Engine extends EventEmitter
         $renderer = $this->sdl->getRenderer();
         $this->bridge->poll();
         $this->input->poll($renderer);
+        if ($this->config->get('view') === 'window') {
+            // apps (JumPHP\Gui): the view is the window, pixel for pixel, whatever its size
+            [$ow, $oh] = $renderer->outputSize();
+            if ($ow > 0 && $oh > 0 && ($ow !== $renderer->getWidth() || $oh !== $renderer->getHeight())) {
+                $renderer->resizeView($ow, $oh);
+            }
+        }
         if ($this->net !== null && $this->net->isActive()) {
             $this->net->poll();
         }

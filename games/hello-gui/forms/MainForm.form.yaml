@@ -1,0 +1,52 @@
+# The main window, made with the IDE's visual editor (open this file there: Design). The code behind it is
+# src/Form/MainForm.php: `events` name its methods (a double click on a widget in the editor writes them).
+form:
+  title: Hello GUI
+  theme: light
+  layout: column
+  padding: 20
+  gap: 16
+  children:
+    - type: row
+      gap: 12
+      children:
+        - {type: image, id: logo, src: assets/images/logo.png, width: 40, height: 40}
+        - type: column
+          gap: 0
+          children:
+            - {type: label, id: heading, text: Contacts, style: title}
+            - {type: label, id: subtitle, text: 'A graphic app in PHP: no HTML, the same on a PC, a Mac, a phone and the web.', style: muted, hide: [xs]}
+        - {type: spacer}
+        - {type: checkbox, id: dark, text: Dark, events: {change: onDarkChange}}
+    - type: grid
+      gap: 16
+      height: fill
+      children:
+        - type: panel
+          id: editor
+          title: New contact
+          span: {xs: 12, md: 5}
+          gap: 12
+          children:
+            - {type: label, text: Name}
+            - {type: textbox, id: name, placeholder: 'Ada Lovelace', events: {submit: onNameSubmit}}
+            - {type: label, text: E-mail}
+            - {type: textbox, id: email, placeholder: 'ada@example.com'}
+            - {type: label, text: Country}
+            - {type: combobox, id: country, items: [France, Belgium, Switzerland, Canada, Other], selected: 0}
+            - {type: checkbox, id: newsletter, text: 'Send the newsletter', checked: true}
+            - type: row
+              children:
+                - {type: button, id: add, text: Add, style: primary, default: true, events: {click: onAddClick}}
+                - {type: button, id: clear, text: Clear, style: flat, events: {click: onClearClick}}
+        - type: panel
+          id: people
+          title: Contacts
+          span: {xs: 12, md: 7}
+          height: fill
+          children:
+            - {type: listbox, id: list, height: fill, minHeight: 160, events: {change: onListChange, activate: onListActivate}}
+            - type: row
+              children:
+                - {type: label, id: status, text: 'No contact yet', style: muted, grow: 1}
+                - {type: button, id: remove, text: Remove, style: danger, enabled: false, events: {click: onRemoveClick}}

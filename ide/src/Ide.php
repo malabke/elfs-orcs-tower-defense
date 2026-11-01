@@ -6,6 +6,8 @@ use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Claude\ClaudeCode;
 use JumPHP\Ide\Git\Git;
+use JumPHP\Ide\Gui\FormCode;
+use JumPHP\Ide\Gui\FormFile;
 use JumPHP\Ide\Php\Index;
 use JumPHP\Ide\Php\Intelligence;
 use JumPHP\Ide\Php\Source;
@@ -75,6 +77,7 @@ final class Ide
             $this->runner = new Runner($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
         }
         $this->registerCore();
+        $this->registerForms();
         if ($this->git !== null) {
             $this->registerGit();
         }
@@ -149,6 +152,59 @@ final class Ide
     {
         $this->index->invalidate();
         $this->indexed = false;
+    }
+
+    /** The visual editor of forms (graphic PHP apps, JumPHP\Gui): form files <-> arrays, the code behind them. */
+    private function registerForms(): void
+    {
+        $this->register('gui.read', fn (array $p) => FormFile::parse(isset($p['text']) ? (string)$p['text'] : $this->workspace->read(Paths::clean((string)($p['path'] ?? '')))));
+        $this->register('gui.dump', fn (array $p) => ['content' => FormFile::dump((array)($p['form'] ?? []), (string)($p['header'] ?? ''))]);
+        // the form's class with a new event method and/or its @property lines: {path (the form file), wire?: {id, type, event,
+        // method?}, widgets?: {id: type}} -> {path, content, line, added, created} (the interface writes it: open editors follow)
+        $this->register('gui.code', function (array $p) {
+            [$path, $created] = $this->formClassFile(Paths::clean((string)($p['path'] ?? '')));
+            $content = $created ? FormCode::newClass(Templates::namespaceOf($path, $this->workspace), pathinfo($path, PATHINFO_FILENAME)) : $this->workspace->read($path);
+            $line = null;
+            $added = false;
+            if (isset($p['widgets']) && is_array($p['widgets'])) {
+                $widgets = [];
+                foreach ($p['widgets'] as $id => $type) {
+                    if (preg_match('/^[A-Za-z_]\w*$/', (string)$id)) {
+                        $widgets[(string)$id] = FormCode::classOf((string)$type);
+                    }
+                }
+                $content = FormCode::properties($content, $widgets);
+            }
+            if (!empty($p['wire']) && is_array($p['wire'])) {
+                $w = $p['wire'];
+                $event = (string)($w['event'] ?? 'click');
+                $method = (string)($w['method'] ?? FormCode::handlerName((string)($w['id'] ?? 'form'), $event));
+                if (!preg_match('/^[A-Za-z_]\w*$/', $method)) {
+                    throw new \InvalidArgumentException("$method is not a method name");
+                }
+                ['content' => $content, 'line' => $line, 'added' => $added] = FormCode::wire($content, $method, FormCode::classOf((string)($w['type'] ?? '')), $event);
+            }
+            return ['path' => $path, 'content' => $content, 'line' => $line, 'added' => $added, 'created' => $created];
+        });
+    }
+
+    /**
+     * The class of a form file: games/x/forms/MainForm.form.yaml -> the file of class MainForm under games/x/src/
+     * (src/Form/MainForm.php when there is none yet).
+     *
+     * @return array{0: string, 1: bool} its path, whether it has to be created
+     */
+    private function formClassFile(string $form): array
+    {
+        $class = preg_replace('/\.form\.ya?ml$/', '', basename($form)) ?: 'MainForm';
+        $app = preg_match('#^(.*?)/?forms/#', $form, $m) ? $m[1] : dirname($form);
+        $src = ($app === '' || $app === '.' ? '' : "$app/") . 'src/';
+        foreach (array_keys($this->workspace->files()) as $file) {
+            if (str_starts_with($file, $src) && basename($file) === "$class.php") {
+                return [$file, false];
+            }
+        }
+        return ["{$src}Form/$class.php", true];
     }
 
     private function registerCore(): void
