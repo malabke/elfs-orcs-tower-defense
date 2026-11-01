@@ -14,7 +14,7 @@ final class Loopback
     /** @var resource|null */
     private $server = null;
 
-    /** @var list<array{0: resource, 1: string}> connections being read */
+    /** @var array<int, array{0: resource, 1: string}> connections being read */
     private array $clients = [];
 
     public readonly string $state;

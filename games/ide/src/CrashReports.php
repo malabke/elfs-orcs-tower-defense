@@ -23,7 +23,7 @@ final class CrashReports
     {
         $frames = [];
         foreach (array_slice($e->getTrace(), 0, 40) as $frame) {
-            $frames[] = ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '?') . '()'
+            $frames[] = ($frame['class'] ?? '') . ($frame['type'] ?? '') . $frame['function'] . '()'
                 . (isset($frame['file']) ? ' ' . self::clean($frame['file']) . ':' . ($frame['line'] ?? 0) : '');
         }
         return [
