@@ -169,6 +169,7 @@ export class Editors {
       try { file = await this.load(path); } catch (e) { notify(e.message, 'error', { title: 'Cannot open ' + basename(path) }); return null; }
       tab = { id: 'tab' + Math.random().toString(36).slice(2), path, kind: file.kind, preview: !!options.preview };
       if (file.kind === 'text' && languageOf(path) === 'html') tab.mode = prefs.get('htmlMode', 'code');
+      if (file.kind === 'text' && /\.form\.ya?ml$/.test(path)) tab.mode = prefs.get('formMode', 'design');
       const replace = options.preview && group.tabs.find((t) => t.preview && !this.isDirty(t.path));
       if (replace) this.closeTab(group, replace, true);
       group.tabs.push(tab);
@@ -221,6 +222,7 @@ export class Editors {
     if (tab.kind === 'text') {
       if (!group.textView.parentNode) host.append(group.textView);
       if (languageOf(tab.path) === 'html' && file) return this.renderHtml(group, tab, file);
+      if (/\.form\.ya?ml$/.test(tab.path) && file) return this.renderHtml(group, tab, file, 'form');
       group.textView.style.display = '';
       this.showModel(group, tab, file);
       return;
@@ -255,12 +257,12 @@ export class Editors {
     return group.modelTab ? { tab: group.modelTab, state: group.editor.saveViewState() } : null;
   }
 
-  /** .html files: Code, Design (visual editor) or both side by side. */
-  async renderHtml(group, tab, file) {
-    const mode = tab.mode || 'code';
+  /** .html files (and forms of graphic apps, *.form.yaml): Code, Design (visual editor) or both side by side. */
+  async renderHtml(group, tab, file, kind = 'html') {
+    const mode = tab.mode || (kind === 'form' ? 'design' : 'code');
     const host = group.host;
     const switcher = el('div.mode-switch', {}, ['code', 'split', 'design'].map((m) => el(`button${m === mode ? '.on' : ''}`, {
-      onclick: () => { tab.mode = m; prefs.set('htmlMode', m); this.renderView(group, tab); },
+      onclick: () => { tab.mode = m; prefs.set(kind === 'form' ? 'formMode' : 'htmlMode', m); this.renderView(group, tab); },
     }, { code: 'Code', split: 'Split', design: 'Design' }[m])));
     host.append(switcher);
     if (mode === 'code') {
@@ -279,6 +281,7 @@ export class Editors {
       this.showModel(group, tab, file);
     }
     host.append(designHost);
+    if (kind === 'form') return this.renderFormDesigner(group, tab, file, designHost);
     try {
       const { Designer } = await import('./designer.js');
       let syncing = false;
@@ -301,6 +304,41 @@ export class Editors {
       const sub = file.model.onDidChangeContent(debounce(() => { if (!syncing && group.designer === designer) designer.setHtml(file.model.getValue()); }, 600));
       const destroy = designer.destroy?.bind(designer);
       designer.destroy = () => { sub.dispose(); destroy && destroy(); group.textView.style.right = ''; group.textView.style.width = ''; };
+    } catch (e) {
+      designHost.append(el('div.placeholder', {}, 'The visual editor could not start: ' + e.message));
+    }
+  }
+
+  /** The visual editor of a form (graphic PHP apps, JumPHP\Gui): the YAML in the model, the code behind in the form's class. */
+  async renderFormDesigner(group, tab, file, designHost) {
+    try {
+      const { FormDesigner } = await import('./form-designer.js');
+      let syncing = false;
+      const app = tab.path.includes('/forms/') ? tab.path.slice(0, tab.path.indexOf('/forms/')) : '';
+      const config = this.app.runner?.config('run:' + app.split('/').pop());
+      const run = config ? () => { this.app.runner.start(config); this.app.showTool?.('run'); } : null;
+      const designer = new FormDesigner(designHost, {
+        path: tab.path,
+        text: file.model.getValue(),
+        backend,
+        run,
+        writeFile: async (p, content) => {
+          const open = this.files.get(p);
+          if (open?.model) { if (open.model.getValue() !== content) open.model.pushEditOperations([], [{ range: open.model.getFullModelRange(), text: content }], () => null); }
+          else await backend.invoke('file.write', { path: p, content });
+          this.app.tree?.refresh?.();
+        },
+        openFile: (p, line) => this.open(p, line ? { line, col: 9 } : {}),
+        onChange: (text) => {
+          syncing = true;
+          file.model.pushEditOperations([], [{ range: file.model.getFullModelRange(), text }], () => null);
+          syncing = false;
+        },
+      });
+      group.designer = designer;
+      const sub = file.model.onDidChangeContent(debounce(() => { if (!syncing && group.designer === designer) designer.setText(file.model.getValue()); }, 600));
+      const destroy = designer.destroy.bind(designer);
+      designer.destroy = () => { sub.dispose(); destroy(); group.textView.style.right = ''; group.textView.style.width = ''; };
     } catch (e) {
       designHost.append(el('div.placeholder', {}, 'The visual editor could not start: ' + e.message));
     }

@@ -9,8 +9,8 @@ use JumPHP\Async\Task;
 /**
  * New Project. Games (an original one, an Amstrad CPC remake, a port) are jumphp.net projects: the playground makes
  * the GitHub repository from the JumPHP template with the brief, the IDE waits for it, clones and opens it. Desktop
- * apps and hybrid games are local JumPHP projects: the template is cloned, then bin/jumphp app:new / new makes the
- * app's folder.
+ * apps, graphic apps (forms, desktop or mobile) and hybrid games are local JumPHP projects: the template is cloned,
+ * then bin/jumphp app:new / gui:new / new makes the app's folder.
  */
 final class Creator
 {
@@ -102,8 +102,14 @@ final class Creator
                     ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root));
             })
             ->then(function () use ($root, $id, $title, $kind) {
-                $this->progress($kind === 'app' ? "bin/jumphp app:new {$id}…" : "bin/jumphp new {$id}…");
-                return $this->run(['bin/jumphp', $kind === 'app' ? 'app:new' : 'new', $id, $title], $root);
+                $command = match ($kind) {
+                    'app' => ['bin/jumphp', 'app:new', $id, $title],
+                    'gui' => ['bin/jumphp', 'gui:new', $id, $title],
+                    'gui-mobile' => ['bin/jumphp', 'gui:new', $id, $title, '--mobile'],
+                    default => ['bin/jumphp', 'new', $id, $title],
+                };
+                $this->progress(implode(' ', array_slice($command, 0, 3)) . '…');
+                return $this->run($command, $root);
             })
             ->then(function () use ($root, $id, $kind, $p) {
                 $game = "$root/games/$id";

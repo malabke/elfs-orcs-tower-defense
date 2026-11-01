@@ -236,14 +236,30 @@ class Container extends Widget
                 $grow += $this->growOf($children[$i], 'width');
             }
             $free = max(0, $w - $sum);
+            $sizes = [];
+            foreach ($line as $i) {
+                $sizes[$i] = $widths[$i];
+            }
+            if ($sum > $w) {
+                // too wide: the supple children (texts, boxes, containers: not buttons, ticks or fixed widths) give room
+                // back, in proportion; if that is not enough, everybody shrinks
+                $supple = array_filter($line, fn (int $i) => !is_numeric($children[$i]->props['width']) && $children[$i]->stretches('width'));
+                $pool = array_sum(array_map(fn (int $i) => $widths[$i], $supple));
+                $over = $sum - $w;
+                foreach ($supple as $i) {
+                    $sizes[$i] = max(0, $widths[$i] - $over * $widths[$i] / max(1, $pool));
+                }
+                $left = array_sum($sizes) + $gap * (count($line) - 1);
+                if ($left > $w) {
+                    foreach ($line as $i) {
+                        $sizes[$i] *= max(0, $w - $gap * (count($line) - 1)) / max(1, $left - $gap * (count($line) - 1));
+                    }
+                }
+            }
             $final = [];
             $lineH = 0;
             foreach ($line as $i) {
-                $cw = $widths[$i] + ($grow > 0 ? $free * $this->growOf($children[$i], 'width') / $grow : 0);
-                if (!$this->props['wrap'] && $sum > $w && $grow === 0) {
-                    // too wide: the children shrink to fit, in proportion
-                    $cw = $widths[$i] * max(0, $w - $gap * (count($line) - 1)) / max(1, $sum - $gap * (count($line) - 1));
-                }
+                $cw = $sizes[$i] + ($grow > 0 ? $free * $this->growOf($children[$i], 'width') / $grow : 0);
                 [, $ch] = $children[$i]->measure($t, $cw, $bp);
                 $final[$i] = [$cw, $ch];
                 $lineH = max($lineH, $ch);

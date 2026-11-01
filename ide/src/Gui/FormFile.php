@@ -66,7 +66,7 @@ final class FormFile
         if (empty($widget['children'])) {
             unset($widget['children']);
             $line = self::inline($widget);
-            if (strlen($pad) + strlen($line) <= 120) {
+            if (strlen($pad) + strlen($line) <= 160) {
                 return "$pad- $line\n";
             }
         }

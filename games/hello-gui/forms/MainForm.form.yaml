@@ -1,7 +1,7 @@
 # The main window, made with the IDE's visual editor (open this file there: Design). The code behind it is
 # src/Form/MainForm.php: `events` name its methods (a double click on a widget in the editor writes them).
 form:
-  title: Hello GUI
+  title: 'Hello GUI'
   theme: light
   layout: column
   padding: 20
@@ -24,14 +24,14 @@ form:
       children:
         - type: panel
           id: editor
-          title: New contact
+          title: 'New contact'
           span: {xs: 12, md: 5}
           gap: 12
           children:
             - {type: label, text: Name}
             - {type: textbox, id: name, placeholder: 'Ada Lovelace', events: {submit: onNameSubmit}}
             - {type: label, text: E-mail}
-            - {type: textbox, id: email, placeholder: 'ada@example.com'}
+            - {type: textbox, id: email, placeholder: ada@example.com}
             - {type: label, text: Country}
             - {type: combobox, id: country, items: [France, Belgium, Switzerland, Canada, Other], selected: 0}
             - {type: checkbox, id: newsletter, text: 'Send the newsletter', checked: true}

@@ -261,4 +261,19 @@ final class FormTest extends TestCase
         $list = $form->widget('people');
         self::assertSame(600.0, $list->y + $list->h);
     }
+
+    public function testALongTextInARowLeavesRoomForTheTickAtTheEnd(): void
+    {
+        $form = $this->form([
+            ['type' => 'row', 'gap' => 0, 'children' => [
+                ['type' => 'label', 'id' => 'long', 'text' => str_repeat('A long sentence that wraps. ', 20)],
+                ['type' => 'spacer'],
+                ['type' => 'checkbox', 'id' => 'dark', 'text' => 'Dark'],
+            ]],
+        ]);
+        $dark = $form->widget('dark');
+        self::assertLessThanOrEqual(800.0, $dark->x + $dark->w);
+        self::assertGreaterThan(400.0, $dark->x);
+        self::assertGreaterThan(1, $form->widget('long')->h / 20, 'the text wraps');
+    }
 }

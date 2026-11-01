@@ -14,6 +14,7 @@ final class ProjectInfo
     public const KINDS = [
         'game' => 'Game',
         'app' => 'Desktop app (HTML + PHP)',
+        'gui' => 'Graphic app (forms, no HTML)',
         'hybrid' => 'Hybrid game (SDL + HTML windows)',
         'cpc' => 'Amstrad CPC remake',
         'port' => 'Port of an open-source game',
@@ -57,7 +58,7 @@ final class ProjectInfo
         $yaml = $this->workspace->read($prefix . 'config/game.yaml');
         $get = fn (string $key) => preg_match('/^\s*' . $key . ':\s*["\']?([^"\'#\n]*?)["\']?\s*(?:#.*)?$/m', $yaml, $m) ? trim($m[1]) : null;
         $ui = $get('ui');
-        $kind = $ui === 'webview' ? 'app' : ($ui === 'hybrid' ? 'hybrid' : 'game');
+        $kind = $ui === 'webview' ? 'app' : ($ui === 'hybrid' ? 'hybrid' : ($get('kind') === 'gui' ? 'gui' : 'game'));
         $brief = $this->workspace->exists($prefix . 'BRIEF.md') ? $this->workspace->read($prefix . 'BRIEF.md') : '';
         if ($kind === 'game' && preg_match('/\b(amstrad|cpc|\.dsk|dsk2jumphp)\b/i', $brief)) {
             $kind = 'cpc';
@@ -71,6 +72,7 @@ final class ProjectInfo
         return [
             'id' => $id, 'dir' => $dir, 'title' => $get('title') ?? $id, 'kind' => $kind, 'kindLabel' => self::KINDS[$kind],
             'startScene' => $get('start_scene'), 'width' => (int)($get('width') ?? 320), 'height' => (int)($get('height') ?? 180),
+            'forms' => $kind === 'gui' ? array_values(array_filter(array_keys($this->workspace->files()), fn ($p) => str_starts_with($p, $prefix . 'forms/') && str_ends_with($p, '.form.yaml'))) : null,
             'pages' => $pages, 'site' => $this->workspace->exists($prefix . 'site/index.html') ? $prefix . 'site' : null,
             'hasTests' => (bool)array_filter(array_keys($this->workspace->files()), fn ($p) => str_starts_with($p, $prefix . 'tests/') && str_ends_with($p, 'Test.php')),
         ];

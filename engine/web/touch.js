@@ -163,7 +163,7 @@
 	}
 
 	function start() {
-		if (!matchMedia('(pointer: coarse)').matches) return;
+		if (!matchMedia('(pointer: coarse)').matches || (window.JUMPHP_GAME || {}).touch === false) return;
 		const cfg = Object.assign({ a: 'Space', b: 'Escape', start: 'Return' }, (window.JUMPHP_GAME || {}).touch || {});
 		const labels = Object.assign({ a: 'A', b: 'B', start: 'START', select: 'SELECT' }, cfg.labels || {});
 		const game = window.JUMPHP_GAME || {};

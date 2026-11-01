@@ -78,4 +78,34 @@ final class FormsTest extends TestCase
         self::assertStringContainsString(' * @property Button $ok', $new['content']);
         self::assertStringContainsString('final class Settings extends Form', $new['content']);
     }
+
+    public function testAGraphicAppIsKnownWithItsForms(): void
+    {
+        $ws = new MemoryWorkspace([
+            'bin/jumphp' => '#!/bin/bash',
+            'games/contacts/config/game.yaml' => "game:\n  id: contacts\n  kind: gui                     # forms\n  view: window\n",
+            'games/contacts/forms/MainForm.form.yaml' => self::FORM,
+        ]);
+        $info = (new Ide($ws))->handle('project.info', []);
+        self::assertSame('gui', $info['modules'][0]['kind']);
+        self::assertSame(['games/contacts/forms/MainForm.form.yaml'], $info['modules'][0]['forms']);
+        self::assertContains('run:contacts', array_column($info['run'], 'id'));
+    }
+
+    public function testANewFormFileStartsWithATitle(): void
+    {
+        $ide = new Ide(new MemoryWorkspace([]));
+        $ide->handle('file.create', ['path' => 'games/x/forms/SettingsForm.form.yaml']);
+        $form = $ide->handle('gui.read', ['path' => 'games/x/forms/SettingsForm.form.yaml'])['form'];
+        self::assertSame('Settings', $form['title']);
+        self::assertSame('label', $form['children'][0]['type']);
+    }
+
+    public function testTheFormTravelsAsJsonInTheOrderOfTheFile(): void
+    {
+        $ide = new Ide(new MemoryWorkspace([]));
+        $read = $ide->handle('gui.read', ['text' => self::FORM]);
+        self::assertStringStartsWith('{"title":"Contacts","children":[{"type":"label"', $read['json']);
+        self::assertSame(self::FORM, $ide->handle('gui.dump', ['json' => $read['json'], 'header' => $read['header']])['content']);
+    }
 }

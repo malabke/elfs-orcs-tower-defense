@@ -386,8 +386,10 @@ async function main() {
 	window.JumPHPTouch?.start();
 	notifyParent({ type: 'jumphp:ready', game: GAME.id });
 
-	// a desktop app shows its pages at once (no sound to unlock, the pages take the focus themselves)
+	// a desktop app shows its pages at once (no sound to unlock, the pages take the focus themselves); an app of forms
+	// (view: window) too: it is used, not started
 	if (GAME.ui === 'webview') return;
+	if (GAME.view === 'window') { canvas.focus(); return; }
 	// browsers start audio and keyboard focus after a user gesture: one click / tap / key on the overlay
 	const overlay = $('overlay');
 	overlay.style.display = 'flex';
@@ -498,7 +500,8 @@ $('btn-full').addEventListener('click', () => {
 	fullscreenElement() ? exitFullscreen() : enterFullscreen();
 	canvas.focus();
 });
-canvas.addEventListener('dblclick', () => enterFullscreen());
+canvas.addEventListener('dblclick', () => { if (GAME.view !== 'window') enterFullscreen(); });   // forms use double clicks
+if (GAME.view === 'window') document.documentElement.classList.add('view-window');
 $('btn-sound').addEventListener('click', () => {
 	// SDL_mixer plays through emscripten's Web Audio context
 	const ctx = window.SDL2?.audioContext || window.Module?.SDL2?.audioContext;

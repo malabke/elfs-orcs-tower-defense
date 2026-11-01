@@ -157,8 +157,15 @@ final class Ide
     /** The visual editor of forms (graphic PHP apps, JumPHP\Gui): form files <-> arrays, the code behind them. */
     private function registerForms(): void
     {
-        $this->register('gui.read', fn (array $p) => FormFile::parse(isset($p['text']) ? (string)$p['text'] : $this->workspace->read(Paths::clean((string)($p['path'] ?? '')))));
-        $this->register('gui.dump', fn (array $p) => ['content' => FormFile::dump((array)($p['form'] ?? []), (string)($p['header'] ?? ''))]);
+        // the form also travels as a JSON string: the order of its keys is the file's (a host's JSON may sort objects' keys)
+        $this->register('gui.read', function (array $p) {
+            $parsed = FormFile::parse(isset($p['text']) ? (string)$p['text'] : $this->workspace->read(Paths::clean((string)($p['path'] ?? ''))));
+            return $parsed + ['json' => json_encode((object)$parsed['form'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION)];
+        });
+        $this->register('gui.dump', function (array $p) {
+            $form = isset($p['json']) ? json_decode((string)$p['json'], true, 64, JSON_THROW_ON_ERROR) : ($p['form'] ?? []);
+            return ['content' => FormFile::dump(is_array($form) ? $form : [], (string)($p['header'] ?? ''))];
+        });
         // the form's class with a new event method and/or its @property lines: {path (the form file), wire?: {id, type, event,
         // method?}, widgets?: {id: type}} -> {path, content, line, added, created} (the interface writes it: open editors follow)
         $this->register('gui.code', function (array $p) {
@@ -168,7 +175,11 @@ final class Ide
             $added = false;
             if (isset($p['widgets']) && is_array($p['widgets'])) {
                 $widgets = [];
+                // [[id, type], ...] in the form's order (an object's keys may come sorted through a host's JSON)
                 foreach ($p['widgets'] as $id => $type) {
+                    if (is_array($type)) {
+                        [$id, $type] = array_values($type) + [null, 'container'];
+                    }
                     if (preg_match('/^[A-Za-z_]\w*$/', (string)$id)) {
                         $widgets[(string)$id] = FormCode::classOf((string)$type);
                     }

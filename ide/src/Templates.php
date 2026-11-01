@@ -12,6 +12,11 @@ final class Templates
     {
         $ext = Paths::extension($path);
         $name = pathinfo($path, PATHINFO_FILENAME);
+        if (preg_match('/\.form\.ya?ml$/', $path)) {
+            // a window of a graphic app: open it in the visual editor; its class is written at the first double click
+            $title = trim((string)preg_replace('/(?<!^)[A-Z]/', ' $0', preg_replace('/Form$/', '', basename($path, '.form.yaml')) ?: 'Form'));
+            return "# A window of the app (JumPHP\\Gui): open it in Design view. The code behind it: src/Form/" . basename($path, '.form.yaml') . ".php\nform:\n  title: '$title'\n  children:\n    - {type: label, text: '$title', style: title}\n";
+        }
         return match ($ext) {
             'php' => self::php($path, $name, $workspace),
             'html', 'htm' => "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>$name</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <main>\n    <h1>$name</h1>\n  </main>\n</body>\n</html>\n",

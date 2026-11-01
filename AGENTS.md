@@ -43,6 +43,7 @@ engine/                 the framework: composer package jumphp/engine, namespace
   src/Tauri/            desktop apps (§16): App, Window, AppMain, TauriRuntime (FFI), FakeRuntime, NativeCommands
   src/Native/           Dialog, FilePicker, Notification, Shell: the system's features, a provider per target (§16)
   src/Testing/          GameTestCase (games), AppTestCase (desktop apps, no window)
+  src/Gui/              graphic apps without HTML (§17): Form (a scene + forms/*.form.yaml), Container (row, column, grid), widgets
   bootstrap/wasm.php    browser entry point
   web/                  the web page template (index.html, jumphp.js, jumphp-worker.js, jumphp-files.js (remote games), touch.js,
                         jumphp-device.js, jumphp-http.js, jumphp-pwa.js, jumphp-gamepad.js, sw.js)
@@ -52,6 +53,7 @@ engine/                 the framework: composer package jumphp/engine, namespace
   tests/                engine unit tests
 skeleton/               template of a game, copied by `bin/jumphp new`
 skeleton-app/           template of a desktop app (Tauri), copied by `bin/jumphp app:new` (§16)
+skeleton-gui/           template of a graphic app (forms, JumPHP\Gui), copied by `bin/jumphp gui:new` (§17)
 tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C library PHP loads with FFI; §16)
 ide/                    JumPHP IDE: package jumphp/ide, PHP core (JumPHP\Ide\) + HTML interface, shared by games/ide
                         (the desktop app) and jumphp.net/ide (docs/ide.md)
@@ -141,6 +143,8 @@ games/<id>/
 | `bin/jumphp relay up\|down\|logs` | multiplayer relay server on `ws://localhost:8090/ws` |
 | `bin/jumphp export:desktop <id>` | a Docker image that runs the game |
 | `bin/jumphp export:standalone <id> [--linux] [--windows]` | the game as one executable for players (dist/standalone/; docs/standalone.md) |
+| `bin/jumphp gui:new <id> ["Title"] [--mobile]` | a **graphic app** (forms made in the IDE's visual editor, `JumPHP\Gui`, no HTML; §17); then run / test / shot / build / export as a game |
+| `bin/jumphp video <id> <film.mp4> [name] [fps]` | a film as frames + sound for the `video` widget (`assets/videos/<name>/`) |
 | `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them; `app:export --windows --macos`; `app:release` (updates); `build` = the app in the browser |
 | `bin/jumphp tauri:setup` / `tauri:build` / `tauri:download` | the Tauri image / the runtime library `build/tauri/linux-x86_64/libjumphp_tauri.so`, built or downloaded (done automatically when needed) |
 | `bin/jumphp apple <id>` (`ios <id>`, `macos <id>`) | the game as native Apple apps, built and tried on GitHub's Macs: .dmg (Mac), .ipa (iPhone / iPad), the simulator's app, screenshots (§14, "Apple apps") |
@@ -990,6 +994,8 @@ background), then ~10.
   menu, global shortcut.
 - `games/ide/` + `ide/` — the JumPHP IDE (docs/ide.md): a big desktop app, its core tested with PHPUnit
   (`bin/jumphp php ide vendor/bin/phpunit`), its interface checked with `games/ide/tools/shot.sh`.
+- `games/hello-gui/` — a graphic app (§17): a form made in the visual editor (responsive grid of two panels), its code
+  behind, saved contacts, game tests.
 - `games/hello-desktop/` — a desktop app (Tauri, §16): a notepad, HTML page + PHP (files, native dialogs, PHP clock,
   drag and drop, quit confirmation), tested with `AppTestCase`.
 - `engine/stubs/sdl.stub.php` — every raw SDL / SDL_image / SDL_mixer / SDL_ttf function and constant.
@@ -1053,3 +1059,25 @@ bin/jumphp build notes               # dist/web/: the same app in a web page (we
 - Don'ts: no SDL / `Engine` in an app (it has no SDL window); no blocking calls; never write outside `var/` (the
   user's data folder once exported) except files the user chose in a dialog.
 
+
+## 17. Graphic apps (JumPHP\Gui): forms, no HTML
+
+When the user wants "an app" made of windows with buttons, lists, fields... drawn by PHP itself (no HTML, the same on
+desktop, web and phones), or a "mobile app" of that kind: `bin/jumphp gui:new <id> "Title"` (`--mobile` for phones).
+Full guide: `docs/gui.md`. Example: `games/hello-gui`.
+
+- A window = `forms/<Name>.form.yaml` (its widgets: what the IDE's visual editor writes) + `src/Form/<Name>.php`
+  (`final class <Name> extends JumPHP\Gui\Form`, a scene: `loaded($params)`, event methods named in the form file
+  `events: {click: onSaveClick}`, `tick($dt)`). Widgets by id: `$this->save`; keep one `@property Button $save` line
+  per widget id in the class docblock (the visual editor does it; do it when you edit the YAML by hand).
+- game.yaml: `kind: gui`, `view: window` (the view follows the window, pixel for pixel; sizes in forms are dp),
+  `touch: false`, `start_scene: App\Form\MainForm`.
+- Layout like a web page without HTML: `column` / `row` / `grid` (12 columns, `span: {xs: 12, md: 6}` per screen
+  width: xs < 600 dp, sm < 900, md < 1200, lg) / `stack` / `panel`; `gap`, `padding`, `items`, `justify`; children
+  `width` / `height` (dp, `auto`, `fill`), `grow`, `align`, `hide: [xs]`; a `spacer` takes the free room.
+- Widgets: label, button, textbox, checkbox, radio, combobox, listbox, slider, progressbar, image, video (frames: `bin/jumphp
+  video`), spacer, separator. Their events: docs/gui.md.
+- Tests (GameTestCase): `$form = $this->game->scene(); $form->click($form->widget('add')); $form->type("Ada\n");`.
+  Check with `bin/jumphp shot <id>` (and a phone width: `--mobile` apps are 390 dp wide).
+- Don'ts: no game-style `actions()` for the forms (they read the mouse, touch and keys themselves); no HTML;
+  colours as '#rrggbb'; never block (rule 2).
