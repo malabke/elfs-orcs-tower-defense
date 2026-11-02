@@ -139,6 +139,17 @@ class ComboBox extends Widget
         $this->form?->setOverlay($this);
     }
 
+    /** The open list scrolls (a line per notch); closed, the wheel goes to the page. */
+    public function wheel(float $notches): bool
+    {
+        if (!$this->open || $this->form === null) {
+            return false;
+        }
+        $rows = $this->popup($this->form->theme)[4];
+        $this->first = max(0, min($this->first - (int)round($notches), count((array)$this->props['items']) - $rows));
+        return true;
+    }
+
     public function close(): void
     {
         $this->open = false;

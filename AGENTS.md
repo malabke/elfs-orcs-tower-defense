@@ -1075,8 +1075,8 @@ Full guide: `docs/gui.md`. Example: `games/hello-gui`.
 - Layout like a web page without HTML: `column` / `row` / `grid` (12 columns, `span: {xs: 12, md: 6}` per screen
   width: xs < 600 dp, sm < 900, md < 1200, lg) / `stack` / `panel`; `gap`, `padding`, `items`, `justify`; children
   `width` / `height` (dp, `auto`, `fill`), `grow`, `align`, `hide: [xs]`; a `spacer` takes the free room.
-- Widgets: label, button, textbox, checkbox, radio, combobox, listbox, slider, progressbar, image, video (frames: `bin/jumphp
-  video`), spacer, separator. Their events: docs/gui.md.
+- Widgets: label, button, textbox, checkbox, radio, combobox, listbox, slider, progressbar, image, video (`src: assets/videos/intro.mp4`:
+  bin/jumphp cuts the film into pictures by itself), spacer, separator. Mouse wheel, dead keys, input methods: handled. Their events: docs/gui.md.
 - Tests (GameTestCase): `$form = $this->game->scene(); $form->click($form->widget('add')); $form->type("Ada\n");`.
   Check with `bin/jumphp shot <id>` (and a phone width: `--mobile` apps are 390 dp wide).
 - Don'ts: no game-style `actions()` for the forms (they read the mouse, touch and keys themselves); no HTML;

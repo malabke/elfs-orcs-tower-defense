@@ -91,6 +91,7 @@ php_tree() {
   # php-sdl: PHP 8.5 (zend_ce_exception), no SDLCALL before a call, its header in src/ (registry/src/Extension/sdl.php)
   sed -i 's/zend_exception_get_default()/zend_ce_exception/g; s/= SDLCALL SDL_/= SDL_/g' "$tree"/ext/sdl/src/*.[ch]
   printf '/* phpext_sdl_ptr */\n#include "src/php_sdl.h"\n' > "$tree/ext/sdl/php_sdl.h"
+  (cd "$tree/ext/sdl" && git apply -p1 /workspace/docker/ext/php-sdl-events.patch)
   # PHP-OpenGL: JumPHP's patch, then OpenGL (ES on Android) from SDL at run time (registry/functions.php)
   (cd "$tree/ext/opengl" && git apply -p1 /workspace/docker/ext/php-opengl.patch)
   php -r 'require $argv[1]; jumphp_gl_loader($argv[2], false);' "$REGISTRY/functions.php" "$tree/ext/opengl"
@@ -107,7 +108,7 @@ build_php() {
     *) die "unknown ABI $abi" ;;
   esac
   # the key: what makes PHP (versions, the extensions' config.m4, the functions php_tree and build_php themselves)
-  local key; key="$( { echo "$PHP_VERSION $NDK_VERSION $API $LIBPNG_VERSION $OPENSSL_VERSION"; cat "$HERE"/ext/*.m4 /workspace/docker/ext/php-opengl.patch \
+  local key; key="$( { echo "$PHP_VERSION $NDK_VERSION $API $LIBPNG_VERSION $OPENSSL_VERSION"; cat "$HERE"/ext/*.m4 /workspace/docker/ext/php-opengl.patch /workspace/docker/ext/php-sdl-events.patch \
     "$REGISTRY/functions.php"; declare -f php_tree build_php; } | sha256sum | cut -c1-12)"
   local out="/cache/php/$abi-$key"
   [ -f "$out/lib/libphp.a" ] && { ln -sfn "$(basename "$out")" "/cache/php/$abi"; return 0; }

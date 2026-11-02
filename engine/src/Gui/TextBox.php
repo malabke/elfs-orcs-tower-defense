@@ -7,6 +7,8 @@ use JumPHP\Renderer\Renderer;
 /**
  * A text field: `text`, `placeholder`, `password` (shown as dots), `maxLength` (0: no limit), `multiline` (Return goes
  * to the next line, the box grows with its `rows`), `readonly`.
+ * The text comes from the system's text input: the keyboard's layout, dead keys (^ then e = ê) and input methods
+ * (Chinese, Japanese...: what they compose is shown underlined until it is chosen).
  * Events: change (each key), submit (Return in a one-line box).
  *
  * @property string $text
@@ -19,6 +21,11 @@ class TextBox extends Widget
 
     /** where the cursor is (characters) */
     public int $cursor = 0;
+    /** what the system's input method (or a dead key) is composing: shown underlined at the cursor, not in the text yet */
+    public string $composition = '';
+    /** @var array{0: float, 1: float, 2: float, 3: float}|null the cursor's box (x, y, w, h, view pixels) when last drawn: the input method's window opens there */
+    public ?array $caret = null;
+    private bool $composing = false;
     private float $scrollX = 0;
     private float $blink = 0;
 
@@ -50,7 +57,10 @@ class TextBox extends Widget
     private function shown(): string
     {
         $text = (string)$this->props['text'];
-        return $this->props['password'] ? str_repeat('•', mb_strlen($text)) : $text;
+        if ($this->props['password']) {
+            return str_repeat('•', mb_strlen($text));
+        }
+        return $this->composing ? mb_substr($text, 0, $this->cursor) . $this->composition . mb_substr($text, $this->cursor) : $text;
     }
 
     public function update(float $dt): void
@@ -59,6 +69,20 @@ class TextBox extends Widget
     }
 
     public function render(Renderer $r, Theme $t): void
+    {
+        // a composition is drawn as if typed, the cursor after it
+        $this->composing = $this->focused && $this->composition !== '' && !$this->props['password'];
+        $length = $this->composing ? mb_strlen($this->composition) : 0;
+        $this->cursor += $length;
+        try {
+            $this->draw($r, $t, $length);
+        } finally {
+            $this->cursor -= $length;
+            $this->composing = false;
+        }
+    }
+
+    private function draw(Renderer $r, Theme $t, int $composed): void
     {
         $border = $this->focused ? $t->color('focus') : ($this->hovered ? $t->color('muted') : $t->color('border'));
         if ($this->focused) {
@@ -81,9 +105,16 @@ class TextBox extends Widget
             $y = $this->y + $t->px($t->padding * 0.8);
             for ($n = $first; $n < count($lines) && $y + $lh <= $this->y + $this->h; $n++, $y += $lh) {
                 $font->draw($r, $lines[$n], $this->x + $pad, $y + ($lh - $font->height()) / 2, 1, $color);
-                if ($this->focused && $n === $cursorLine && $this->blink < 0.55) {
+                if ($this->focused && $n === $cursorLine) {
                     $cx = $this->x + $pad + $font->width(mb_substr($lines[$n], 0, $cursorCol));
-                    $r->fillRect($cx, $y + $t->px(2), max(1, $t->px(1.5)), $lh - $t->px(4), $t->color('text'));
+                    $this->caret = [$cx, $y, max(1, $t->px(1.5)), $lh];
+                    if ($composed > 0) {
+                        $from = $this->x + $pad + $font->width(mb_substr($lines[$n], 0, max(0, $cursorCol - $composed)));
+                        $r->fillRect($from, $y + $lh - $t->px(2), $cx - $from, max(1, $t->px(1)), $color);
+                    }
+                    if ($this->blink < 0.55) {
+                        $r->fillRect($cx, $y + $t->px(2), max(1, $t->px(1.5)), $lh - $t->px(4), $t->color('text'));
+                    }
                 }
             }
             return;
@@ -97,9 +128,16 @@ class TextBox extends Widget
         }
         $visible = $this->clip($font, $text, $this->scrollX, $innerW, $offset);
         $font->draw($r, $visible, $this->x + $pad + $offset, $this->textTop($t), 1, $color);
-        if ($this->focused && $this->blink < 0.55) {
+        if ($this->focused) {
             $cx = $this->x + $pad + $before - $this->scrollX;
-            $r->fillRect($cx, $this->y + $t->px(8), max(1, $t->px(1.5)), $this->h - $t->px(16), $t->color('text'));
+            $this->caret = [$cx, $this->y, max(1, $t->px(1.5)), $this->h];
+            if ($composed > 0) {
+                $from = $this->x + $pad + $font->width(mb_substr($text, 0, $this->cursor - $composed)) - $this->scrollX;
+                $r->fillRect(max($this->x + $pad, $from), $this->textTop($t) + $font->height() + $t->px(1), $cx - max($this->x + $pad, $from), max(1, $t->px(1)), $color);
+            }
+            if ($this->blink < 0.55) {
+                $r->fillRect($cx, $this->y + $t->px(8), max(1, $t->px(1.5)), $this->h - $t->px(16), $t->color('text'));
+            }
         }
     }
 
@@ -254,5 +292,7 @@ class TextBox extends Widget
     public function blur(): void
     {
         $this->scrollX = 0;
+        $this->composition = '';
+        $this->caret = null;
     }
 }

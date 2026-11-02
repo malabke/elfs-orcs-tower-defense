@@ -236,6 +236,28 @@ class Renderer
         return [($px - $x) * $this->viewWidth / $w, ($py - $y) * $this->viewHeight / $h];
     }
 
+    /** The other way: a point of the view in window coordinates (logical pixels). */
+    public function viewToWindow(float $vx, float $vy): array
+    {
+        [$x, $y, $w, $h] = $this->letterbox;
+        if ($w === 0 || $h === 0 || $this->viewWidth === 0 || $this->viewHeight === 0) {
+            return [$vx, $vy];
+        }
+        $px = $x + $vx * $w / $this->viewWidth;
+        $py = $y + $vy * $h / $this->viewHeight;
+        if ($this->window !== null) {
+            $ww = 0;
+            $wh = 0;
+            \SDL_GetWindowSize($this->window, $ww, $wh);
+            [$ow, $oh] = $this->outputSize();
+            if ($ww > 0 && $wh > 0 && $ow > 0 && $oh > 0) {
+                $px *= $ww / $ow;
+                $py *= $wh / $oh;
+            }
+        }
+        return [$px, $py];
+    }
+
     private function computeLetterbox(): array
     {
         [$ow, $oh] = $this->outputSize();

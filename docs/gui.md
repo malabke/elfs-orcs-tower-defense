@@ -95,7 +95,7 @@ Sizes are **dp** (density-independent pixels): a button is as big on a HiDPI scr
 
 Container settings: `gap` (between children), `padding`, `items` (start / center / end / stretch: across),
 `justify` (start / center / end / between / around: along), `background`, `border`, `scroll` (a long content scrolls:
-drag it or its bar).
+drag it, its bar or the mouse wheel).
 
 Child settings: `width` / `height` = a number (dp), `auto` (what its content needs) or `fill` (all the room);
 `grow` (shares the free room of a row or column: `grow: 1` and `grow: 2` = a third and two thirds); `align` (itself,
@@ -123,7 +123,7 @@ window's edge).
 | slider | value, min, max, step | change (float $value) |
 | progressbar | value, max, showText | click |
 | image | src (assets/... or any file: `load($path)`), fit (contain / cover / fill / none) | click |
-| video | src (a folder of frames), fps, audio, autoplay, loop, controls; `play()`, `pause()`, `stop()`, `seek()` | end, click |
+| video | src (a film of assets/videos/, or a folder of frames), fps, audio, autoplay, loop, controls; `play()`, `pause()`, `stop()`, `seek()` | end, click |
 | spacer | size | |
 | separator | | |
 | column, row, grid, stack, panel | see Layout | click |
@@ -131,8 +131,12 @@ window's edge).
 A widget of the app: a class extending `JumPHP\Gui\Widget` (`content()` = its size, `render()`), used with
 `class: App\Gui\Gauge` in the form file.
 
-**Video**: SDL's binding decodes no video stream, so a video is a folder of pictures + its sound:
-`bin/jumphp video contacts intro.mp4` makes `assets/videos/intro/00001.jpg...` and `audio.ogg` (ffmpeg, in Docker).
+**Video**: put the film in `assets/videos/` (`intro.mp4`, `.webm`, `.mov`, `.mkv`, `.avi`) and give it as `src:
+assets/videos/intro.mp4`. SDL decodes no video stream, so `bin/jumphp` cuts it into pictures + its sound
+(`assets/videos/intro/00001.jpg...`, `audio.ogg`; ffmpeg, in Docker) at the widget's `fps` before `run`, `test`, `shot`,
+the builds and the exports, again only when the film changes; the packages carry the pictures, not the film. It then plays
+the same on a PC, a Mac, a phone and the web. Commit the `assets/videos/intro/` folder too: the JumPHP playground and
+the web IDE do not cut films. `bin/jumphp video contacts ~/film.mp4` does it by hand for a film from elsewhere.
 
 ## Keyboard, mouse, touch
 
@@ -141,8 +145,12 @@ fields, Return clicks the `default: true` button (or submits a text box), Escape
 dialog), arrows in lists / drop-down lists / sliders, held keys repeat, Ctrl+C / Ctrl+V in text boxes (where the target
 has a clipboard). On phones the system keyboard opens with a text box.
 
-Limits of SDL's binding today: no mouse wheel (drag to scroll), text typed comes from key codes (accented keys of the
-layout work, dead keys and input methods do not).
+The mouse wheel (and two fingers on a touchpad) scrolls what is under the pointer: a list, an open drop-down list, else
+the scrolled area around it. Text comes from the system's text input: the keyboard's layout, dead keys (`^` then `e` = `ê`)
+and input methods (Chinese, Japanese, Korean...: what they compose is shown underlined at the cursor, their window
+opens under it). Both need the desktop image and the browser engine built with `docker/ext/php-sdl-events.patch`
+(`bin/jumphp setup`, `bin/jumphp engine:build` or a newer `engine:download`): with older ones there is no wheel and the characters come from the
+key codes.
 
 ## Tests
 

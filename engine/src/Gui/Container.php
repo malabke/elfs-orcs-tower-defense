@@ -12,8 +12,8 @@ use JumPHP\Renderer\Renderer;
  *   `stack`: on top of each other (a picture with a text over it).
  * - `gap` between the children, `padding` inside (dp); `align` (start | center | end | stretch) across,
  *   `justify` (start | center | end | between) along; a Spacer (or `grow` of a child) takes the free room.
- * - `title` + `border`: a framed group; `background`: a colour; `scroll: true`: a long content scrolls (drag it, or
- *   its bar) inside the container's height.
+ * - `title` + `border`: a framed group; `background`: a colour; `scroll: true`: a long content scrolls (drag it, its
+ *   bar or the wheel) inside the container's height.
  *
  * @property string $layout
  * @property float $gap
@@ -511,6 +511,16 @@ class Container extends Widget
             return;
         }
         $this->scrollY = max(0, min($this->scrollY + $dy, $this->contentHeight - $this->viewHeight($this->form->theme)));
+    }
+
+    public function wheel(float $notches): bool
+    {
+        if (!$this->isScrolling() || $this->form === null) {
+            return false;
+        }
+        $before = $this->scrollY;
+        $this->scrollBy(-$notches * $this->form->theme->px(48));
+        return $this->scrollY !== $before;
     }
 
     // input ------------------------------------------------------------------------------------------------------

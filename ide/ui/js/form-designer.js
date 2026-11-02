@@ -109,7 +109,7 @@ const PROPS = {
   slider: [['value', 'Value', 'number'], ['min', 'Min', 'number'], ['max', 'Max', 'number'], ['step', 'Step', 'number']],
   progressbar: [['value', 'Value', 'number'], ['max', 'Max', 'number'], ['showText', 'Show %', 'check']],
   image: [['src', 'Picture', 'image'], ['fit', 'Fit', 'select', ['contain', 'cover', 'fill', 'none']]],
-  video: [['src', 'Frames folder', 'text'], ['fps', 'Frames a second', 'number'], ['audio', 'Sound file', 'text'], ['autoplay', 'Autoplay', 'check', true],
+  video: [['src', 'Film (or folder of frames)', 'video'], ['fps', 'Frames a second', 'number'], ['audio', 'Sound file (default: the film\'s)', 'sound'], ['autoplay', 'Autoplay', 'check', true],
     ['loop', 'Loop', 'check'], ['controls', 'Controls', 'check', true], ['fit', 'Fit', 'select', ['contain', 'cover', 'fill']]],
   spacer: [['size', 'Size (dp, empty: grows)', 'number']],
   separator: [],
@@ -126,6 +126,21 @@ const FORM_PROPS = [['title', 'Window title', 'text'], ['theme', 'Theme', 'selec
   ['fontSize', 'Text size (dp)', 'number'], ['zoom', 'Zoom', 'number'], ['dialog', 'Dialog (over a window)', 'check'], ['width', 'Dialog width (dp)', 'number']];
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+const FILM_EXT = /\.(mp4|webm|mov|mkv|avi|m4v)$/i;
+const SOUND_EXT = /\.(ogg|wav|mp3)$/i;
+
+/** What a picker of the inspector offers, from the app's files (paths from the app's folder). */
+const PICKS = {
+  image: (paths) => paths.filter((p) => IMAGE_EXT.test(p)),
+  // the films (bin/jumphp cuts them into pictures), and the folders of pictures that no film makes
+  video: (paths) => {
+    const films = paths.filter((p) => p.startsWith('assets/videos/') && FILM_EXT.test(p));
+    const made = new Set(films.map((p) => p.replace(FILM_EXT, '')));
+    const folders = new Set(paths.filter((p) => p.startsWith('assets/videos/') && IMAGE_EXT.test(p)).map((p) => p.slice(0, p.lastIndexOf('/'))));
+    return [...films, ...[...folders].filter((f) => !made.has(f) && f !== 'assets/videos')];
+  },
+  sound: (paths) => paths.filter((p) => SOUND_EXT.test(p) && !/^assets\/videos\/[^/]+\/audio\.ogg$/.test(p)),
+};
 
 function svg(name, size = 16) {
   return `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path d="${ICONS[name] || ''}"/></svg>`;
@@ -1045,7 +1060,9 @@ export class FormDesigner {
         return this.field(label, area);
       }
       case 'image':
-        return this.imageControl(node, prop, label);
+      case 'video':
+      case 'sound':
+        return this.assetControl(node, prop, label, kind);
       default: {
         const input = el('input', { class: 'dz-input', value: value ?? '', spellcheck: 'false' });
         input.addEventListener('input', () => commit(input.value));
@@ -1054,8 +1071,8 @@ export class FormDesigner {
     }
   }
 
-  /** A picture of the app's assets (or a path typed). */
-  imageControl(node, prop, label) {
+  /** A file of the app's assets: a picture, a film, a sound (PICKS). */
+  assetControl(node, prop, label, kind) {
     const select = el('select', { class: 'dz-input' }, [el('option', { value: '', text: '(none)' })]);
     const fill = (list) => {
       const values = new Set(list);
@@ -1063,14 +1080,13 @@ export class FormDesigner {
       for (const p of list) select.append(el('option', { value: p, text: p }));
       select.value = node[prop] || '';
     };
-    if (this.images) fill(this.images);
-    else {
-      this.backend.invoke('files.list', {}).then((r) => {
+    if (!this.images) {
+      this.images = this.backend.invoke('files.list', {}).then((r) => {
         const prefix = this.app ? `${this.app}/` : '';
-        this.images = (r.files || []).map((f) => f.path).filter((p) => p.startsWith(prefix + 'assets/') && IMAGE_EXT.test(p)).map((p) => p.slice(prefix.length));
-        fill(this.images);
-      }).catch(() => fill([]));
+        return (r.files || []).map((f) => f.path).filter((p) => p.startsWith(prefix + 'assets/')).map((p) => p.slice(prefix.length));
+      }).catch(() => []);
     }
+    this.images.then((paths) => fill(PICKS[kind](paths)));
     select.addEventListener('change', () => this.set(node, prop, select.value, true));
     return this.field(label, select);
   }

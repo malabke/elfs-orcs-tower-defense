@@ -6,10 +6,13 @@ use JumPHP\Kernel\Engine;
 use JumPHP\Renderer\Renderer;
 
 /**
- * A video: `src` = a folder of pictures, one per frame, in name order (assets/videos/intro/0001.jpg...; make it from
- * an .mp4 with `bin/jumphp video <app> film.mp4`, which also writes its sound as audio.ogg), `fps`, `audio` (a sound
- * file played with it, default the folder's audio.ogg), `loop`, `autoplay`, `controls` (a play / pause button over it).
- * SDL's binding decodes no video stream itself: the frames are pictures, loaded as they are shown.
+ * A video: `src` = a film put in assets/videos/ (assets/videos/intro.mp4: .mp4, .webm, .mov, .mkv, .avi), or a folder of
+ * pictures, one per frame, in name order (assets/videos/intro/00001.jpg...). `fps`, `audio` (a sound file played with
+ * it, default the folder's audio.ogg), `loop`, `autoplay`, `controls` (a play / pause button over it).
+ * The same everywhere (desktop, browser, phones), SDL decoding no video stream: bin/jumphp cuts each film of
+ * assets/videos/ into its pictures and its sound (assets/videos/intro/, made again when the film changes) before run,
+ * test, shot, the builds and the exports, which leave the film itself out. `bin/jumphp video <app> film.mp4` does it
+ * by hand for a film from elsewhere.
  * From the code: play(), pause(), stop(), seek($seconds), isPlaying(), duration(), position().
  * Events: end (the last frame, without loop), click.
  *
@@ -38,10 +41,20 @@ class Video extends Widget
         return ['end', 'click'];
     }
 
+    /** The folder of the pictures: the film's own (assets/videos/intro.mp4 -> assets/videos/intro), or src. */
+    public function folder(): string
+    {
+        $src = rtrim((string)$this->props['src'], '/');
+        return preg_match(self::FILM, $src) ? (string)preg_replace(self::FILM, '', $src) : $src;
+    }
+
+    /** a film, cut into pictures by bin/jumphp */
+    public const FILM = '/\.(mp4|webm|mov|mkv|avi|m4v)$/i';
+
     /** @return list<string> the files of the frames */
     public function frames(): array
     {
-        $src = (string)$this->props['src'];
+        $src = $this->folder();
         if ($this->frames === null || $this->framesOf !== $src) {
             $dir = $this->path($src);
             $files = $dir !== '' && is_dir($dir) ? (glob(rtrim($dir, '/') . '/*.{png,jpg,jpeg,webp,PNG,JPG}', GLOB_BRACE) ?: []) : [];
@@ -111,8 +124,8 @@ class Video extends Widget
     private function sound(bool $on): void
     {
         $audio = (string)$this->props['audio'];
-        if ($audio === '' && $this->props['src'] !== '' && is_file($this->path(rtrim((string)$this->props['src'], '/') . '/audio.ogg'))) {
-            $audio = rtrim((string)$this->props['src'], '/') . '/audio.ogg';
+        if ($audio === '' && $this->folder() !== '' && is_file($this->path($this->folder() . '/audio.ogg'))) {
+            $audio = $this->folder() . '/audio.ogg';
         }
         if ($audio === '') {
             return;

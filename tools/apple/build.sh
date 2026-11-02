@@ -122,6 +122,7 @@ php_tree() {
   # php-sdl: PHP 8.5 (zend_ce_exception), no SDLCALL before a call, its header in src/ (registry/src/Extension/sdl.php)
   perl -pi -e 's/zend_exception_get_default\(\)/zend_ce_exception/g; s/= SDLCALL SDL_/= SDL_/g' "$tree"/ext/sdl/src/*.[ch]
   printf '/* phpext_sdl_ptr */\n#include "src/php_sdl.h"\n' > "$tree/ext/sdl/php_sdl.h"
+  (cd "$tree/ext/sdl" && git apply -p1 "$ROOT/docker/ext/php-sdl-events.patch")
   # PHP-OpenGL: JumPHP's patch, then OpenGL (ES on iOS) from SDL at run time (registry/functions.php)
   (cd "$tree/ext/opengl" && git apply -p1 "$ROOT/docker/ext/php-opengl.patch")
   php -r 'require $argv[1]; jumphp_gl_loader($argv[2], false);' "$REGISTRY/functions.php" "$tree/ext/opengl"
@@ -147,7 +148,7 @@ build_php() {
   target "$t"
   # the key: what makes PHP (versions, the extensions' config.m4, the functions php_tree, target and build_php)
   local key; key="$( { echo "$PHP_VERSION $LIBPNG_VERSION $OPENSSL_VERSION $MESA_VERSION $(xcrun --sdk "$SDK" --show-sdk-version)";
-    cat "$ROOT"/tools/android/ext/*.m4 "$ROOT/docker/ext/php-opengl.patch" "$REGISTRY/functions.php";
+    cat "$ROOT"/tools/android/ext/*.m4 "$ROOT/docker/ext/php-opengl.patch" "$ROOT/docker/ext/php-sdl-events.patch" "$REGISTRY/functions.php";
     declare -f php_tree target build_php; if [ "${SDK#iphone}" != "$SDK" ]; then declare -f ios_configure ios_config_h; fi; } | sha | cut -c1-12)"
   local out="$CACHE/php/$t-$key"
   [ -f "$out/lib/libphp.a" ] && { ln -sfn "$(basename "$out")" "$CACHE/php/$t"; return 0; }

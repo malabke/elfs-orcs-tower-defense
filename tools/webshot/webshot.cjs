@@ -1,6 +1,8 @@
 // Headless Chrome check of a browser build (bin/jumphp webshot): opens the page, waits for the game to start,
 // clicks the "play" overlay, plays scripted keys, saves a screenshot, prints the console and fails on errors.
 //   node webshot.cjs <url> <out.png> [seconds=8] [keys JSON: [[seconds, "ArrowDown"], ...]]
+// A step can also be "text:ê" (characters typed as an input method gives them), "wheel:300" (the mouse wheel, pixels
+// down, at the mouse) or "click:480,200" (a click at a point of the page).
 const puppeteer = require('puppeteer');
 const [url, out, seconds = '8', keysJson = '[]'] = process.argv.slice(2);
 (async () => {
@@ -27,7 +29,10 @@ const [url, out, seconds = '8', keysJson = '[]'] = process.argv.slice(2);
   for (const [at, key] of keys) {
     const wait = at * 1000 - (Date.now() - t0);
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    await page.keyboard.down(key); await new Promise((r) => setTimeout(r, 80)); await page.keyboard.up(key);
+    if (key.startsWith('text:')) for (const ch of key.slice(5)) await page.keyboard.press('KeyE', { text: ch });
+    else if (key.startsWith('wheel:')) await page.mouse.wheel({ deltaY: Number(key.slice(6)) });
+    else if (key.startsWith('click:')) { const [x, y] = key.slice(6).split(',').map(Number); await page.mouse.click(x, y); }
+    else { await page.keyboard.down(key); await new Promise((r) => setTimeout(r, 80)); await page.keyboard.up(key); }
   }
   const rest = Number(seconds) * 1000 - (Date.now() - t0);
   if (rest > 0) await new Promise((r) => setTimeout(r, rest));

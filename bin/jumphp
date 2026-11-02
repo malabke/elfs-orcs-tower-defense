@@ -185,6 +185,7 @@ ensure_vendor() {
     say "composer install ($dir)"
     php_run "$dir" -- composer install --no-interaction --no-progress
   fi
+  ensure_videos "$dir"
 }
 
 cmd_setup() {
@@ -313,7 +314,35 @@ cmd_video() {
   local game="${1:-}" file="${2:-}"; local dir; dir="$(game_dir "$game")"
   [ -f "$file" ] || die "usage: bin/jumphp video <app> <film.mp4> [name] [fps]"
   local name="${3:-$(basename "${file%.*}" | tr '[:upper:] ' '[:lower:]-')}" fps="${4:-25}"
-  local out="$dir/assets/videos/$name" abs
+  video_frames "$file" "$dir/assets/videos/$name" "$fps"
+  say "done: {type: video, src: assets/videos/$name, fps: $fps}"
+}
+
+# the films put in assets/videos/ (intro.mp4...): their pictures and sound in assets/videos/<name>/, made again when the
+# film is newer (src: assets/videos/intro.mp4 plays them). Before run, test, shot, the builds and the exports.
+ensure_videos() {
+  local dir="$1" film name out
+  [ -d "$ROOT/$dir/assets/videos" ] || return 0
+  for film in "$ROOT/$dir"/assets/videos/*.{mp4,webm,mov,mkv,avi,m4v,MP4,MOV}; do
+    [ -f "$film" ] || continue
+    name="$(basename "${film%.*}")"; out="$dir/assets/videos/$name"
+    if [ -f "$ROOT/$out/00001.jpg" ] && [ ! "$film" -nt "$ROOT/$out/00001.jpg" ]; then continue; fi
+    rm -f "$ROOT/$out"/[0-9]*.jpg "$ROOT/$out/audio.ogg"
+    video_frames "$film" "$out" "$(video_fps "$dir" "$name")"
+  done
+}
+
+# the fps of a film: `fps` of the video widget that plays it (forms/*.form.yaml), else 25
+video_fps() {
+  local fps
+  fps="$(grep -hoE "src: *['\"]?assets/videos/$2\.[A-Za-z0-9]+['\"]?, *fps: *[0-9.]+|fps: *[0-9.]+, *src: *['\"]?assets/videos/$2\.[A-Za-z0-9]+" "$ROOT/$1"/forms/*.form.yaml 2>/dev/null \
+    | grep -oE 'fps: *[0-9.]+' | head -1 | grep -oE '[0-9.]+$')" || true
+  echo "${fps:-25}"
+}
+
+# video_frames <film> <repo-relative folder> <fps>: numbered JPEG pictures (at most 1280 wide) + audio.ogg
+video_frames() {
+  local file="$1" out="$2" fps="$3" abs
   abs="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
   mkdir -p "$ROOT/$out"
   docker image inspect jumphp/ffmpeg:dev >/dev/null 2>&1 || docker build -q -t jumphp/ffmpeg:dev "$ROOT/docker/ffmpeg" >/dev/null
@@ -322,7 +351,6 @@ cmd_video() {
     -loglevel error -y -i "/in/$(basename "$file")" -vf "fps=$fps,scale='min(1280,iw)':-2" -q:v 4 /out/%05d.jpg
   docker run --rm -u "$(id -u):$(id -g)" -v "$abs:/in/$(basename "$file"):ro" -v "$ROOT/$out:/out" jumphp/ffmpeg:dev \
     -loglevel error -y -i "/in/$(basename "$file")" -vn -c:a libvorbis -q:a 4 /out/audio.ogg 2>/dev/null || rm -f "$ROOT/$out/audio.ogg"
-  say "done: {type: video, src: assets/videos/$name, fps: $fps}"
 }
 
 # the game as an Android app (tools/twa.sh in docker/twa); asks what it does not know, remembers it in
@@ -799,6 +827,7 @@ cmd_shot() {
 cmd_build() {
   local game="${1:-}"; local dir; dir="$(game_dir "$game")"
   [ -f "$ENGINE_DIR/php-web.mjs" ] && [ -f "$ENGINE_DIR/php-web.wasm" ] || die "no engine in build/engine: bin/jumphp engine:build first"
+  ensure_videos "$dir"
   say "staging $dir (composer --no-dev, container dump)"
   php_run "$dir" -- sh /workspace/tools/stage-web.sh "/workspace/$dir"
   say "packaging (emscripten file_packager) -> $dir/dist/web"
@@ -855,6 +884,7 @@ cmd_build_remote() {
   local game="${1:-}"; local dir; dir="$(game_dir "$game")"
   [ -f "$ROOT/build/runtime/version.json" ] || cmd_runtime_build
   [ -f "$ROOT/$dir/vendor/autoload.php" ] || php_run "$dir" -- composer install --no-interaction
+  ensure_videos "$dir"
   rm -rf "$ROOT/$dir/dist/remote"
   php_run "$dir" -- php /workspace/tools/remote-manifest.php "/workspace/$dir" "/workspace/$dir/dist/remote" engine/ /workspace/build/runtime
   cp -r "$ROOT/build/runtime" "$ROOT/$dir/dist/remote/engine"

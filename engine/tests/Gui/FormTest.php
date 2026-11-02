@@ -276,4 +276,55 @@ final class FormTest extends TestCase
         self::assertGreaterThan(400.0, $dark->x);
         self::assertGreaterThan(1, $form->widget('long')->h / 20, 'the text wraps');
     }
+
+    public function testTheWheelScrollsTheListUnderThePointerThenTheWindow(): void
+    {
+        $children = [['type' => 'listbox', 'id' => 'people', 'height' => 120, 'items' => array_map(fn (int $i) => "Person $i", range(1, 40))]];
+        for ($i = 0; $i < 30; $i++) {
+            $children[] = ['type' => 'button', 'id' => "b$i", 'text' => "B$i"];
+        }
+        $form = $this->form($children);
+        $form->layoutTo(400, 300);
+        /** @var ListBox $list */
+        $list = $form->widget('people');
+        $form->wheelAt($list->x + 10, $list->y + 10, -1);
+        self::assertGreaterThan(0, $list->scrollY, 'the list scrolls down');
+        self::assertSame(0.0, $form->root->scrollY, 'not the window');
+        $form->wheelAt(200, 250, -2);
+        self::assertGreaterThan(0, $form->root->scrollY, 'over a button: the window scrolls');
+        $scrolled = $form->root->scrollY;
+        $form->wheelAt(200, 250, 1);
+        self::assertLessThan($scrolled, $form->root->scrollY, 'and back up');
+    }
+
+    public function testTheWheelScrollsTheOpenListOfAComboBox(): void
+    {
+        $form = $this->form([['type' => 'combobox', 'id' => 'colour', 'rows' => 3, 'items' => ['Red', 'Green', 'Blue', 'Cyan', 'Pink', 'Gold']]]);
+        /** @var ComboBox $combo */
+        $combo = $form->widget('colour');
+        $form->click($combo);
+        $form->wheelAt($combo->x + 10, $combo->y + $combo->h + 20, -2);
+        // the first line shown is now the third one: a click on it chooses Blue
+        $form->clickAt($combo->x + 20, $combo->y + $combo->h + 4 + 4 + 0.5 * 36 * 0.9);
+        self::assertSame('Blue', $combo->value());
+    }
+
+    public function testTheTextOfTheSystemsInputMethodIsTyped(): void
+    {
+        $keyboard = new \JumPHP\Input\Keyboard();
+        self::assertFalse($keyboard->hasTextEvents());
+        $keyboard->setComposition('^');
+        self::assertSame('^', $keyboard->getComposition(), 'a dead key waits');
+        $keyboard->addText('ê');
+        self::assertSame('ê', $keyboard->getText());
+        self::assertSame('', $keyboard->getComposition(), 'typed: nothing composed any more');
+        self::assertTrue($keyboard->hasTextEvents());
+        $keyboard->resetTransientStates();
+        self::assertSame('', $keyboard->getText());
+
+        $form = $this->form([['type' => 'textbox', 'id' => 'name']]);
+        $form->click($form->widget('name'));
+        $form->type('日本');
+        self::assertSame('日本', $form->widget('name')->props['text']);
+    }
 }

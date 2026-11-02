@@ -755,6 +755,9 @@ class SDL_Event
     public mixed $motion;
     public mixed $window;
     public mixed $button;
+    public mixed $wheel;
+    public mixed $text;
+    public mixed $edit;
     public mixed $tfinger;
     public function __construct() {}
     public function __toString() {}

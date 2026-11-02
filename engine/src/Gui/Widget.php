@@ -199,6 +199,12 @@ abstract class Widget
 
     // input: the form routes the pointer to the widget under it (or the one pressed), the keys to the focused one ----
 
+    /** The wheel over it (notches, > 0 = up): true when it scrolled, else the widget around it gets it. */
+    public function wheel(float $notches): bool
+    {
+        return false;
+    }
+
     public function pointerDown(Pointer $p): void
     {
     }

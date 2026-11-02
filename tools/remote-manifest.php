@@ -16,7 +16,7 @@ if (!is_file("$runtime/version.json")) {
 require "$game/vendor/autoload.php";
 
 // what a normal build leaves out too (tools/stage-web.sh)
-const SKIP = '#^(vendor|dist|\.build|var|cache|tests|site|\.git[^/]*)(/|$)|^phpstan\.neon$|(^|/)core(\.[0-9]+)?$|(^|/)\.DS_Store$#';
+const SKIP = '#^(vendor|dist|\.build|var|cache|tests|site|\.git[^/]*)(/|$)|^phpstan\.neon$|(^|/)core(\.[0-9]+)?$|(^|/)\.DS_Store$|^assets/videos/[^/]+\.(mp4|webm|mov|mkv|avi|m4v)$#i';
 
 $config = JumPHP\Kernel\GameConfig::load($game)->all();
 $composer = json_decode((string)@file_get_contents("$game/composer.json"), true) ?: [];

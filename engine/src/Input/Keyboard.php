@@ -18,6 +18,12 @@ class Keyboard
     private array $order = [];
     /** @var int[] keys that went down this frame, in order (text typing) */
     private array $typed = [];
+    /** the text typed this frame (SDL_TEXTINPUT: the layout, dead keys and input methods applied) */
+    private string $text = '';
+    /** what an input method is composing (not typed yet) */
+    private string $composition = '';
+    /** the binding sends text events (older engines do not: then text comes from the key codes) */
+    private bool $textEvents = false;
 
     public function handle($event): void
     {
@@ -74,6 +80,38 @@ class Keyboard
         return $this->typed;
     }
 
+    /** Text typed (UTF-8), from the system's text input. */
+    public function addText(string $text): void
+    {
+        $this->textEvents = true;
+        $this->text .= $text;
+        $this->composition = '';
+    }
+
+    /** @return string the text typed this frame */
+    public function getText(): string
+    {
+        return $this->text;
+    }
+
+    public function setComposition(string $text): void
+    {
+        $this->textEvents = true;
+        $this->composition = $text;
+    }
+
+    /** What an input method (or a dead key) is composing, shown at the cursor until it is typed. */
+    public function getComposition(): string
+    {
+        return $this->composition;
+    }
+
+    /** True once text events came: the typed text is then getText(), not the key codes. */
+    public function hasTextEvents(): bool
+    {
+        return $this->textEvents;
+    }
+
     public function anyPressed(): bool
     {
         return $this->pressed !== [];
@@ -85,6 +123,7 @@ class Keyboard
         $this->pressed = [];
         $this->released = [];
         $this->typed = [];
+        $this->text = '';
     }
 
     public function releaseAll(): void

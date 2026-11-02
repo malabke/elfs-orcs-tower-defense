@@ -2,7 +2,8 @@
 # stage-game.sh <games/game folder> <destination>: the game as the desktop runs it, for a package that carries it
 # (export:standalone, the Android app): its files and its vendor/ (the engine's symbolic link followed), without
 # what only development needs (var/, dist/, tests/, site/, core dumps, the engine's tests / web / own vendor, the
-# IDE package's own vendor (its dev tools: the game's vendor/ has what it needs), *.md).
+# IDE package's own vendor (its dev tools: the game's vendor/ has what it needs), *.md, the films of assets/videos/
+# (their pictures are there)).
 # + cacert.pem: the CA certificates of HTTPS (Debian's, from the build image), for the phones and computers whose own
 # are not where PHP's OpenSSL looks (the package points SSL_CERT_FILE at it). Prints the build: a hash of the files.
 set -euo pipefail
@@ -14,7 +15,8 @@ rm -rf "$dest" && mkdir -p "$dest"
     --exclude=./android --exclude=./.phpunit.cache --exclude='./core' --exclude='./core.[0-9]*' \
     --exclude='./vendor/jumphp/engine/tests' --exclude='./vendor/jumphp/engine/web' \
     --exclude='./vendor/jumphp/engine/vendor' --exclude='./vendor/jumphp/engine/.phpunit.cache' \
-    --exclude='./vendor/jumphp/ide/vendor' --exclude='./vendor/jumphp/ide/tests' --exclude='*.md' . ) \
+    --exclude='./vendor/jumphp/ide/vendor' --exclude='./vendor/jumphp/ide/tests' --exclude='*.md' \
+    --exclude='./assets/videos/*.mp4' --exclude='./assets/videos/*.webm' --exclude='./assets/videos/*.mov' --exclude='./assets/videos/*.mkv' --exclude='./assets/videos/*.avi' --exclude='./assets/videos/*.m4v' . ) \
   | tar -x -C "$dest"
 mkdir -p "$dest/var"
 # desktop apps and hybrid games: JumPHP's own Tauri pages (the embedded game's), from the web/ left out above

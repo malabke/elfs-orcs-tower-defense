@@ -21,12 +21,14 @@ ARG NETWORK_REF=a898904e58d445501dc98e5d2cf029632c449618
 ARG PHP_OPENGL_REF=438798d5f0a5347a59d13252611556792cc2a1b8
 ARG PHP_OPENAL_REF=6f78e95120ffe2cd30813a78ca66eaedde310314
 
+COPY --from=ext php-sdl-events.patch /tmp/php-sdl-events.patch
 RUN git clone https://github.com/php/php-src.git /src/php-src --branch $PHP_BRANCH --single-branch --depth 1
 
 RUN set -eux; \
     fetch() { mkdir -p "$3" && cd "$3" && git init -q && git remote add origin "https://github.com/$1.git" \
               && git fetch -q --depth 1 origin "$2" && git checkout -q FETCH_HEAD; }; \
     fetch davidnurdin/php-sdl           "$PHP_SDL_REF"   /tmp/php-sdl; \
+    (cd /tmp/php-sdl && git apply /tmp/php-sdl-events.patch); \
     fetch kea/php-sdl-image             "$SDL_IMAGE_REF" /src/php-src/ext/sdl_image; \
     fetch kea/php-sdl-mixer             "$SDL_MIXER_REF" /src/php-src/ext/sdl_mixer; \
     fetch kea/php-sdl-ttf               "$SDL_TTF_REF"   /src/php-src/ext/sdl_ttf; \

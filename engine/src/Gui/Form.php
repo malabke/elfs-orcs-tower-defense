@@ -328,6 +328,27 @@ abstract class Form extends AbstractScene
         }
         $this->root->renderOverlay($r, $this->theme);
         $this->renderTooltip($r);
+        $this->placeInputMethod($r);
+    }
+
+    /** @var list<int>|null where the input method's window was put */
+    private ?array $imeAt = null;
+
+    /** The window of an input method (Chinese, Japanese...: its candidates) opens under the cursor of the text box. */
+    private function placeInputMethod(Renderer $r): void
+    {
+        $box = $this->focus instanceof TextBox ? $this->focus->caret : null;
+        if ($box === null || !isset($this->engine) || !function_exists('SDL_SetTextInputRect') || !class_exists('SDL_Rect')) {
+            return;
+        }
+        $offset = $this->focus->parent?->scrollOffset() ?? 0;
+        [$x1, $y1] = $r->viewToWindow($box[0], $box[1] - $offset);
+        [$x2, $y2] = $r->viewToWindow($box[0] + $box[2], $box[1] + $box[3] - $offset);
+        $at = [(int)$x1, (int)$y1, max(1, (int)($x2 - $x1)), max(1, (int)($y2 - $y1))];
+        if ($at !== $this->imeAt) {
+            $this->imeAt = $at;
+            \SDL_SetTextInputRect(new \SDL_Rect(...$at));
+        }
     }
 
     private function renderTooltip(Renderer $r): void
@@ -369,6 +390,7 @@ abstract class Form extends AbstractScene
         $p->down = $mouse->isPressed(1);
         $p->up = $mouse->isReleased(1);
         $p->held = $mouse->isHeld(1);
+        $p->wheel = $mouse->wheelY;
         $mods = (int)\SDL_GetModState();
         $p->shift = ($mods & 3) !== 0;
         $p->ctrl = ($mods & (192 | 3072)) !== 0;
@@ -380,18 +402,31 @@ abstract class Form extends AbstractScene
             $this->repeatKey = end($typed);
             $this->repeatAt = $this->clock + 0.45;
         } elseif ($last !== null && $last === $this->repeatKey && $keyboard->isKeyHeld($last) && $this->clock >= $this->repeatAt
-            && (in_array($last, self::REPEAT, true) || self::character($last) !== null)) {
+            && (in_array($last, self::REPEAT, true) || (self::character($last) !== null && !$keyboard->hasTextEvents()))) {
             $typed = [$last];
             $this->repeatAt = $this->clock + 0.035;
         } elseif ($last === null) {
             $this->repeatKey = null;
         }
+        // the system's text input (the keyboard's layout, dead keys, input methods): the characters come from it, the
+        // keys that type one are left out; without it (older engines), the characters come from the key codes
+        $system = $keyboard->hasTextEvents();
         foreach ($typed as $key) {
             $char = $p->ctrl ? null : self::character($key, $p->shift, $caps);
-            if ($char !== null) {
-                $p->text[] = $char;
-            } else {
+            if ($char === null) {
                 $p->keys[] = $key;
+            } elseif (!$system) {
+                $p->text[] = $char;
+            }
+        }
+        if ($system) {
+            foreach (mb_str_split($keyboard->getText()) ?: [] as $char) {
+                if ($char >= ' ' && $char !== "\x7f") {
+                    $p->text[] = $char;
+                }
+            }
+            if ($this->focus instanceof TextBox) {
+                $this->focus->composition = $keyboard->getComposition();
             }
         }
         return $p;
@@ -467,7 +502,20 @@ abstract class Form extends AbstractScene
             $widget->pointerUp($local, $inside);
         }
 
+        if ($p->wheel != 0) {
+            $this->wheel($p, $target);
+        }
         $this->keys($p);
+    }
+
+    /** The wheel: the widget under the pointer scrolls (a list, an open list), or else the scrolled container around it. */
+    private function wheel(Pointer $p, ?Widget $target): void
+    {
+        for ($w = $target; $w !== null; $w = $w->parent) {
+            if ($w->wheel($p->wheel)) {
+                return;
+            }
+        }
     }
 
     /** A press on a widget inside a scrolled container that moves: it scrolls the container (phones). */
@@ -649,6 +697,14 @@ abstract class Form extends AbstractScene
             };
             $this->keys($p);
         }
+    }
+
+    /** Tests: the wheel turned over a point of the view (notches, > 0 = up). */
+    public function wheelAt(float $x, float $y, float $notches): void
+    {
+        $p = new Pointer();
+        [$p->x, $p->y, $p->wheel] = [$x, $y, $notches];
+        $this->handle($p);
     }
 
     /** Tests: one key (Pointer::LEFT...). */

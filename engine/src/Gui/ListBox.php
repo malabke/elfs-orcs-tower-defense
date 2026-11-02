@@ -5,7 +5,7 @@ namespace JumPHP\Gui;
 use JumPHP\Renderer\Renderer;
 
 /**
- * A list of lines to choose from: `items` (texts), `selected` (index, -1: none). Drag it (or its bar) to scroll,
+ * A list of lines to choose from: `items` (texts), `selected` (index, -1: none). Drag it (its bar, the wheel) to scroll,
  * arrows / Page up / Page down when it has the focus.
  * Events: change (int $index, string $item), activate (double click or Return on a line).
  *
@@ -120,6 +120,17 @@ class ListBox extends Widget
     {
         $content = count((array)$this->props['items']) * $this->rowHeight($t);
         $this->scrollY = max(0, min($this->scrollY, $content - $this->h + 2));
+    }
+
+    public function wheel(float $notches): bool
+    {
+        if ($this->form === null) {
+            return false;
+        }
+        $before = $this->scrollY;
+        $this->scrollY -= $notches * 3 * $this->rowHeight($this->form->theme);
+        $this->clampScroll($this->form->theme);
+        return $this->scrollY !== $before;
     }
 
     public function select(int $index): void

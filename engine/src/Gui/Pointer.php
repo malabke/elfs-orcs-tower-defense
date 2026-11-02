@@ -4,7 +4,7 @@ namespace JumPHP\Gui;
 
 /**
  * What the user did this frame, for the widgets: the pointer (mouse or finger, in view pixels), its button, the keys
- * pressed and the text typed. Built by FormScene from the engine's input; tests build one by hand.
+ * pressed, the text typed and the wheel. Built by FormScene from the engine's input; tests build one by hand.
  */
 final class Pointer
 {
@@ -22,6 +22,8 @@ final class Pointer
     public array $text = [];
     public bool $shift = false;
     public bool $ctrl = false;
+    /** the mouse wheel this frame, in notches: > 0 = up (away from the user) */
+    public float $wheel = 0;
 
     public function pressed(int $key): bool
     {

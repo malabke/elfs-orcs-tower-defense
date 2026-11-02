@@ -45,11 +45,13 @@ ARG SDL_IMAGE_REF
 ARG SDL_MIXER_REF
 ARG SDL_TTF_REF
 COPY php86-compat.h /usr/src/php86-compat.h
+COPY --from=ext php-sdl-events.patch /usr/src/php-sdl-events.patch
 # fetch <repo> <ref> <dir>: one pinned commit, no history (same SDL commits as docker/desktop)
 RUN set -eux; \
     fetch() { mkdir -p "$3" && cd "$3" && git init -q && git remote add origin "https://github.com/$1.git" \
               && git fetch -q --depth 1 origin "$2" && git checkout -q FETCH_HEAD; }; \
     fetch davidnurdin/php-sdl   "$PHP_SDL_REF"   /usr/src/ext-sdl; \
+    (cd /usr/src/ext-sdl && git apply /usr/src/php-sdl-events.patch); \
     fetch kea/php-sdl-image     "$SDL_IMAGE_REF" /usr/src/ext-sdl_image; \
     fetch kea/php-sdl-mixer     "$SDL_MIXER_REF" /usr/src/ext-sdl_mixer; \
     fetch kea/php-sdl-ttf       "$SDL_TTF_REF"   /usr/src/ext-sdl_ttf; \
