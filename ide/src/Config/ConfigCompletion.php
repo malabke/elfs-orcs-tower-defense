@@ -6,7 +6,8 @@ use JumPHP\Ide\Php\Index;
 
 /**
  * Completion in a game's YAML files: config/game.yaml (its keys, with what each one does, and their values: scenes,
- * languages, booleans, key names...) and config/input.yaml (actions, then key / pad / touch / mouse names).
+ * languages, booleans, key names...), config/input.yaml (actions, then key / pad / touch / mouse names) and
+ * config/services.yaml (Symfony's dependency injection: _defaults, a service's keys, the project's classes).
  * The YAML is read by its indentation: the keys above the cursor give where it is.
  */
 final class ConfigCompletion
@@ -21,7 +22,7 @@ final class ConfigCompletion
     /** Whether a file is one this completes. */
     public static function handles(string $path): bool
     {
-        return (bool)preg_match('#(^|/)config/(game|input)\.ya?ml$#', $path);
+        return (bool)preg_match('#(^|/)config/(game|input|services)\.ya?ml$#', $path);
     }
 
     /** @return array{items: list<array<string, mixed>>, incomplete: bool} */
@@ -30,7 +31,11 @@ final class ConfigCompletion
         if (!self::handles($path)) {
             return ['items' => [], 'incomplete' => false];
         }
-        $schema = str_contains(basename($path), 'input') ? self::input() : self::game();
+        $schema = match (true) {
+            str_contains(basename($path), 'input') => self::input(),
+            str_contains(basename($path), 'services') => self::services(),
+            default => self::game(),
+        };
         $lines = preg_split('/\R/', $text) ?: [];
         $current = $lines[$line - 1] ?? '';
         $before = substr($current, 0, max(0, $column - 1));
@@ -39,7 +44,7 @@ final class ConfigCompletion
         $node = $this->node($schema, $path);
 
         // "key: [A, B, |" or "key: |": a value of key
-        if (preg_match('/^\s*(?:-\s+)?([\w-]+)\s*:\s*(.*)$/', $before, $m)) {
+        if (preg_match('/^\s*(?:-\s+)?([\w\\\\-]+)\s*:\s*(.*)$/', $before, $m)) {
             $child = $this->child($node, $m[1]);
             if ($child === null) {
                 return ['items' => [], 'incomplete' => false];
@@ -58,7 +63,7 @@ final class ConfigCompletion
             return ['items' => $this->values($node['items'] ?? null), 'incomplete' => false];
         }
         // "  ke|": a key here
-        if (preg_match('/^\s*[\w-]*$/', $before)) {
+        if (preg_match('/^\s*[\w\\\\-]*$/', $before)) {
             $present = $this->siblings($lines, $line - 1, $indent);
             $items = [];
             foreach ($node['keys'] ?? [] as $key => $child) {
@@ -68,6 +73,14 @@ final class ConfigCompletion
                 $items[] = ['label' => $key, 'kind' => 'property', 'detail' => $child['doc'] ?? '',
                     'documentation' => $child['doc'] ?? '', 'insertText' => $key . ': ',
                     'sortText' => '0' . $key];
+            }
+            // services.yaml: a service is keyed by its class
+            if (isset($node['any']['keys']['class'])) {
+                foreach ($this->classes() as $class) {
+                    if (!isset($present[$class])) {
+                        $items[] = ['label' => $class, 'kind' => 'class', 'detail' => 'service', 'insertText' => $class . ':', 'sortText' => '1' . $class];
+                    }
+                }
             }
             return ['items' => $items, 'incomplete' => false];
         }
@@ -90,7 +103,7 @@ final class ConfigCompletion
             }
             $own = strlen($text) - strlen(ltrim($text, ' '));
             if ($own < $indent) {
-                if (preg_match('/^\s*(?:-\s+)?([\w-]+)\s*:/', $text, $m)) {
+                if (preg_match('/^\s*(?:-\s+)?([\w\\\\-]+)\s*:/', $text, $m)) {
                     array_unshift($path, $m[1]);
                 }
                 $indent = $own;
@@ -113,7 +126,7 @@ final class ConfigCompletion
                 if ($own < $indent) {
                     break;
                 }
-                if ($own === $indent && preg_match('/^\s*([\w-]+)\s*:/', $text, $m)) {
+                if ($own === $indent && preg_match('/^\s*([\w\\\\-]+)\s*:/', $text, $m)) {
                     $out[$m[1]] = true;
                 }
             }
@@ -142,6 +155,7 @@ final class ConfigCompletion
     {
         $list = match ($values) {
             'scenes' => $this->scenes(),
+            'classes' => $this->classes(),
             'keys' => self::keyNames(),
             'langs' => self::LANGS,
             null => [],
@@ -149,7 +163,7 @@ final class ConfigCompletion
         };
         $items = [];
         foreach ($list as $i => $value) {
-            $items[] = ['label' => $value, 'kind' => $values === 'scenes' ? 'class' : 'value', 'insertText' => $value,
+            $items[] = ['label' => $value, 'kind' => in_array($values, ['scenes', 'classes'], true) ? 'class' : 'value', 'insertText' => $value,
                 'sortText' => sprintf('%04d', $i)];
         }
         return $items;
@@ -169,6 +183,58 @@ final class ConfigCompletion
         }
         sort($out);
         return array_values(array_unique($out));
+    }
+
+    /** @return list<string> the project's own classes and interfaces (not the libraries') */
+    private function classes(): array
+    {
+        $out = [];
+        foreach ($this->index?->classNames('', 2000) ?? [] as $class) {
+            if ($class['path'] !== null && !str_contains($class['path'], 'vendor/') && in_array($class['kind'], ['class', 'interface'], true)) {
+                $out[] = $class['name'];
+            }
+        }
+        sort($out);
+        return array_values(array_unique($out));
+    }
+
+    /** @return array<string, mixed> config/services.yaml (Symfony DependencyInjection, as the engine reads it) */
+    private static function services(): array
+    {
+        $bool = static fn (string $doc): array => ['doc' => $doc, 'values' => self::BOOL];
+        $service = ['doc' => 'A service: its class name (or a namespace prefix ending with \\ and a resource)', 'keys' => [
+            'class' => ['doc' => 'Its class, when the key is not the class name', 'values' => 'classes'],
+            'arguments' => ['doc' => 'Constructor arguments: [\'@App\\Other\', \'%param%\', 42] or {$name: value}'],
+            'calls' => ['doc' => 'Methods called after construction: - [setLogger, [\'@logger\']]'],
+            'factory' => ['doc' => 'Made by a factory: [\'@App\\Factory\', create] or [App\\Factory, create]'],
+            'alias' => ['doc' => 'Another name of an existing service', 'values' => 'classes'],
+            'decorates' => ['doc' => 'Replaces a service, which stays reachable as .inner', 'values' => 'classes'],
+            'parent' => ['doc' => 'An abstract service whose settings it takes', 'values' => 'classes'],
+            'tags' => ['doc' => 'Tags: [name] or - {name: x, priority: 10}'],
+            'bind' => ['doc' => 'Values for constructor arguments by name or type: $speed: 120'],
+            'resource' => ['doc' => 'For a namespace prefix (App\\:): its files, \'../src/*\''],
+            'exclude' => ['doc' => 'For a namespace prefix: files that are not services, \'../src/Entity\''],
+            'public' => $bool('Reachable with $container->get() (scenes are public automatically)'),
+            'shared' => $bool('One instance (true, the default) or a new one each time'),
+            'lazy' => $bool('Made at its first use'),
+            'abstract' => $bool('Only a parent of other services'),
+            'autowire' => $bool('Constructor arguments found from their types'),
+            'autoconfigure' => $bool('Tags from the interfaces it implements'),
+            'synthetic' => $bool('Set at run time ($container->set())'),
+        ]];
+        return ['keys' => [
+            'services' => ['doc' => 'The services: _defaults, then one key per class (or App\\: for a whole folder)', 'keys' => [
+                '_defaults' => ['doc' => 'The defaults of the services of this file', 'keys' => [
+                    'autowire' => $bool('Constructor arguments found from their types'),
+                    'autoconfigure' => $bool('Tags from the interfaces they implement'),
+                    'public' => $bool('Reachable with $container->get()'),
+                    'bind' => ['doc' => 'Values for constructor arguments by name or type: $speed: 120'],
+                ]],
+                '_instanceof' => ['doc' => 'Settings of the services that implement an interface: App\\Contract: {tags: [x]}'],
+            ], 'any' => $service],
+            'parameters' => ['doc' => 'Values for %name% in arguments: speed: 120'],
+            'imports' => ['doc' => 'Other files: - {resource: services_dev.yaml}'],
+        ]];
     }
 
     /** @return list<string> what config/input.yaml binds: SDL key names, gamepad, touch, mouse */

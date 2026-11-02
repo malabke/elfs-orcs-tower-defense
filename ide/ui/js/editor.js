@@ -659,11 +659,11 @@ export class Editors {
       },
     });
 
-    // config/game.yaml, config/input.yaml: their keys, values, scenes, key names (JumPHP\Ide\Config\ConfigCompletion)
+    // config/game.yaml, input.yaml, services.yaml: their keys, values, scenes, key names, classes (JumPHP\Ide\Config\ConfigCompletion)
     monaco.languages.registerCompletionItemProvider('yaml', {
       triggerCharacters: [' ', '[', ','],
       provideCompletionItems: async (model, position) => {
-        if (!/(^|\/)config\/(game|input)\.ya?ml$/.test(pathOf(model.uri))) return { suggestions: [] };
+        if (!/(^|\/)config\/(game|input|services)\.ya?ml$/.test(pathOf(model.uri))) return { suggestions: [] };
         const result = await backend.invoke('config.complete', args(model, position)).catch(() => null);
         if (!result) return { suggestions: [] };
         const line = model.getLineContent(position.lineNumber).slice(0, position.column - 1);

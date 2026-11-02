@@ -34,6 +34,23 @@ final class ConfigCompletionTest extends TestCase
         self::assertNotContains('title', $labels, 'already written');
     }
 
+    public function testServicesYamlKeysAndClasses(): void
+    {
+        $file = 'games/x/config/services.yaml';
+        $top = $this->labels($file, "services:\n  _defaults:\n    autowire: true\n  |\n");
+        self::assertContains('_instanceof', $top);
+        self::assertNotContains('_defaults', $top, 'already written');
+        self::assertContains('App\\Scene\\PlayScene', $top, 'a service keyed by its class');
+        $defaults = $this->labels($file, "services:\n  _defaults:\n    autowire: true\n    |\n");
+        self::assertContains('autoconfigure', $defaults);
+        self::assertNotContains('autowire', $defaults);
+        $service = $this->labels($file, "services:\n  App\\Scene\\PlayScene:\n    |\n");
+        self::assertContains('arguments', $service);
+        self::assertContains('public', $service);
+        self::assertSame(['true', 'false'], $this->labels($file, "services:\n  App\\Scene\\PlayScene:\n    lazy: |\n"));
+        self::assertContains('App\\Scene\\TitleScene', $this->labels($file, "services:\n  title:\n    alias: |\n"));
+    }
+
     public function testTheScenesOfTheProjectForStartScene(): void
     {
         self::assertSame(['App\\Scene\\PlayScene', 'App\\Scene\\TitleScene'], $this->labels('games/x/config/game.yaml', "game:\n  start_scene: |\n"));
@@ -62,6 +79,6 @@ final class ConfigCompletionTest extends TestCase
 
     public function testOtherFilesAreLeftAlone(): void
     {
-        self::assertSame([], $this->labels('games/x/config/services.yaml', "services:\n  |\n"));
+        self::assertSame([], $this->labels('games/x/config/packages.yaml', "services:\n  |\n"));
     }
 }
