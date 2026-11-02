@@ -112,7 +112,9 @@ later iOS).
 
 Done (IDE 0.1.9): generics (`@template`, `@extends`, `class-string<T>`), array shapes and their keys, foreach over
 collections, the libraries' functions and classmaps, the stubs' functions, `config/game.yaml` and `config/input.yaml`.
-Left: `services.yaml` / form files / `lang.yaml`, the bin/jumphp commands (Run configurations, terminal), a background
+Done (IDE 0.1.18): the game's texts in `t('…')` (config/lang.yaml) and its actions in `isPressed('…')` / `isHeld` /
+`isReleased` / `press` / `hold` / `label` (config/input.yaml + the engine's).
+Left: `services.yaml` / form files / `lang.yaml` itself, the bin/jumphp commands (Run configurations, terminal), a background
 index of a whole vendor/ (names come from file names today, members when a class is first used).
 
 ## CLI apps: what is left

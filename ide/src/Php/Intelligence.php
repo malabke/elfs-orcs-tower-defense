@@ -176,6 +176,11 @@ final class Intelligence
         $start = $offset - strlen($word);
         $lead = substr($text, 0, $start);
 
+        // a string argument of the game's own names: t('…') its texts (config/lang.yaml), isPressed('…') its actions
+        if (preg_match('/(?:\b|->|::)(t|isPressed|isHeld|isReleased|press|hold|label)\(\s*([\'"])([^\'"\\\\\n]*)$/', $before, $arg)) {
+            return ['items' => $this->gameNames($path, $arg[1] === 't' ? 'texts' : 'actions'), 'incomplete' => false, 'typed' => $arg[3]];
+        }
+
         $context = $this->contextBefore($text, $offset);
 
         if (preg_match('/(\?->|->)$/', $lead, $op)) {
@@ -211,6 +216,55 @@ final class Intelligence
             return ['items' => array_values($items), 'incomplete' => false];
         }
         return ['items' => $this->wordItems($lead, $word, $context, $source, $start), 'incomplete' => true];
+    }
+
+    /**
+     * The texts (config/lang.yaml's keys: the source strings) or the actions (config/input.yaml + the engine's) of the
+     * game a file belongs to (the nearest folder above it with config/game.yaml).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function gameNames(string $path, string $what): array
+    {
+        $workspace = $this->index->workspace();
+        $dir = str_replace('\\', '/', dirname($path));
+        while (!$workspace->exists(($dir === '.' || $dir === '' ? '' : "$dir/") . 'config/game.yaml')) {
+            if ($dir === '.' || $dir === '' || $dir === '/' || dirname($dir) === $dir) {
+                return [];
+            }
+            $dir = dirname($dir);
+        }
+        $config = ($dir === '.' || $dir === '' ? '' : "$dir/") . 'config/';
+        $read = static function (string $file) use ($workspace): array {
+            try {
+                $data = $workspace->exists($file) ? \Symfony\Component\Yaml\Yaml::parse($workspace->read($file)) : [];
+            } catch (\Throwable) {
+                return [];
+            }
+            return is_array($data) ? $data : [];
+        };
+        $names = [];
+        if ($what === 'texts') {
+            foreach ($read($config . 'lang.yaml') as $lang => $texts) {
+                foreach (is_array($texts) ? $texts : [] as $key => $text) {
+                    $names[(string)$key][] = $lang . ': ' . (is_scalar($text) ? (string)$text : '');
+                }
+            }
+        } else {
+            foreach (['up', 'down', 'left', 'right', 'confirm', 'back', 'pause'] as $action) {
+                $names[$action] = ['engine action'];
+            }
+            $input = $read($config . 'input.yaml');
+            foreach (is_array($input['actions'] ?? null) ? $input['actions'] : [] as $action => $keys) {
+                $names[(string)$action] = [implode(', ', array_map('strval', array_filter((array)$keys, 'is_scalar')))];
+            }
+        }
+        $items = [];
+        foreach ($names as $name => $details) {
+            $items[] = ['label' => $name, 'kind' => $what === 'texts' ? 'text' : 'enumMember', 'detail' => implode(' · ', array_slice($details, 0, 3)),
+                'insertText' => $name, 'filterText' => $name, 'sortText' => '0' . $name];
+        }
+        return $items;
     }
 
     /** @return list<array<string, mixed>> */

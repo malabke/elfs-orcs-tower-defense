@@ -78,6 +78,27 @@ final class IntelligenceTest extends TestCase
         return array_map(fn ($i) => $i['label'], $this->php->complete('src/Scene/Play.php', $text, $line, $col)['items']);
     }
 
+    public function testTheGamesTextsAndActionsAreCompletedInsideTheirStrings(): void
+    {
+        $this->ws->write('games/demo/config/game.yaml', "game:\n  id: demo\n");
+        $this->ws->write('games/demo/config/lang.yaml', "fr:\n  PLAY NOW: JOUER\n  QUIT: QUITTER\nde:\n  QUIT: BEENDEN\n");
+        $this->ws->write('games/demo/config/input.yaml', "actions:\n  jump: [Space, pad0:a]\n");
+        $complete = function (string $code): array {
+            [$text, $line, $col] = $this->cursor("<?php\nclass Play {\n function f() {\n  $code\n }\n}");
+            return $this->php->complete('games/demo/src/Scene/Play.php', $text, $line, $col);
+        };
+        $texts = $complete("Lang::t('PLAY N|");
+        self::assertSame(['PLAY NOW', 'QUIT'], array_column($texts['items'], 'label'));
+        self::assertSame('PLAY N', $texts['typed']);
+        self::assertSame('fr: QUITTER · de: BEENDEN', $texts['items'][1]['detail']);
+        $actions = array_column($complete('$this->actions()->isPressed("|')['items'], 'label');
+        self::assertContains('jump', $actions);
+        self::assertContains('confirm', $actions);
+        // outside a game: nothing
+        [$text, $line, $col] = $this->cursor("<?php\n\$a->isHeld('|");
+        self::assertSame([], $this->php->complete('src/Scene/Play.php', $text, $line, $col)['items']);
+    }
+
     public function testMembersOfThisPropertyChainAreCompleted(): void
     {
         $labels = $this->labels("<?php\nnamespace App\\Scene;\nuse App\\Entity\\Hero;\nclass Play {\n private Hero \$hero;\n function f() {\n  \$this->hero->|\n }\n}");

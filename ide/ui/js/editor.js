@@ -59,7 +59,7 @@ const KIND = () => ({ method: monaco.languages.CompletionItemKind.Method, functi
   enumMember: monaco.languages.CompletionItemKind.EnumMember, class: monaco.languages.CompletionItemKind.Class,
   interface: monaco.languages.CompletionItemKind.Interface, trait: monaco.languages.CompletionItemKind.Module,
   enum: monaco.languages.CompletionItemKind.Enum, variable: monaco.languages.CompletionItemKind.Variable,
-  keyword: monaco.languages.CompletionItemKind.Keyword, field: monaco.languages.CompletionItemKind.Field,
+  keyword: monaco.languages.CompletionItemKind.Keyword, field: monaco.languages.CompletionItemKind.Field, text: monaco.languages.CompletionItemKind.Text,
   value: monaco.languages.CompletionItemKind.Value });
 
 const SYMBOL = () => ({ class: monaco.languages.SymbolKind.Class, interface: monaco.languages.SymbolKind.Interface,
@@ -630,15 +630,18 @@ export class Editors {
     const kinds = KIND();
 
     monaco.languages.registerCompletionItemProvider('php', {
-      triggerCharacters: ['>', ':', '$', '\\'],
+      triggerCharacters: ['>', ':', '$', '\\', "'", '"'],
       provideCompletionItems: async (model, position, context) => {
         const line = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
         if (context.triggerCharacter === '>' && !line.endsWith('->')) return { suggestions: [] };
+        if ((context.triggerCharacter === "'" || context.triggerCharacter === '"') && !/\(\s*['"]$/.test(line)) return { suggestions: [] };
         if (context.triggerCharacter === ':' && !line.endsWith('::')) return { suggestions: [] };
         const result = await backend.invoke('php.complete', args(model, position)).catch(() => null);
         if (!result) return { suggestions: [] };
         const word = model.getWordUntilPosition(position);
-        const replace = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, position.column);
+        // a string argument (t('…'), isPressed('…')): what is typed inside the quotes, spaces included
+        const from = typeof result.typed === 'string' ? position.column - result.typed.length : word.startColumn;
+        const replace = new monaco.Range(position.lineNumber, from, position.lineNumber, position.column);
         return {
           incomplete: result.incomplete,
           suggestions: result.items.map((item) => ({
