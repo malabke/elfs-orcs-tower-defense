@@ -167,10 +167,10 @@ final class Debugger
         foreach ($this->sessions as $id => $session) {
             $messages = $session->poll();
             foreach ($messages === false ? [] : $messages as $message) {
-                if ($message->getName() === 'init') {
+                if ($message->localName() === 'init') {
                     $this->started($session);
-                } elseif ($message->getName() === 'stream') {
-                    ($this->emit)('debug.output', ['session' => $id, 'text' => base64_decode((string)$message)]);
+                } elseif ($message->localName() === 'stream') {
+                    ($this->emit)('debug.output', ['session' => $id, 'text' => base64_decode($message->text)]);
                 }
             }
             if ($messages === false || !$session->isOpen()) {
@@ -183,7 +183,7 @@ final class Debugger
     private function started(Session $session): void
     {
         // in Docker (bin/jumphp) the project is /workspace; a program run on this computer sees its real folder
-        $script = str_replace('\\', '/', rawurldecode((string)preg_replace('#^file://#', '', (string)($session->init['fileuri'] ?? ''))));
+        $script = str_replace('\\', '/', rawurldecode((string)preg_replace('#^file://#', '', (string)$session->init?->attr('fileuri', ''))));
         $this->roots[$session->id] = str_starts_with($script, self::CONTAINER_ROOT . '/') ? self::CONTAINER_ROOT : $this->root;
         $session->command('feature_set', ['n' => 'max_depth', 'v' => 1]);
         $session->command('feature_set', ['n' => 'max_children', 'v' => 200]);
@@ -200,8 +200,8 @@ final class Debugger
     private function sendBreakpoint(Session $session, string $path, array $bp): void
     {
         $args = ['t' => $bp['condition'] !== null ? 'conditional' : 'line', 'f' => $this->fileUri($path, $this->roots[$session->id] ?? self::CONTAINER_ROOT), 'n' => $bp['line']];
-        $session->command('breakpoint_set', $args, $bp['condition'])->then(function (\SimpleXMLElement $r) use ($session, $path, $bp): void {
-            $this->ids[$session->id][(string)$r['id']] = ['path' => $path, 'line' => $bp['line']];
+        $session->command('breakpoint_set', $args, $bp['condition'])->then(function (XmlNode $r) use ($session, $path, $bp): void {
+            $this->ids[$session->id][(string)$r->attr('id')] = ['path' => $path, 'line' => $bp['line']];
         }, fn () => null);
     }
 
@@ -226,8 +226,8 @@ final class Debugger
         unset($this->paused[$id]);
         $session->status = 'running';
         ($this->emit)('debug.running', ['session' => $id]);
-        return $session->command($how)->then(function (\SimpleXMLElement $r) use ($session, $how) {
-            $status = (string)$r['status'];
+        return $session->command($how)->then(function (XmlNode $r) use ($session, $how) {
+            $status = (string)$r->attr('status');
             if ($status === 'break') {
                 return $this->pausedAt($session);
             }
@@ -243,11 +243,11 @@ final class Debugger
 
     private function pausedAt(Session $session): Deferred
     {
-        return $session->command('stack_get')->then(function (\SimpleXMLElement $r) use ($session) {
+        return $session->command('stack_get')->then(function (XmlNode $r) use ($session) {
             $stack = [];
-            foreach ($r->stack as $frame) {
-                $stack[] = ['level' => (int)$frame['level'], 'where' => (string)$frame['where'],
-                    'path' => $this->fromUri((string)$frame['filename']), 'line' => (int)$frame['lineno']];
+            foreach ($r->children('stack') as $frame) {
+                $stack[] = ['level' => (int)$frame->attr('level'), 'where' => (string)$frame->attr('where'),
+                    'path' => $this->fromUri((string)$frame->attr('filename')), 'line' => (int)$frame->attr('lineno')];
             }
             $top = $stack[0] ?? ['path' => null, 'line' => 0];
             $paused = ['session' => $session->id, 'status' => 'break', 'path' => $top['path'], 'line' => $top['line'], 'stack' => $stack];
@@ -264,45 +264,44 @@ final class Debugger
     public function variables(int $id, int $depth = 0, int $context = 0): Deferred
     {
         return $this->session($id)->command('context_get', ['d' => $depth, 'c' => $context])
-            ->then(fn (\SimpleXMLElement $r) => array_map($this->property(...), iterator_to_array($r->property, false)));
+            ->then(fn (XmlNode $r) => array_map($this->property(...), $r->children('property')));
     }
 
     /** The children of a variable (its fullname from variables(): $hero->weapon, $list[3]...). */
     public function children(int $id, string $fullname, int $depth = 0, int $page = 0): Deferred
     {
         return $this->session($id)->command('property_get', ['n' => $fullname, 'd' => $depth, 'p' => $page])
-            ->then(fn (\SimpleXMLElement $r) => isset($r->property) ? $this->property($r->property, true) : null);
+            ->then(fn (XmlNode $r) => ($p = $r->child('property')) !== null ? $this->property($p, true) : null);
     }
 
     /** Evaluates PHP in the stopped frame (an expression: $this->score * 2, count($enemies)...). */
     public function evaluate(int $id, string $expression): Deferred
     {
         return $this->session($id)->command('eval', [], $expression)
-            ->then(fn (\SimpleXMLElement $r) => isset($r->property) ? $this->property($r->property, true) : ['type' => 'null', 'value' => 'null']);
+            ->then(fn (XmlNode $r) => ($p = $r->child('property')) !== null ? $this->property($p, true) : ['type' => 'null', 'value' => 'null']);
     }
 
     /** @return array<string, mixed> */
-    private function property(\SimpleXMLElement $p, bool $withChildren = false): array
+    private function property(XmlNode $p, bool $withChildren = false): array
     {
-        $a = $p->attributes();
-        $value = (string)$p;
-        if ((string)($a['encoding'] ?? '') === 'base64') {
-            $value = (string)base64_decode($value);
+        $value = $p->text;
+        if ($p->attr('encoding', '') === 'base64') {
+            $value = (string)base64_decode(trim($value));
         }
-        $type = (string)($a['type'] ?? '');
-        $out = ['name' => (string)($a['name'] ?? ''), 'fullname' => (string)($a['fullname'] ?? ''), 'type' => $type,
-            'class' => isset($a['classname']) ? (string)$a['classname'] : null,
+        $type = (string)$p->attr('type', '');
+        $children = (int)$p->attr('numchildren', '0');
+        $out = ['name' => (string)$p->attr('name', ''), 'fullname' => (string)$p->attr('fullname', ''), 'type' => $type, 'class' => $p->attr('classname'),
             'value' => match ($type) {
-                'array' => 'array(' . (int)($a['numchildren'] ?? 0) . ')',
-                'object' => (string)($a['classname'] ?? 'object'),
+                'array' => "array($children)",
+                'object' => (string)$p->attr('classname', 'object'),
                 'null', 'uninitialized' => $type,
-                'bool' => $value === '1' ? 'true' : 'false',
+                'bool' => trim($value) === '1' ? 'true' : 'false',
                 'string' => mb_strimwidth($value, 0, 400, '…'),
                 default => $value,
             },
-            'children' => (int)($a['numchildren'] ?? 0) > 0 || (string)($a['children'] ?? '0') === '1'];
-        if ($withChildren && isset($p->property)) {
-            $out['items'] = array_map(fn ($c) => $this->property($c), iterator_to_array($p->property, false));
+            'children' => $children > 0 || $p->attr('children', '0') === '1'];
+        if ($withChildren && $p->children('property')) {
+            $out['items'] = array_map(fn (XmlNode $c) => $this->property($c), $p->children('property'));
         }
         return $out;
     }

@@ -48,6 +48,7 @@ class App {
     this.bindKeys();
     this.bindHeader();
     backend.on('index.progress', (p) => this.indexProgress(p));
+    backend.on('ide.error', (p) => notify(`${p.message} (${p.at})`, 'error', { title: `${p.where}: an error` }));
     backend.on('files.changed', debounce(() => { this.tree?.refresh(); this.git?.refresh(); this.editors?.reloadFromDisk(); }, 300));
     backend.on('project.closed', () => location.reload());
     backend.on('bridge.status', (st) => this.bridgeStatus(st));

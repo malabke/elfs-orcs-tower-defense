@@ -170,15 +170,29 @@ final class Ide
     /** A slice of background work: indexing, processes. The desktop app calls it every frame. */
     public function tick(float $budget = 0.008): void
     {
-        $this->processes->poll();
-        $this->agent?->tick();
-        $this->claude?->tick();
-        $this->docker?->tick();
-        $this->debugger?->tick();
+        // one part that fails never takes the IDE down: its error is shown (event ide.error), the rest goes on
+        $this->guard('processes', fn () => $this->processes->poll());
+        $this->guard('Claude', fn () => $this->agent?->tick());
+        $this->guard('Claude', fn () => $this->claude?->tick());
+        $this->guard('Docker', fn () => $this->docker?->tick());
+        $this->guard('Debugger', fn () => $this->debugger?->tick(), fn () => $this->debugger?->close());
         if (!$this->indexed) {
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);
             $this->indexed = $done;
+        }
+    }
+
+    private function guard(string $where, callable $work, ?callable $onError = null): void
+    {
+        try {
+            $work();
+        } catch (\Throwable $e) {
+            try {
+                $onError && $onError();
+            } catch (\Throwable) {
+            }
+            ($this->emit)('ide.error', ['where' => $where, 'message' => $e->getMessage(), 'at' => basename($e->getFile()) . ':' . $e->getLine()]);
         }
     }
 

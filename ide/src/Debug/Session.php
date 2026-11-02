@@ -14,7 +14,7 @@ final class Session
     public string $status = 'starting';   // starting, running, break, stopping, stopped
 
     /** what Xdebug said first (<init>): the script it runs */
-    public ?\SimpleXMLElement $init = null;
+    public ?XmlNode $init = null;
 
     /** @var array<int, Deferred> transaction id => its answer */
     private array $waiting = [];
@@ -27,7 +27,7 @@ final class Session
         stream_set_blocking($this->socket, false);
     }
 
-    /** Sends a command; resolves with Xdebug's <response> (rejects with its <error>). */
+    /** Sends a command; resolves with Xdebug's <response> as an XmlNode (rejects with its <error>). */
     public function command(string $name, array $args = [], ?string $data = null): Deferred
     {
         $deferred = new Deferred();
@@ -52,7 +52,7 @@ final class Session
      * Reads what Xdebug sent. Returns the messages that are not answers (the <init>, notifications), and false once
      * the connection is closed.
      *
-     * @return list<\SimpleXMLElement>|false
+     * @return list<XmlNode>|false
      */
     public function poll(): array|false
     {
@@ -70,14 +70,14 @@ final class Session
             }
             $xml = substr($this->buffer, $zero + 1, $length);
             $this->buffer = (string)substr($this->buffer, $zero + 1 + $length + 1);
-            $message = @simplexml_load_string($xml);
-            if ($message === false) {
+            $message = XmlNode::parse($xml);
+            if ($message === null) {
                 continue;
             }
-            if ($message->getName() === 'response') {
+            if ($message->localName() === 'response') {
                 $this->answer($message);
             } else {
-                if ($message->getName() === 'init') {
+                if ($message->localName() === 'init') {
                     $this->init = $message;
                 }
                 $other[] = $message;
@@ -107,21 +107,20 @@ final class Session
         return is_resource($this->socket);
     }
 
-    private function answer(\SimpleXMLElement $response): void
+    private function answer(XmlNode $response): void
     {
-        $attributes = $response->attributes();
-        $transaction = (int)($attributes['transaction_id'] ?? 0);
-        if (isset($attributes['status'])) {
-            $this->status = (string)$attributes['status'];
+        $transaction = (int)$response->attr('transaction_id', '0');
+        if ($response->has('status')) {
+            $this->status = (string)$response->attr('status');
         }
         $deferred = $this->waiting[$transaction] ?? null;
         unset($this->waiting[$transaction]);
         if ($deferred === null) {
             return;
         }
-        $error = $response->error;
-        if ($error !== null && isset($error['code'])) {
-            $deferred->reject(new \RuntimeException(trim((string)$error->message) ?: 'Xdebug error ' . $error['code']));
+        $error = $response->child('error');
+        if ($error !== null && $error->has('code')) {
+            $deferred->reject(new \RuntimeException(trim((string)$error->child('message')?->text) ?: 'Xdebug error ' . $error->attr('code')));
             return;
         }
         $deferred->resolve($response);
