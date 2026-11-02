@@ -105,8 +105,18 @@ final class ProjectInfo
                     $configs[] = ['id' => "webshot:$id", 'label' => "Browser check $id", 'group' => $id, 'icon' => 'globe', 'command' => ['bin/jumphp', 'webshot', $id, '6', '[[1,"Enter"]]'], 'kind' => 'webshot'];
                     $configs[] = ['id' => "serve:$id", 'label' => "Serve $id on localhost:8080", 'group' => $id, 'icon' => 'globe', 'command' => ['bin/jumphp', 'serve', $id], 'kind' => 'serve', 'url' => 'http://localhost:8080'];
                     $configs[] = ['id' => "standalone:$id", 'label' => "Executable of $id (Linux)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'export:standalone', $id], 'kind' => 'build'];
+                    $configs[] = ['id' => "standalone-windows:$id", 'label' => "Executable of $id (Windows)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'export:standalone', $id, '--windows'], 'kind' => 'build'];
+                    $configs[] = ['id' => "macos:$id", 'label' => "Mac app of $id (built on GitHub)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'macos', $id], 'kind' => 'build'];
+                    $configs[] = ['id' => "ios:$id", 'label' => "iPhone / iPad app of $id (built on GitHub)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'ios', $id], 'kind' => 'build'];
+                    $configs[] = ['id' => "android:$id", 'label' => "Android app of $id (built on GitHub)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'android', $id], 'kind' => 'build'];
+                    $configs[] = ['id' => "android-local:$id", 'label' => "Android app of $id (built here)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'android', $id, '--local'], 'kind' => 'build'];
+                    if (!$m['site']) {
+                        $configs[] = ['id' => "site-new:$id", 'label' => "Make the web site of $id", 'group' => $id, 'icon' => 'globe', 'command' => ['bin/jumphp', 'site:new', $id], 'kind' => 'build'];
+                    }
                 } else {
                     $configs[] = ['id' => "export:$id", 'label' => "Executable of $id (Linux)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'app:export', $id], 'kind' => 'build'];
+                    $configs[] = ['id' => "export-windows:$id", 'label' => "Executable of $id (Windows)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'app:export', $id, '--windows'], 'kind' => 'build'];
+                    $configs[] = ['id' => "export-macos:$id", 'label' => "Mac app of $id", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'app:export', $id, '--macos'], 'kind' => 'build'];
                 }
                 $configs[] = ['id' => "install:$id", 'label' => "composer install ($id)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'install', $id], 'kind' => 'tool'];
                 if ($m['site']) {

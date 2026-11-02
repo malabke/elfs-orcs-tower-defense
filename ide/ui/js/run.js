@@ -61,9 +61,20 @@ export class Runner {
       this.app.showTool('run');
       this.render();
       this.app.updateRunWidget();
+      return id;
     } catch (e) {
       notify(e.message, 'error', { title: 'Cannot run ' + config.label });
+      return null;
     }
+  }
+
+  /** Runs a configuration and resolves with its end ({code, image...}), or null when it could not start. */
+  async startAndWait(config, env = {}) {
+    const id = await this.start(config, env);
+    if (id === null || id === undefined) return null;
+    return new Promise((resolve) => {
+      const off = backend.on('run.exit', (p) => { if (p.id === id) { off?.(); resolve(p); } });
+    });
   }
 
   stop(run = this.runs.find((r) => r.code === undefined)) {

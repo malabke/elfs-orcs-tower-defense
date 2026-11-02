@@ -70,6 +70,7 @@ Games (<game> = a folder of games/, e.g. pong)
   shot <game> [frames] [out.png]   headless screenshot after N frames (default 120) -> var/screenshots/
   build <game>              browser build -> games/<game>/dist/web (static files)
   build:remote <game>       the game as a remote game (shared engine, files one by one) -> dist/remote
+  site:new <game> [--force] a first web site for the game in games/<game>/site/ (from game.yaml + screenshots of its demo)
   build:site <game>         the game's web site (site/) + the game in play/ -> dist/site (what deploy sends)
   siteshot <game>           headless Chrome on dist/site: desktop + phone screenshots, broken images, JS errors
   serve <game> [port]       serve the browser build on http://localhost:<port> (default 8080)
@@ -463,6 +464,8 @@ cmd_android() {
     esac
     shift
   done
+  # a game linked from its own repository (the IDE's copy of JumPHP): GitHub's build would push this copy, not the game
+  [ "$local_build" = 1 ] || [ ! -L "$ROOT/$dir" ] || die "$game is kept in its own repository: build its Android app here with --local (or put the game in a JumPHP project)"
   local state="$ROOT/$dir/android/app.json" code=0
   mkdir -p "$ROOT/$dir/android"
   if [ -f "$state" ]; then
@@ -582,6 +585,7 @@ cmd_apple() {
     shift
   done
   platforms="$(echo "${platforms:-macos ios}" | xargs)"
+  [ "$local_build" = 1 ] || [ ! -L "$ROOT/$dir" ] || die "$game is kept in its own repository: GitHub's Macs build from a JumPHP project (put the game in one), or --local on a Mac"
   local state="$ROOT/$dir/apple/app.json" build=0
   mkdir -p "$ROOT/$dir/apple"
   if [ -f "$state" ]; then
@@ -835,6 +839,21 @@ cmd_shot() {
     -e "JUMPHP_SCENE=${JUMPHP_SCENE:-}" -e "JUMPHP_SCENE_PARAMS=${JUMPHP_SCENE_PARAMS:-}" -e "JUMPHP_INPUT=${JUMPHP_INPUT:-}" \
     -- $(gl_wrap "$dir") php app.php
   echo "$ROOT/$dir/$out"
+}
+
+# a first web site for the game (games/<game>/site/, AGENTS.md §13) from its game.yaml and screenshots of its smoke demo
+cmd_site_new() {
+  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
+  ensure_vendor "$dir"
+  local shots="var/screenshots/site" smoke
+  rm -rf "${ROOT:?}/$dir/$shots" && mkdir -p "$ROOT/$dir/$shots"
+  # the scene shot: the game's self-playing demo (game.yaml smoke) when it has one
+  smoke="$(php_run "$dir" -- php -r 'require "vendor/autoload.php"; $s = JumPHP\Kernel\GameConfig::load(".")->get("smoke", []);
+    echo empty($s["scene"]) ? "" : $s["scene"] . "\t" . json_encode($s["params"] ?? new stdClass());' 2>/dev/null)" || smoke=""
+  say "screenshots of $game"
+  JUMPHP_SCENE="${smoke%%$'\t'*}" JUMPHP_SCENE_PARAMS="$([ -n "$smoke" ] && echo "${smoke#*$'\t'}")" JUMPHP_SHOT_EVERY=120 \
+    cmd_shot "$game" 600 "$shots/shot.png" >/dev/null
+  php_run . -- php tools/new-site.php "$dir" "$dir/$shots" "$@"
 }
 
 cmd_build() {
@@ -1186,6 +1205,7 @@ main() {
     build:remote) cmd_build_remote "$@" ;;
     build:site) cmd_build_site "$@" ;;
     siteshot) cmd_siteshot "$@" ;;
+    site:new) cmd_site_new "$@" ;;
     serve) cmd_serve "$@" ;;
     webshot) cmd_webshot "$@" ;;
     relay) cmd_relay "$@" ;;

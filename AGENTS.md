@@ -861,6 +861,8 @@ and `tools/site/`).
   `hreflang="x-default"` = the main one; canonical and `og:url` = the page itself, `og:locale` its language; a small menu
   of the languages (links `../<code>/`, `../` for the main one, each in its own language). `sitemap.xml`: one `<url>` per
   language with the `xhtml:link` alternates.
+- **A first version**: `bin/jumphp site:new <id>` writes one from the game itself (shots of its smoke scene, og.png,
+  favicon, SEO, robots.txt, sitemap.xml; never over an existing `site/`): a start to improve, not the end.
 - **Check it**: `bin/jumphp build:site <id>` then `bin/jumphp siteshot <id>`: it fails on a broken image, a
   JavaScript error, a missing title / description / `play/` link or sideways scrolling, and writes
   `var/screenshots/site-desktop.png` and `site-phone.png`: **open them** and look.

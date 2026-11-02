@@ -395,3 +395,43 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .tw-check { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); cursor: pointer; padding: 0 4px; border-radius: 4px; }
 .tw-check input { margin: 0; width: 12px; height: 12px; }
 .tw-check.on { color: var(--text); }
+
+/* the jumphp.net tool window: publish, settings, numbers, site, downloads, phone apps (publish.js) -------------- */
+.pub { padding: 10px 12px 24px; overflow: auto; height: 100%; user-select: text; font-size: 13px; }
+.pub-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.pub-title { font-weight: 600; font-size: 15px; }
+.pub-badge { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: var(--hover); color: var(--text-2); }
+.pub-badge[data-status="published"], .pub-badge[data-status="ready"] { background: color-mix(in srgb, var(--green) 25%, transparent); color: var(--text); }
+.pub-badge[data-status="failed"], .pub-badge[data-status="error"] { background: color-mix(in srgb, var(--red) 30%, transparent); color: var(--text); }
+.pub-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.pub a { color: var(--accent-2); text-decoration: none; cursor: pointer; }
+.pub a:hover { text-decoration: underline; }
+.pub-message { white-space: pre-wrap; font-size: 12px; background: var(--panel); padding: 6px 8px; border-radius: 4px; max-height: 120px; overflow: auto; }
+.pub-section { border-top: 1px solid var(--border-2); padding: 6px 0; }
+.pub-section > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.pub-body { padding: 4px 0 6px; display: flex; flex-direction: column; gap: 8px; }
+.pub-note, .pub-faint { color: var(--text-2); margin: 0; }
+.pub-faint { font-size: 12px; }
+.pub-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pub-check { display: flex; gap: 6px; align-items: center; }
+.pub-inline { display: flex; align-items: center; gap: 8px; }
+.pub-version { width: 90px; }
+.pub-numbers { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+.pub-numbers > div { background: var(--panel); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; }
+.pub-numbers b { font-size: 18px; }
+.pub-numbers span { color: var(--text-2); font-size: 11px; }
+.pub-chart { display: flex; align-items: flex-end; gap: 2px; height: 60px; background: var(--panel); border-radius: 6px; padding: 6px; }
+.pub-chart i { flex: 1; min-height: 1px; background: var(--accent); border-radius: 1px; }
+.pub-sub { margin: 8px 0 0; font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
+.pub-msg { background: var(--panel); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; }
+.pub-msg-head { color: var(--text-2); font-size: 11px; display: flex; gap: 4px; align-items: center; margin-bottom: 2px; }
+.pub-platform { display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--border-2); }
+.pub-platform .pub-row { grid-column: 1 / -1; }
+.pub-pname { font-weight: 600; }
+.pub-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.pub-steps li { color: var(--text); }
+.pub-command { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.pub-command code { flex: 1; background: var(--panel); padding: 4px 6px; border-radius: 4px; font-size: 12px; overflow-x: auto; white-space: nowrap; }
+.pub .field { align-items: stretch; text-align: left; }
+.pub-inline.field { flex-direction: row; align-items: center; justify-content: flex-start; }
+.pub-body > .btn { align-self: flex-start; }

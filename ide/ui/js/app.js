@@ -10,6 +10,7 @@ import { Git } from './git.js';
 import { Runner, Problems, Structure, Hierarchy } from './run.js';
 import { Welcome } from './welcome.js';
 import { GamePanel } from './game.js';
+import { PublishPanel } from './publish.js';
 import { ClaudePanel } from './claude.js';
 
 const $ = (id) => document.getElementById(id);
@@ -85,6 +86,7 @@ class App {
     this.find = new FindPanel(this);
     if (this.project.capabilities?.preview) this.game = new GamePanel(this);
     if (this.project.capabilities?.claude) this.claude = new ClaudePanel(this);
+    if (backend.kind === 'native' && this.project.playground) this.publishPanel = new PublishPanel(this);
     this.console = { append: (source, text) => { if (this.gitConsole) this.gitConsole.textContent += text; } };
     this.registerTools();
     this.registerActions();
@@ -113,6 +115,7 @@ class App {
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
     if (this.claude) T('claude', 'right', 'Claude', 'claude', this.claude, 'Alt+8');
+    if (this.publishPanel) T('publish', 'right', 'jumphp.net', 'globe', this.publishPanel, 'Alt+J');
     if (caps.log) T('git', 'bottom', 'Git', 'log', { title: () => 'Git', node: this.git.logNode, actions: () => [el('button', { title: 'Refresh', onclick: () => this.git.showLog() }, icon('refresh'))] }, 'Alt+9');
   }
 
@@ -197,6 +200,7 @@ class App {
     if (id === 'hierarchy') this.hierarchy.update();
     if (id === 'git' && !this.git.logNode.firstChild) this.git.showLog();
     if (id === 'problems') this.problems.render();
+    view.shown?.();
     if (!quiet && id === 'project') this.tree.node.focus();
     this.editors?.layout();
   }
