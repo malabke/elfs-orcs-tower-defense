@@ -75,6 +75,7 @@ cmd_tauri_download() {
       mv "$out.part" "$out"
       [ "$p" = linux-x86_64 ] || [ "$p" = macos-universal ] && chmod 755 "$out"
       touch "$out"
+      echo "$key" > "$(dirname "$out")/.key"    # the sources it was built from (tauri_lib_current)
       say "tauri-$key: build/tauri/$p/$file"
     else
       rm -f "$out.part"
@@ -83,6 +84,17 @@ cmd_tauri_download() {
     fi
   done
   return $status
+}
+
+# the Windows / macOS library (they can not be built here) of THESE sources of tauri/: downloaded again when it is
+# missing or came from other sources (a library of older sources lacks functions TauriRuntime declares: the exported
+# app does not start, "Failed resolving C function"); fails rather than packing a stale one
+ensure_tauri_platform_lib() {
+  local p="$1" asset file
+  read -r asset file <<<"$(tauri_asset "$p")"
+  if [ -f "$ROOT/build/tauri/$p/$file" ] && [ "$(cat "$ROOT/build/tauri/$p/.key" 2>/dev/null)" = "$(tauri_key)" ]; then return 0; fi
+  cmd_tauri_download "$p" \
+    || die "no $p library for these sources of tauri/ (tauri-$(tauri_key)): run the GitHub workflow tauri (Actions > tauri), then again"
 }
 
 # the library, downloaded (the release of these sources) or built, when missing or older than its sources
@@ -205,8 +217,7 @@ cmd_app_export() {
       lib="$TAURI_LIB"
     else
       lib="build/tauri/windows-x86_64/jumphp_tauri.dll"
-      [ -f "$ROOT/$lib" ] || cmd_tauri_download windows-x86_64 \
-        || die "no Windows library for these sources of tauri/: run the GitHub workflow tauri (Actions > tauri), then again"
+      ensure_tauri_platform_lib windows-x86_64
     fi
     JUMPHP_STANDALONE_EXTENSIONS=tools/app-extensions.txt JUMPHP_STANDALONE_SPC=spc-app \
     JUMPHP_STANDALONE_BOOT='JumPHP\Tauri\App' JUMPHP_STANDALONE_NATIVE="$lib" \
@@ -221,8 +232,7 @@ cmd_app_export() {
 # app:export --macos: <app>-macos.zip holding <Title>.app (Apple silicon + Intel executables, the universal library)
 app_export_macos() {
   local app="$1" dir="$2" lib="build/tauri/macos-universal/libjumphp_tauri.dylib" arch
-  [ -f "$ROOT/$lib" ] || cmd_tauri_download macos-universal \
-    || die "no macOS library for these sources of tauri/: run the GitHub workflow tauri (Actions > tauri), then again"
+  ensure_tauri_platform_lib macos-universal
   for arch in arm64 x86_64; do
     JUMPHP_STANDALONE_EXTENSIONS=tools/app-extensions.txt JUMPHP_STANDALONE_SPC=spc-app \
     JUMPHP_STANDALONE_BOOT='JumPHP\Tauri\App' JUMPHP_STANDALONE_NATIVE="$lib" JUMPHP_STANDALONE_NATIVE_DIR=macos-universal \
