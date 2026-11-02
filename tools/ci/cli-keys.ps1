@@ -64,7 +64,7 @@ foreach ($keys in @('a', 'Milk', "`r", 'q')) {
 }
 if (-not $p.WaitForExit(15000)) { $p.Kill(); throw 'the app did not end with q: the keys did not reach its screen' }
 $file = Join-Path $Data 'tasks.json'
-if (-not (Test-Path $file)) { throw "no $file: the task was not added" }
+if (-not (Test-Path $file)) { throw "no ${file}: the task was not added" }
 $tasks = Get-Content $file -Raw
 Write-Output $tasks
 if ($tasks -notmatch 'Milk') { throw 'the task typed is not in tasks.json' }
