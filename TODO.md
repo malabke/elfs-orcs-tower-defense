@@ -149,10 +149,10 @@ a site.
 ## jumphp.net: big downloads are slow and sometimes cut
 
 Seen 2026-11-02: the installers handed out by jumphp.net (/installers/download/<id>/<platform>, 20-32 MB) come at
-~0.4-3 MB/s through Cloudflare, and two downloads out of six stopped half way (curl: partial file). Serve them faster
-and resumable: X-Sendfile / FrankenPHP's file server for the made installers instead of PHP streaming them, check that
-Range requests work through Cloudflare, or redirect to a GitHub release asset / a CDN for the bases; the installers
-themselves already download their package's files with retries.
+~0.4-3 MB/s through Cloudflare, and two downloads out of six stopped half way (curl: partial file). Decided
+(2026-11-02): the executables stay behind Cloudflare (no download host around it). Within that: Cloudflare caching
+them (a cache rule on /installers/download/, the download counted another way), X-Sendfile / FrankenPHP's file
+server instead of PHP streaming them, Range requests through Cloudflare so a cut download resumes.
 
 ## Cleaning
 
