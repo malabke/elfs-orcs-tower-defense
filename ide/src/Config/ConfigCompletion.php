@@ -1,0 +1,280 @@
+<?php
+
+namespace JumPHP\Ide\Config;
+
+use JumPHP\Ide\Php\Index;
+
+/**
+ * Completion in a game's YAML files: config/game.yaml (its keys, with what each one does, and their values: scenes,
+ * languages, booleans, key names...) and config/input.yaml (actions, then key / pad / touch / mouse names).
+ * The YAML is read by its indentation: the keys above the cursor give where it is.
+ */
+final class ConfigCompletion
+{
+    private const LANGS = ['fr', 'en', 'es', 'de', 'it', 'pt', 'nl', 'pl', 'ru', 'uk', 'tr', 'ja', 'zh', 'ko'];
+    private const BOOL = ['true', 'false'];
+
+    public function __construct(private ?Index $index = null)
+    {
+    }
+
+    /** Whether a file is one this completes. */
+    public static function handles(string $path): bool
+    {
+        return (bool)preg_match('#(^|/)config/(game|input)\.ya?ml$#', $path);
+    }
+
+    /** @return array{items: list<array<string, mixed>>, incomplete: bool} */
+    public function complete(string $path, string $text, int $line, int $column): array
+    {
+        if (!self::handles($path)) {
+            return ['items' => [], 'incomplete' => false];
+        }
+        $schema = str_contains(basename($path), 'input') ? self::input() : self::game();
+        $lines = preg_split('/\R/', $text) ?: [];
+        $current = $lines[$line - 1] ?? '';
+        $before = substr($current, 0, max(0, $column - 1));
+        $indent = strlen($current) - strlen(ltrim($current, ' '));
+        $path = $this->pathAbove($lines, $line - 1, $before !== '' && trim($before) === '' ? strlen($before) : $indent);
+        $node = $this->node($schema, $path);
+
+        // "key: [A, B, |" or "key: |": a value of key
+        if (preg_match('/^\s*(?:-\s+)?([\w-]+)\s*:\s*(.*)$/', $before, $m)) {
+            $child = $this->child($node, $m[1]);
+            if ($child === null) {
+                return ['items' => [], 'incomplete' => false];
+            }
+            $value = $m[2];
+            if (str_starts_with(ltrim($value), '[')) {
+                return ['items' => $this->values($child['items'] ?? null), 'incomplete' => false];
+            }
+            if (preg_match('/^[\'"]?[\w\\\\:. -]*$/', $value)) {
+                return ['items' => $this->values($child['values'] ?? null), 'incomplete' => false];
+            }
+            return ['items' => [], 'incomplete' => false];
+        }
+        // "- |": an item of the list above
+        if (preg_match('/^\s*-\s+[\w:. -]*$/', $before)) {
+            return ['items' => $this->values($node['items'] ?? null), 'incomplete' => false];
+        }
+        // "  ke|": a key here
+        if (preg_match('/^\s*[\w-]*$/', $before)) {
+            $present = $this->siblings($lines, $line - 1, $indent);
+            $items = [];
+            foreach ($node['keys'] ?? [] as $key => $child) {
+                if (isset($present[$key])) {
+                    continue;
+                }
+                $items[] = ['label' => $key, 'kind' => 'property', 'detail' => $child['doc'] ?? '',
+                    'documentation' => $child['doc'] ?? '', 'insertText' => $key . ': ',
+                    'sortText' => '0' . $key];
+            }
+            return ['items' => $items, 'incomplete' => false];
+        }
+        return ['items' => [], 'incomplete' => false];
+    }
+
+    /**
+     * The keys above a line, outermost first ("game", "smoke"...).
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function pathAbove(array $lines, int $at, int $indent): array
+    {
+        $path = [];
+        for ($i = $at - 1; $i >= 0 && $indent > 0; $i--) {
+            $text = $lines[$i];
+            if (trim($text) === '' || str_starts_with(ltrim($text), '#')) {
+                continue;
+            }
+            $own = strlen($text) - strlen(ltrim($text, ' '));
+            if ($own < $indent) {
+                if (preg_match('/^\s*(?:-\s+)?([\w-]+)\s*:/', $text, $m)) {
+                    array_unshift($path, $m[1]);
+                }
+                $indent = $own;
+            }
+        }
+        return $path;
+    }
+
+    /** @param list<string> $lines @return array<string, true> the keys already written beside this line */
+    private function siblings(array $lines, int $at, int $indent): array
+    {
+        $out = [];
+        foreach ([[-1, -1], [1, count($lines)]] as [$step, $end]) {
+            for ($i = $at + $step; $i !== $end && $i >= 0 && $i < count($lines); $i += $step) {
+                $text = $lines[$i];
+                if (trim($text) === '' || str_starts_with(ltrim($text), '#')) {
+                    continue;
+                }
+                $own = strlen($text) - strlen(ltrim($text, ' '));
+                if ($own < $indent) {
+                    break;
+                }
+                if ($own === $indent && preg_match('/^\s*([\w-]+)\s*:/', $text, $m)) {
+                    $out[$m[1]] = true;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /** @param array<string, mixed> $schema @param list<string> $path @return array<string, mixed> */
+    private function node(array $schema, array $path): array
+    {
+        $node = $schema;
+        foreach ($path as $key) {
+            $node = $this->child($node, $key) ?? [];
+        }
+        return $node;
+    }
+
+    /** @param array<string, mixed> $node @return array<string, mixed>|null */
+    private function child(array $node, string $key): ?array
+    {
+        return $node['keys'][$key] ?? $node['any'] ?? null;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function values(array|string|null $values): array
+    {
+        $list = match ($values) {
+            'scenes' => $this->scenes(),
+            'keys' => self::keyNames(),
+            'langs' => self::LANGS,
+            null => [],
+            default => (array)$values,
+        };
+        $items = [];
+        foreach ($list as $i => $value) {
+            $items[] = ['label' => $value, 'kind' => $values === 'scenes' ? 'class' : 'value', 'insertText' => $value,
+                'sortText' => sprintf('%04d', $i)];
+        }
+        return $items;
+    }
+
+    /** @return list<string> the scenes of the project (classes under a Scene folder or namespace) */
+    private function scenes(): array
+    {
+        if ($this->index === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->index->classNames('Scene', 400) as $class) {
+            if ($class['path'] !== null && $class['kind'] === 'class' && preg_match('/\\\\(Scene|Form)\\\\|Scene$|Form$/', $class['name'])) {
+                $out[] = $class['name'];
+            }
+        }
+        sort($out);
+        return array_values(array_unique($out));
+    }
+
+    /** @return list<string> what config/input.yaml binds: SDL key names, gamepad, touch, mouse */
+    public static function keyNames(): array
+    {
+        $keys = ['Left', 'Right', 'Up', 'Down', 'Space', 'Return', 'Escape', 'Tab', 'Backspace', 'Delete', 'Insert', 'Home', 'End',
+            'PageUp', 'PageDown', 'Left Shift', 'Right Shift', 'Left Ctrl', 'Right Ctrl', 'Left Alt', 'Right Alt'];
+        foreach (range('A', 'Z') as $letter) {
+            $keys[] = $letter;
+        }
+        foreach (range(0, 9) as $digit) {
+            $keys[] = (string)$digit;
+        }
+        foreach (range(1, 12) as $f) {
+            $keys[] = "F$f";
+        }
+        foreach (range(0, 9) as $digit) {
+            $keys[] = "Keypad $digit";
+        }
+        foreach (['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'select', 'start', 'home', 'ls', 'rs', 'up', 'down', 'left', 'right',
+            'ls_left', 'ls_right', 'ls_up', 'ls_down', 'rs_left', 'rs_right', 'rs_up', 'rs_down'] as $button) {
+            $keys[] = "pad0:$button";
+        }
+        foreach (['tap', 'left', 'right', 'up', 'down'] as $touch) {
+            $keys[] = "touch:$touch";
+        }
+        foreach ([1, 2, 3] as $button) {
+            $keys[] = "mouse:$button";
+        }
+        return $keys;
+    }
+
+    /** @return array<string, mixed> config/input.yaml */
+    private static function input(): array
+    {
+        $binding = ['doc' => 'Keys, pad buttons, touch or mouse', 'items' => 'keys', 'values' => ['[]']];
+        $actions = [];
+        foreach (['up', 'down', 'left', 'right', 'confirm', 'back', 'pause'] as $action) {
+            $actions[$action] = ['doc' => "Engine action (redefining it replaces its bindings)"] + $binding;
+        }
+        return ['keys' => [
+            'actions' => ['doc' => 'The game\'s actions => their bindings: jump: [Space, pad0:a, touch:tap]', 'keys' => $actions, 'any' => $binding],
+        ]];
+    }
+
+    /** @return array<string, mixed> config/game.yaml (JumPHP\Kernel\GameConfig, AGENTS.md section 4) */
+    private static function game(): array
+    {
+        $key = fn (string $doc, array|string|null $values = null, array $more = []) => ['doc' => $doc] + ($values !== null ? ['values' => $values] : []) + $more;
+        $langs = [];
+        foreach (self::LANGS as $lang) {
+            $langs[$lang] = $key("The description in this language");
+        }
+        return ['keys' => ['game' => ['doc' => 'The game (every key optional)', 'keys' => [
+            'id' => $key('Lower case, unique (a-z0-9-)'),
+            'title' => $key('The title (page title, portal)'),
+            'version' => $key('Its version (0.1.0)'),
+            'description' => $key('One sentence about it'),
+            'descriptions' => $key('The description per language: the playground shows the visitor\'s', null, ['keys' => $langs]),
+            'width' => $key('Virtual width in pixels (320)', ['320', '256', '384', '640']),
+            'height' => $key('Virtual height in pixels (180)', ['180', '224', '192', '240', '360']),
+            'scale' => $key('Desktop window = width x scale', ['2', '3', '4']),
+            'integer_scale' => $key('Scale by whole factors only (sharper, bigger borders)', self::BOOL),
+            'view' => $key('fixed: the virtual size; window: the window\'s size, pixel for pixel (forms)', ['fixed', 'window']),
+            'fullscreen' => $key('Start full screen (desktop)', self::BOOL),
+            'vsync' => $key('Follow the screen\'s refresh', self::BOOL),
+            'max_fps' => $key('Desktop frame cap', ['60', '120', '144']),
+            'background' => $key('Letterbox colour [r, g, b]', ['[0, 0, 0]']),
+            'start_scene' => $key('The first scene', 'scenes'),
+            'start_params' => $key('Its enter() params', ['{}']),
+            'lang' => $key('Default language (config/lang.yaml)', 'langs'),
+            'net_url' => $key('The relay server', ['ws://localhost:8090/ws']),
+            'smoke' => $key('What bin/jumphp test runs headless 600 frames: a self-playing demo', null, ['keys' => [
+                'scene' => $key('The scene', 'scenes'),
+                'params' => $key('Its enter() params', ['{ demo: true }']),
+            ]]),
+            'online' => $key('The game has online play (shown by the portal)', self::BOOL),
+            'touch' => $key('The phones\' on-screen pad', null, ['keys' => [
+                'a' => $key('Key of the A button', 'keys'),
+                'b' => $key('Key of the B button', 'keys'),
+                'start' => $key('Key of START', 'keys'),
+                'select' => $key('Key of a 4th button', 'keys'),
+                'pad' => $key('stick: a floating joystick (8 directions)', ['stick']),
+                'labels' => $key('Button labels {a: JUMP, ...}', ['{}']),
+                'fullscreen' => $key('Full screen + landscape at the first tap', self::BOOL),
+            ]]),
+            'controls' => $key('One line of help shown by the web page / portal'),
+            'runtime' => $key('async: PHP 8.6 ZTS + TrueAsync on the desktop (threads)', ['default', 'async']),
+            'pause_scene' => $key('Pushed when the tab is hidden / the window loses the focus', 'scenes'),
+            'pause_on_blur' => $key('Pause when the window loses the focus', self::BOOL),
+            'mute_when_hidden' => $key('Silence while hidden', self::BOOL),
+            'pwa' => $key('Installable, plays offline', ['true', 'false'], ['keys' => [
+                'name' => $key('Its name'), 'short_name' => $key('The name under the icon (12 characters)'),
+                'display' => $key('', ['fullscreen', 'standalone']), 'orientation' => $key('', ['landscape', 'portrait', 'any']),
+                'theme_color' => $key('#rrggbb'), 'background_color' => $key('#rrggbb'),
+            ]]),
+            'debug_key' => $key('The FPS overlay key', 'keys'),
+            'fullscreen_key' => $key('The fullscreen key (desktop)', 'keys'),
+            'kind' => $key('gui: an app made of forms (JumPHP\\Gui)', ['gui']),
+            'ui' => $key('webview: a desktop app (HTML + PHP, Tauri); hybrid: a game with HTML windows', ['webview', 'hybrid']),
+            'main' => $key('The class that boots a desktop app (App\\Main)', ['App\\Main', 'App\\Desktop']),
+            'app' => $key('Desktop app settings (docs/tauri.md)', null, ['keys' => [
+                'pages' => $key('Its HTML pages (ui/)'), 'window' => $key('Its window'), 'embed' => $key('The game inside the Tauri window', self::BOOL),
+                'update' => $key('Updates {url: <base>/update.json}'),
+            ]]),
+            'php_ini' => $key('php.ini lines of the exported executable ("a=1\\nb=2")'),
+        ]]]];
+    }
+}

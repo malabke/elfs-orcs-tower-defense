@@ -52,6 +52,7 @@ final class Types
                 continue;
             }
             $part = $isArray ? substr($part, 0, -2) : $part;
+            $part = self::base($part);
             if ($part !== '' && !in_array(strtolower($part), self::SCALARS, true) && preg_match('/^[A-Za-z_\\\\][\w\\\\]*$/', $part)) {
                 $out[] = ltrim($part, '\\');
             }
@@ -82,27 +83,114 @@ final class Types
         return array_values(array_filter($parts, fn ($p) => $p !== ''));
     }
 
+    /** "Box<Hero>" -> "Box"; "Hero" -> "Hero" (a type's name without its generic arguments). */
+    public static function base(string $type): string
+    {
+        $pos = strpos($type, '<');
+        return $pos === false ? $type : substr($type, 0, $pos);
+    }
+
+    /** "Box<int, Hero>" -> ["int", "Hero"]: the generic arguments of one type (not a union). */
+    public static function args(string $type): array
+    {
+        if (!preg_match('/^[^<{]+<(.*)>$/s', $type, $m)) {
+            return [];
+        }
+        return self::splitAt($m[1], ',');
+    }
+
     /**
-     * A docblock type ("Foo|null", "list<Bar>", "?Baz", "\X\Y[]") with its class names resolved in a file's namespace
-     * and use statements. Generic lists of one class become "Class[]".
+     * The fields of an array shape: "array{hero: Hero, count?: int}" -> ["hero" => "Hero", "count" => "int"]
+     * (a list shape "array{Hero, int}": keys 0, 1...). Null: not a shape.
+     *
+     * @return array<string|int, string>|null
+     */
+    public static function shape(string $type): ?array
+    {
+        if (!preg_match('/^(?:array|list)\{(.*)\}$/s', trim($type), $m)) {
+            return null;
+        }
+        $fields = [];
+        $i = 0;
+        foreach (self::splitAt($m[1], ',') as $field) {
+            if (preg_match('/^([\w-]+|\'[^\']*\'|"[^"]*")\??\s*:\s*(.+)$/s', $field, $f)) {
+                $fields[trim($f[1], '\'"')] = trim($f[2]);
+            } else {
+                $fields[$i++] = $field;
+            }
+        }
+        return $fields;
+    }
+
+    /** Splits at a separator at the top level (outside <>, {}, ()). @return list<string> */
+    public static function splitAt(string $text, string $separator): array
+    {
+        $parts = [];
+        $depth = 0;
+        $current = '';
+        foreach (str_split($text) as $char) {
+            if ($char === '<' || $char === '(' || $char === '{') {
+                $depth++;
+            } elseif ($char === '>' || $char === ')' || $char === '}') {
+                $depth--;
+            }
+            if ($char === $separator && $depth === 0) {
+                $parts[] = trim($current);
+                $current = '';
+            } else {
+                $current .= $char;
+            }
+        }
+        $parts[] = trim($current);
+        return array_values(array_filter($parts, fn ($p) => $p !== ''));
+    }
+
+    /** The generic names whose last argument is what they hold ("list<Foo>" holds Foo). */
+    private const LISTS = ['list', 'array', 'iterable', 'non-empty-list', 'non-empty-array', 'generator', 'traversable', 'iterator'];
+
+    /**
+     * A docblock type ("Foo|null", "list<Bar>", "?Baz", "\X\Y[]", "Box<Foo>", "array{a: Foo}") with its class names
+     * resolved in a file's namespace and use statements. Generic lists of one class become "Class[]"; generic classes
+     * keep their arguments ("App\Box<App\Hero>"), shapes their fields; template names ($templates) stay as they are.
      *
      * @param array<string, string> $uses alias (lower case) => fully qualified name
+     * @param list<string> $templates
      */
-    public static function resolveDoc(string $type, string $namespace, array $uses): string
+    public static function resolveDoc(string $type, string $namespace, array $uses, array $templates = []): string
     {
         $out = [];
         foreach (self::split(trim($type)) as $part) {
             $nullable = str_starts_with($part, '?');
             $part = ltrim($part, '?');
-            if (preg_match('/^(?:list|array|iterable|\\\\?Generator|\\\\?Traversable|\\\\?Iterator)<(?:[^,<>]+,\s*)?([\\\\\w]+)>$/i', $part, $m)) {
-                $part = $m[1] . '[]';
-            }
             $suffix = '';
             while (str_ends_with($part, '[]')) {
                 $suffix .= '[]';
                 $part = substr($part, 0, -2);
             }
-            if (in_array(strtolower($part), self::SCALARS, true) || !preg_match('/^\\\\?[A-Za-z_][\w\\\\]*$/', $part)) {
+            if (str_starts_with($part, '(') && str_ends_with($part, ')')) {
+                $inner = self::resolveDoc(substr($part, 1, -1), $namespace, $uses, $templates);
+                $out[] = $suffix !== '' ? (str_contains($inner, '|') ? "array<$inner>" : $inner . $suffix) : $inner;
+            } elseif (($fields = self::shape($part)) !== null) {
+                $resolved = [];
+                foreach ($fields as $key => $field) {
+                    $resolved[] = (is_int($key) ? '' : "$key: ") . self::resolveDoc($field, $namespace, $uses, $templates);
+                }
+                $out[] = 'array{' . implode(', ', $resolved) . '}' . $suffix;
+            } elseif (preg_match('/^(\\\\?[\w\\\\-]+)<(.*)>$/s', $part, $m)) {
+                $args = array_map(fn ($a) => self::resolveDoc($a, $namespace, $uses, $templates), self::splitAt($m[2], ','));
+                $name = ltrim($m[1], '\\');
+                if (in_array(strtolower($name), self::LISTS, true) && $args) {
+                    // the element type: the last argument (Generator<K, V, ...>: the second)
+                    $element = strtolower($name) === 'generator' && count($args) > 1 ? $args[1] : $args[count($args) - 1];
+                    $out[] = (preg_match('/^[\w\\\\]+(?:\[\])*$/', $element) ? $element . '[]' : "array<$element>") . $suffix;
+                } elseif (in_array(strtolower($name), self::SCALARS, true) || $name === 'class-string' || $name === 'key-of' || $name === 'value-of') {
+                    $out[] = strtolower($name) . '<' . implode(', ', $args) . '>' . $suffix;
+                } else {
+                    $out[] = self::resolveName($m[1], $namespace, $uses) . '<' . implode(', ', $args) . '>' . $suffix;
+                }
+            } elseif (in_array($part, $templates, true)) {
+                $out[] = $part . $suffix;
+            } elseif (in_array(strtolower($part), self::SCALARS, true) || !preg_match('/^\\\\?[A-Za-z_][\w\\\\]*$/', $part)) {
                 $out[] = (in_array(strtolower($part), self::SCALARS, true) ? strtolower($part) : $part) . $suffix;
             } else {
                 $out[] = self::resolveName($part, $namespace, $uses) . $suffix;
@@ -112,6 +200,20 @@ final class Types
             }
         }
         return implode('|', array_unique($out));
+    }
+
+    /**
+     * Replaces template names by their types ("T" -> "App\Hero") in a type.
+     *
+     * @param array<string, string> $bindings template name => type
+     */
+    public static function substitute(string $type, array $bindings): string
+    {
+        if ($bindings === []) {
+            return $type;
+        }
+        $names = implode('|', array_map(fn ($n) => preg_quote($n, '/'), array_keys($bindings)));
+        return (string)preg_replace_callback('/(?<![\w\\\\$])(' . $names . ')(?![\w\\\\])/', fn ($m) => $bindings[$m[1]], $type);
     }
 
     /** @param array<string, string> $uses */

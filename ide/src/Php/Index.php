@@ -17,7 +17,7 @@ use JumPHP\Ide\Workspace\Workspace;
  */
 final class Index
 {
-    public const VERSION = 3;
+    public const VERSION = 4;
 
     /** @var array<string, array<string, mixed>> path => file entry (project files) */
     private array $files = [];
@@ -33,6 +33,14 @@ final class Index
 
     /** @var array<string, list<string>> PSR-4 prefix => folders (absolute, or project paths) */
     private array $psr4 = [];
+
+    /** @var array<string, array{0: string, 1: string}> Composer's classmap: lower fqn => [fqn, path] */
+    private array $classmap = [];
+
+    /** @var list<string> Composer's "files" (functions of the libraries), analyzed at the first need */
+    private array $autoloadFiles = [];
+
+    private bool $autoloadFilesLoaded = false;
 
     /** @var list<string>|null project PHP files still to (re)analyze */
     private ?array $pending = null;
@@ -226,6 +234,9 @@ final class Index
     {
         $key = strtolower(ltrim($fqn, '\\'));
         if (!isset($this->functions[$key]) && Builtins::functionInfo($key) === null) {
+            $this->loadAutoloadFiles();
+        }
+        if (!isset($this->functions[$key]) && Builtins::functionInfo($key) === null) {
             $this->loadStubs();
         }
         $path = $this->functions[$key] ?? null;
@@ -345,6 +356,15 @@ final class Index
                 }
             }
         }
+        foreach ($this->classmap as $key => [$fqn]) {
+            if (!isset($seen[$key]) && $match($fqn)) {
+                $seen[$key] = true;
+                $out[] = ['name' => $fqn, 'path' => null, 'kind' => 'class'];
+                if (count($out) >= $limit * 4) {
+                    return $out;
+                }
+            }
+        }
         foreach ($this->psr4 as $prefix => $dirs) {
             foreach ($dirs as $dir) {
                 foreach ($this->libraryFiles($dir) as $relative) {
@@ -362,13 +382,17 @@ final class Index
         return $out;
     }
 
-    /** @return list<array<string, mixed>> project functions */
+    /** @return list<array<string, mixed>> the functions of the project, of its libraries (Composer "files") and of the stubs */
     public function functionList(): array
     {
+        $this->loadAutoloadFiles();
+        $this->loadStubs();
         $out = [];
-        foreach ($this->files as $path => $entry) {
-            foreach ($entry['functions'] as $function) {
-                $out[] = $function + ['path' => $path];
+        foreach ([$this->files, $this->libraries] as $entries) {
+            foreach ($entries as $path => $entry) {
+                foreach ($entry['functions'] as $function) {
+                    $out[] = $function + ['path' => $path];
+                }
             }
         }
         return $out;
@@ -417,6 +441,9 @@ final class Index
     private function findLibraries(): void
     {
         $this->psr4 = [];
+        $this->classmap = [];
+        $this->autoloadFiles = [];
+        $this->autoloadFilesLoaded = false;
         $root = $this->workspace->localPath();
         foreach ($this->workspace->files() as $manifest => $meta) {
             if (basename($manifest) !== 'composer.json' || substr_count($manifest, '/') > 3) {
@@ -428,6 +455,7 @@ final class Index
                 continue;
             }
             $base = dirname($vendor) === '.' ? '' : dirname($vendor);
+            $this->readComposerLists($vendor, $base);
             $text = $this->workspace->read($path);
             if (!preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'\s*=>\s*array\((.*?)\),?\n/s", $text, $entries, PREG_SET_ORDER)) {
                 continue;
@@ -463,9 +491,84 @@ final class Index
         uksort($this->psr4, fn ($a, $b) => strlen($b) <=> strlen($a));
     }
 
+    /** Composer's autoload_classmap.php and autoload_files.php of a vendor/ folder (read, never run). */
+    private function readComposerLists(string $vendor, string $base): void
+    {
+        $paths = function (string $file) use ($vendor, $base): array {
+            $out = [];
+            if (!$this->workspace->exists($file)) {
+                return $out;
+            }
+            preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'\s*=>\s*\\$(vendorDir|baseDir)\s*\.\s*'([^']*)'/", $this->workspace->read($file), $m, PREG_SET_ORDER);
+            foreach ($m as [, $key, $var, $sub]) {
+                $out[stripcslashes($key)] = $this->projectPath(ltrim(($var === 'vendorDir' ? $vendor : $base) . $sub, '/'));
+            }
+            return $out;
+        };
+        foreach ($paths("$vendor/composer/autoload_classmap.php") as $class => $path) {
+            // an optimized autoloader lists every PSR-4 class too: those are found by their prefix anyway
+            if (count($this->classmap) < 100000 && !str_starts_with($path, "$vendor/composer/")) {
+                $this->classmap[strtolower($class)] ??= [$class, $path];
+            }
+        }
+        foreach ($paths("$vendor/composer/autoload_files.php") as $path) {
+            $this->autoloadFiles[] = $path;
+        }
+    }
+
+    /** A path under the project, or absolute when a link leads out of it. */
+    private function projectPath(string $dir): string
+    {
+        $root = $this->workspace->localPath();
+        if ($root !== null) {
+            $real = realpath("$root/$dir");
+            if ($real !== false) {
+                $real = str_replace('\\', '/', $real);
+                return str_starts_with($real, "$root/") ? substr($real, strlen($root) + 1) : $real;
+            }
+        }
+        return $dir;
+    }
+
+    /** Analyzes a library file once (classes and functions it declares). */
+    private function loadLibraryFile(string $path): bool
+    {
+        if (isset($this->files[$path]) || isset($this->libraries[$path])) {
+            return true;
+        }
+        $content = $this->libraryRead($path);
+        if ($content === null) {
+            return false;
+        }
+        $entry = Analyzer::analyze($content) + ['path' => $path, 'mtime' => 0.0];
+        $entry['refs'] = [];
+        $this->libraries[$path] = $entry;
+        $this->register($entry);
+        return true;
+    }
+
+    /** The libraries' functions (Composer "files"), analyzed when first needed. */
+    private function loadAutoloadFiles(): void
+    {
+        if ($this->autoloadFilesLoaded) {
+            return;
+        }
+        $this->autoloadFilesLoaded = true;
+        if (!$this->psr4) {
+            $this->findLibraries();
+            $this->autoloadFilesLoaded = true;
+        }
+        foreach (array_slice($this->autoloadFiles, 0, 400) as $path) {
+            $this->loadLibraryFile($path);
+        }
+    }
+
     private function loadLibraryClass(string $fqn): void
     {
         $fqn = ltrim($fqn, '\\');
+        if (isset($this->classmap[strtolower($fqn)]) && $this->loadLibraryFile($this->classmap[strtolower($fqn)][1])) {
+            return;
+        }
         foreach ($this->psr4 as $prefix => $dirs) {
             if (!str_starts_with($fqn, $prefix)) {
                 continue;
@@ -558,6 +661,14 @@ final class Index
                     if ($file->isFile() && $file->getExtension() === 'php' && count($out) < 20000) {
                         $out[] = str_replace('\\', '/', substr($file->getPathname(), strlen($dir) + 1));
                     }
+                }
+            }
+        }
+        if ($full === null) {
+            // a workspace without local files (the web IDE, tests): its own listing, vendor/ included
+            foreach (array_keys($this->workspace->files(true)) as $path) {
+                if (str_starts_with($path, "$key/") && str_ends_with($path, '.php') && count($out) < 20000) {
+                    $out[] = substr($path, strlen($key) + 1);
                 }
             }
         }

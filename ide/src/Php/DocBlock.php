@@ -20,6 +20,12 @@ final class DocBlock
     /** @var array<string, array{type: string, static: bool, params: string}> @method name => ... */
     public array $methods = [];
 
+    /** @var array<string, ?string> @template name => its bound ("of Foo"), or null */
+    public array $templates = [];
+
+    /** @var list<string> @extends / @implements / @use types with their generic arguments ("Collection<Hero>") */
+    public array $inherits = [];
+
     public static function parse(?string $doc): self
     {
         $block = new self();
@@ -53,7 +59,7 @@ final class DocBlock
 
     private function tag(string $line): void
     {
-        $type = '((?:[^\s<>(){}]|<[^>]*>|\{[^}]*\})+)';
+        $type = '((?:[^\s<>(){}]|<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>|\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\))+)';
         if (preg_match('/^@(?:phpstan-|psalm-)?var\s+' . $type . '(?:\s+\$(\w+))?/', $line, $m)) {
             $this->var = $m[1];
             $this->varName = $m[2] ?? null;
@@ -65,6 +71,10 @@ final class DocBlock
             $this->properties[$m[2]] = $m[1];
         } elseif (preg_match('/^@method\s+(static\s+)?(?:' . $type . '\s+)?(\w+)\s*\(([^)]*)\)/', $line, $m)) {
             $this->methods[$m[3]] = ['type' => $m[2] !== '' ? $m[2] : 'mixed', 'static' => $m[1] !== '', 'params' => $m[4]];
+        } elseif (preg_match('/^@(?:phpstan-|psalm-)?template(?:-covariant|-contravariant)?\s+(\w+)(?:\s+(?:of|as)\s+' . $type . ')?/', $line, $m)) {
+            $this->templates[$m[1]] = $m[2] ?? null;
+        } elseif (preg_match('/^@(?:phpstan-|psalm-|template-)?(?:extends|implements|use)\s+' . $type . '/', $line, $m)) {
+            $this->inherits[] = $m[1];
         } elseif (str_starts_with($line, '@deprecated')) {
             $this->deprecated = true;
         }

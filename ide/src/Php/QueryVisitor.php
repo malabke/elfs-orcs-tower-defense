@@ -72,9 +72,9 @@ final class QueryVisitor extends NodeVisitorAbstract
                 $this->assign($node->var, $node->expr);
             }
         } elseif ($node instanceof Stmt\Foreach_ && (int)$node->expr->getAttribute('endFilePos', 0) < $this->offset) {
-            $elements = Types::classes($this->types->type($node->expr, $this->snapshot()), true);
+            $element = $this->types->elementType($this->types->type($node->expr, $this->snapshot()));
             if ($node->valueVar instanceof Expr\Variable && is_string($node->valueVar->name)) {
-                $this->define($node->valueVar->name, $elements ? implode('|', $elements) : null, $node->valueVar);
+                $this->define($node->valueVar->name, $element !== 'mixed' ? $element : null, $node->valueVar);
             }
             if ($node->keyVar instanceof Expr\Variable && is_string($node->keyVar->name)) {
                 $this->define($node->keyVar->name, null, $node->keyVar);

@@ -104,17 +104,12 @@ later iOS).
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
   computer, never in the project)
 
-## JumPHP IDE: complete autocompletion, external libraries included
+## JumPHP IDE: autocompletion, what is left
 
-The IDE already completes PHP (ide/src/Php/Intelligence.php::complete, Monaco's provider in ui/js/editor.js) from its
-index. To do: completion as complete as PhpStorm's, everywhere, and the same for the code of external libraries:
-- every Composer package of the project (vendor/: classes, methods, functions, constants, their docblocks and
-  types) and libraries added by hand (External Libraries), indexed in the background and kept up to date when
-  composer.json / vendor/ change;
-- PHP's own functions and classes and the extensions' (SDL, OpenGL, OpenAL...: engine/stubs), with their signatures;
-- types followed through return types, @var / @return / generics (@template), chained calls, closures, arrays
-  shapes; parameter hints while typing; auto-import (use statements) when picking a class;
-- completion in YAML (game.yaml keys, services, input actions, form files) and in the bin/jumphp commands.
+Done (IDE 0.1.9): generics (`@template`, `@extends`, `class-string<T>`), array shapes and their keys, foreach over
+collections, the libraries' functions and classmaps, the stubs' functions, `config/game.yaml` and `config/input.yaml`.
+Left: `services.yaml` / form files / `lang.yaml`, the bin/jumphp commands (Run configurations, terminal), a background
+index of a whole vendor/ (names come from file names today, members when a class is first used).
 
 ## A "CLI app" template: full terminal applications (TUI)
 

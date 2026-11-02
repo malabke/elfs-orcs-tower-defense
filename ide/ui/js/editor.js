@@ -59,7 +59,8 @@ const KIND = () => ({ method: monaco.languages.CompletionItemKind.Method, functi
   enumMember: monaco.languages.CompletionItemKind.EnumMember, class: monaco.languages.CompletionItemKind.Class,
   interface: monaco.languages.CompletionItemKind.Interface, trait: monaco.languages.CompletionItemKind.Module,
   enum: monaco.languages.CompletionItemKind.Enum, variable: monaco.languages.CompletionItemKind.Variable,
-  keyword: monaco.languages.CompletionItemKind.Keyword });
+  keyword: monaco.languages.CompletionItemKind.Keyword, field: monaco.languages.CompletionItemKind.Field,
+  value: monaco.languages.CompletionItemKind.Value });
 
 const SYMBOL = () => ({ class: monaco.languages.SymbolKind.Class, interface: monaco.languages.SymbolKind.Interface,
   trait: monaco.languages.SymbolKind.Module, enum: monaco.languages.SymbolKind.Enum, method: monaco.languages.SymbolKind.Method,
@@ -650,6 +651,26 @@ export class Editors {
             detail: item.detail, tags: item.deprecated ? [monaco.languages.CompletionItemTag.Deprecated] : undefined,
             additionalTextEdits: (item.additionalTextEdits || []).map((e) => ({ range: range(e.range), text: e.text })),
             command: item.parameterHints ? { id: 'editor.action.triggerParameterHints', title: '' } : undefined,
+          })),
+        };
+      },
+    });
+
+    // config/game.yaml, config/input.yaml: their keys, values, scenes, key names (JumPHP\Ide\Config\ConfigCompletion)
+    monaco.languages.registerCompletionItemProvider('yaml', {
+      triggerCharacters: [' ', '[', ','],
+      provideCompletionItems: async (model, position) => {
+        if (!/(^|\/)config\/(game|input)\.ya?ml$/.test(pathOf(model.uri))) return { suggestions: [] };
+        const result = await backend.invoke('config.complete', args(model, position)).catch(() => null);
+        if (!result) return { suggestions: [] };
+        const line = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+        const typed = /[\w\\:. -]*$/.exec(line)[0].replace(/^.*[\[,:]\s*|^\s+|^-\s+/, '');
+        const replace = new monaco.Range(position.lineNumber, position.column - typed.length, position.lineNumber, position.column);
+        return {
+          suggestions: result.items.map((item) => ({
+            label: item.label, kind: kinds[item.kind] ?? monaco.languages.CompletionItemKind.Value, insertText: item.insertText,
+            detail: item.detail || undefined, documentation: item.documentation ? { value: item.documentation } : undefined,
+            sortText: item.sortText, range: replace,
           })),
         };
       },

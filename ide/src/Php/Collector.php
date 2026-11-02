@@ -130,6 +130,15 @@ final class Collector extends NodeVisitorAbstract
             'doc' => $doc->summary, 'deprecated' => $doc->deprecated,
             'methods' => [], 'props' => [], 'consts' => [],
         ];
+        $templates = array_keys($doc->templates);
+        if ($templates) {
+            // generics (@template T): their bounds, and what the ancestors' templates are here (@extends Base<T>)
+            $class['templates'] = array_map(fn ($bound) => $bound !== null ? Types::resolveDoc($bound, $this->namespace, $this->uses) : null, $doc->templates);
+        }
+        foreach ($doc->inherits as $inherit) {
+            $resolved = Types::resolveDoc($inherit, $this->namespace, $this->uses, $templates);
+            $class['inherits'][strtolower(Types::base($resolved))] = $resolved;
+        }
         if ($node instanceof Stmt\Class_) {
             if ($node->extends) {
                 $class['extends'][] = $node->extends->toString();
@@ -150,7 +159,7 @@ final class Collector extends NodeVisitorAbstract
                 $this->nameRef('class', $name->toString(), $name);
             }
         }
-        $context = [$this->namespace, $this->uses];
+        $context = [$this->namespace, $this->uses, $templates];
         foreach ($doc->properties as $name => $type) {
             $class['props'][$name] = ['type' => Types::resolveDoc($type, ...$context), 'static' => false,
                 'vis' => 'public', 'doc' => '', 'line' => $line, 'col' => $col, 'magic' => true];
@@ -229,7 +238,7 @@ final class Collector extends NodeVisitorAbstract
     private function functionInfo(Stmt\ClassMethod|Stmt\Function_ $node): array
     {
         $doc = DocBlock::parse($node->getDocComment()?->getText());
-        $context = [$this->namespace, $this->uses];
+        $context = [$this->namespace, $this->uses, [...$this->classTemplates(), ...array_keys($doc->templates)]];
         $params = [];
         foreach ($node->params as $param) {
             $name = $param->var instanceof Expr\Variable && is_string($param->var->name) ? $param->var->name : '?';
@@ -250,14 +259,15 @@ final class Collector extends NodeVisitorAbstract
         }
         [$line, $col] = $this->at($node->name);
         return ['name' => $node->name->toString(), 'params' => $params, 'return' => $return, 'doc' => $doc->summary,
-            'deprecated' => $doc->deprecated, 'line' => $line, 'col' => $col, 'endLine' => $node->getEndLine()];
+            'deprecated' => $doc->deprecated, 'line' => $line, 'col' => $col, 'endLine' => $node->getEndLine()]
+            + ($doc->templates ? ['templates' => array_keys($doc->templates)] : []);
     }
 
     /** @param array<string, string> $vars */
     private function pushScope(Node\FunctionLike $node, array $vars): void
     {
         $doc = DocBlock::parse($node->getDocComment()?->getText());
-        $context = [$this->namespace, $this->uses];
+        $context = [$this->namespace, $this->uses, [...$this->classTemplates(), ...array_keys($doc->templates)]];
         foreach ($node->getParams() as $param) {
             if ($param->var instanceof Expr\Variable && is_string($param->var->name)) {
                 $name = $param->var->name;
@@ -477,6 +487,13 @@ final class Collector extends NodeVisitorAbstract
     private function namespaced(string $name): string
     {
         return $this->namespace === '' ? $name : "$this->namespace\\$name";
+    }
+
+    /** @return list<string> the template names of the class being read */
+    private function classTemplates(): array
+    {
+        $class = $this->currentClass();
+        return array_keys($class !== null ? $this->classes[$class]['templates'] ?? [] : []);
     }
 
     private function currentClass(): ?string

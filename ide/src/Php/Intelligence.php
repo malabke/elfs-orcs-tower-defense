@@ -194,6 +194,22 @@ final class Intelligence
         if (str_ends_with($lead, '$')) {
             return ['items' => $this->variableItems($context, $offset), 'incomplete' => false];
         }
+        if (preg_match('/\[\s*([\'"])$/', $lead, $quote)) {
+            // $array['…: the keys of an array shape (@return array{hero: Hero, count: int})
+            $bracket = (int)strrpos($lead, '[');
+            $context = $this->contextBefore($text, $bracket);   // before the quote left open
+            $expr = $this->expression(self::expressionBefore($lead, $bracket), $context);
+            $type = $expr !== null ? $this->types->type($expr, $context) : null;
+            $items = [];
+            foreach ($type !== null ? Types::split($type) : [] as $part) {
+                foreach (Types::shape($part) ?? [] as $key => $field) {
+                    if (is_string($key)) {
+                        $items[$key] = ['label' => $key, 'kind' => 'field', 'detail' => $field, 'insertText' => $key, 'sortText' => '0' . $key];
+                    }
+                }
+            }
+            return ['items' => array_values($items), 'incomplete' => false];
+        }
         return ['items' => $this->wordItems($lead, $word, $context, $source, $start), 'incomplete' => true];
     }
 
@@ -320,10 +336,23 @@ final class Intelligence
             return array_slice($items, 0, 300);
         }
         if ($qualified === '') {
+            $own = $this->index->files();
             foreach ($this->index->functionList() as $function) {
-                $items[] = ['label' => Index::short($function['name']), 'kind' => 'function', 'detail' => $this->signature($function, false),
+                // the libraries' and extensions' functions (many): only those matching what is typed
+                if ($query === '' ? !isset($own[$function['path']]) : Index::fuzzy($query, Index::short($function['name'])) === null) {
+                    continue;
+                }
+                $item = ['label' => Index::short($function['name']), 'kind' => 'function', 'detail' => $this->signature($function, false),
                     'documentation' => $function['doc'] ?? '', 'insertText' => Index::short($function['name']) . ($function['params'] ? '($0)' : '()'),
                     'snippet' => true, 'sortText' => '4' . $function['name'], 'parameterHints' => (bool)$function['params']];
+                // a function of another namespace (a library's): "use function" added with it
+                $namespace = ($pos = strrpos($function['name'], '\\')) !== false ? substr($function['name'], 0, $pos) : '';
+                if ($namespace !== '' && strcasecmp($namespace, $context->namespace) !== 0
+                    && !preg_match('/^\s*use\s+function\s+' . preg_quote($function['name'], '/') . '\s*;/mi', $source->text)) {
+                    $item['description'] = $namespace;
+                    $item['additionalTextEdits'] = [$this->importEdit($function['name'], $context, $source, 'function')];
+                }
+                $items[] = $item;
             }
             if ($query !== '') {
                 $count = 0;
@@ -385,8 +414,9 @@ final class Intelligence
     }
 
     /** @return array<string, mixed> the edit adding "use $fqn;" */
-    public function importEdit(string $fqn, Context $context, Source $source): array
+    public function importEdit(string $fqn, Context $context, Source $source, string $kind = ''): array
     {
+        $fqn = $kind !== '' ? "$kind $fqn" : $fqn;
         if (isset($context->importAt['use'])) {
             $at = $context->importAt['use'];
             $text = "\nuse $fqn;";

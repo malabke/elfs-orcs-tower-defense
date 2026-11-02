@@ -3,6 +3,7 @@
 namespace JumPHP\Ide;
 
 use JumPHP\Ide\Agent\IdeAgent;
+use JumPHP\Ide\Config\ConfigCompletion;
 use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Claude\ClaudeCode;
@@ -300,6 +301,7 @@ final class Ide
 
         $at = fn (array $p) => [(string)($p['path'] ?? ''), (string)($p['text'] ?? ''), (int)($p['line'] ?? 1), (int)($p['column'] ?? 1)];
         $this->register('php.complete', fn (array $p) => $this->php->complete(...$at($p)));
+        $this->register('config.complete', fn (array $p) => (new ConfigCompletion($this->index))->complete(...$at($p)));
         $this->register('php.definition', fn (array $p) => $this->php->definition(...$at($p)));
         $this->register('php.references', fn (array $p) => $this->php->references(...[...$at($p), $p['declarations'] ?? true]));
         $this->register('php.hierarchy', fn (array $p) => isset($p['class']) ? $this->php->hierarchyOf((string)$p['class'])
