@@ -104,6 +104,15 @@ later iOS).
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
   computer, never in the project)
 
+## A "CLI app" template: full terminal applications (TUI)
+
+- a new kind of project beside games, desktop apps and graphic apps: `bin/jumphp cli:new <id>` from a
+  `skeleton-cli/`, an application that lives in the terminal (commands, and full-screen text interfaces: lists,
+  forms, tables, progress, keyboard and mouse), ideally built on symfony/tui (Fabien Potencier's TUI component)
+- run / test (its PHPUnit tests, a headless terminal for the screens) / export: one executable per system that
+  KEEPS its console (Windows exports are GUI programs since 0.1.6: `JUMPHP_STANDALONE_CONSOLE=1`, to make a
+  game.yaml / kind setting), a project type in the IDE's New Project, docs and an example in games/
+
 ## Cleaning
 
 - the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's

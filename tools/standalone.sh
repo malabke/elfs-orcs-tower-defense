@@ -102,4 +102,16 @@ if [ -n "$INI" ]; then
 fi
 cat "$micro" "$ini" /tmp/stage/game.phar > "$OUT/$FILE"
 chmod 755 "$OUT/$FILE"
+# Windows: a GUI program (SUBSYSTEM:WINDOWS in its PE header, as editbin does), not a console one: no console window
+# beside the game / app / installer. The programs it starts get no window either (registry/src/Patch/WindowsGui.php).
+# Nothing moves in the file (two bytes). JUMPHP_STANDALONE_CONSOLE=1 keeps the console (a command-line tool).
+if [ "$TARGET" = windows-x86_64 ] && [ -z "${JUMPHP_STANDALONE_CONSOLE:-}" ]; then
+  php -r '
+    $f = fopen($argv[1], "r+b");
+    fseek($f, 0x3c); $pe = unpack("V", fread($f, 4))[1];
+    fseek($f, $pe); if (fread($f, 4) !== "PE\0\0") { fwrite(STDERR, "not a PE executable\n"); exit(1); }
+    fseek($f, $pe + 24 + 68); fwrite($f, pack("v", 2));    // optional header: Subsystem = IMAGE_SUBSYSTEM_WINDOWS_GUI
+    fclose($f);
+  ' "$OUT/$FILE" || die "could not make $FILE a GUI program"
+fi
 echo "OUT=$OUT/$FILE"

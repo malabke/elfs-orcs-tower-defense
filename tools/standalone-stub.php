@@ -54,6 +54,11 @@ if (!is_file("$root/.unpacked")) {
 }
 
 @mkdir($data, 0777, true);
+// Windows: a GUI program (tools/standalone.sh), no console to show PHP's errors: they go to <data>\error.log
+if ($windows) {
+    ini_set('log_errors', '1');
+    ini_set('error_log', $data . '\\error.log');
+}
 if (getenv('JUMPHP_VAR') === false) {
     putenv("JUMPHP_VAR=$data");
 }
