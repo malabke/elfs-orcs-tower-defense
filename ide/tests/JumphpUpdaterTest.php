@@ -47,7 +47,7 @@ final class JumphpUpdaterTest extends TestCase
         }
         // JumPHP moves on
         $this->sh('cd up && echo v2 > bin/jumphp && echo e2 > engine/Engine.php && echo n > tools/new.sh && git rm -q tools/gone.sh && echo readme2 > README.md && git add -A && git commit -qm two');
-        return new JumphpUpdater($this->processes, "$this->dir/app", "$this->dir/up");
+        return new JumphpUpdater($this->processes, "$this->dir/app", "$this->dir/up", "$this->dir/cache/jumphp.git", $this->sh('git -C up rev-list --max-parents=0 HEAD'));
     }
 
     private function settle(Deferred $deferred): mixed
@@ -76,6 +76,19 @@ final class JumphpUpdaterTest extends TestCase
         self::assertDirectoryDoesNotExist("$app/games/pong");
         self::assertSame($this->sh('git -C up rev-parse HEAD'), $updater->current());
         self::assertTrue($this->settle($updater->check())['upToDate']);
+        self::assertFileDoesNotExist("$app/.git/shallow", 'the project\'s git is never fetched into');
+        self::assertSame('', $this->sh('cd app && git status --porcelain --untracked-files=no'), 'nothing staged');
+    }
+
+    public function testJumphpsOwnRepositoryIsLeftToGit(): void
+    {
+        $updater = new JumphpUpdater($this->processes, "$this->dir/up", "$this->dir/up", "$this->dir/cache/jumphp.git", $this->sh('git -C up rev-list --max-parents=0 HEAD'));
+        file_put_contents("$this->dir/up/bin/jumphp", "work in progress\n");
+        $plan = $this->settle($updater->check());
+        self::assertTrue($plan['upToDate']);
+        self::assertTrue($plan['history']);
+        self::assertDirectoryDoesNotExist("$this->dir/cache", 'nothing fetched');
+        self::assertSame("work in progress\n", file_get_contents("$this->dir/up/bin/jumphp"));
     }
 
     public function testAFileTheUserChangedIsKeptUnlessForced(): void
