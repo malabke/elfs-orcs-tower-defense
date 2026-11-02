@@ -125,7 +125,7 @@ index of a whole vendor/ (names come from file names today, members when a class
 Done: `bin/jumphp cli:new` (skeleton-cli/, docs/cli.md, games/hello-cli), run / test / shot (the screen as text) /
 export:standalone (Linux, Windows with its console, macOS executables), the IDE's New Project and Run configurations.
 Done: the page on jumphp.net's docs (/docs/application-cli, 14 languages). Left: full-screen screens on Windows without `stty` (symfony/tui reads
-the terminal with it). Done (2026-11-02): macOS installers for CLI apps (the Mac's executable installed); `bin/jumphp installer` works for CLI apps (it lacked symfony/yaml). Left: putting the installed command on the PATH.
+the terminal with it). Done (2026-11-02): macOS installers for CLI apps (the Mac's executable installed); `bin/jumphp installer` works for CLI apps (it lacked symfony/yaml). The installed command is on the PATH (jumphp2installer 0.2.8, the command step).
 
 ## Windows: Docker through WSL, and a composer install that seemed to loop
 

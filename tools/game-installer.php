@@ -142,6 +142,9 @@ $scriptOf = static function (array $found, ?array $versionRule) use ($id, $title
         $steps[] = ['download' => "$id-macos-{arch}", 'os' => 'macos'];
         $steps[] = ['copy' => ['from' => '{download}', 'to' => "{folder}/$id"], 'os' => 'macos'];
         $steps[] = ['executable' => "{folder}/$id", 'os' => 'macos'];
+    }
+    if ($cli) {
+        $steps[] = ['command' => "{folder}/$id{exe}"];     // typed by its name in a terminal (jumphp2installer 0.2.8)
     } elseif (isset($found['macos'])) {
         $steps[] = ['download' => $names['macos'], 'os' => 'macos'];
         $steps[] = ['extract' => '{folder}', 'os' => 'macos'];

@@ -846,6 +846,13 @@ cmd_installer() {
     grep -q 'Binary::PAYLOAD' "$ROOT/.cache/installer-bases/jumphp2installer-linux-x86_64" \
       || die "the base installers of jumphp2installer's newest release cannot hold a game (0.2.6 or newer is needed)"
   fi
+  # a CLI app's installers put it on the PATH (the command step, jumphp2installer 0.2.8+)
+  if is_cli "$game" && ! grep -q 'stepCommand' "$ROOT/.cache/installer-bases/jumphp2installer-linux-x86_64"; then
+    rm -f "$ROOT"/.cache/installer-bases/jumphp2installer-*
+    ensure_installer_bases
+    grep -q 'stepCommand' "$ROOT/.cache/installer-bases/jumphp2installer-linux-x86_64" \
+      || die "the base installers of jumphp2installer's newest release cannot install a command (0.2.8 or newer is needed)"
+  fi
   local list; list="$(IFS=,; echo "${platforms[*]}")"
   local where; case "$target" in github) where="GitHub release of $repo" ;; standalone) where="standalone: the game inside" ;; *) where="$url" ;; esac
   say "$dir: the installer ($list, v$version, $where)"
