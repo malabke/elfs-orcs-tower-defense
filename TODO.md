@@ -92,6 +92,11 @@ later iOS).
 - a real-time debugger based on Xdebug: breakpoints in the editor's gutter, step over / into / out, the call stack,
   variables and watches, evaluating expressions, while the game runs (Xdebug in the desktop image, its DBGp
   connection to the IDE; the browser version and remote games later)
+  - and Claude uses it too: debugger tools in the IDE's own MCP server (ide/src/Agent/AgentTools.php, what the Claude
+    panel already gets): set / clear breakpoints (with conditions), run a game / a test under the debugger, step,
+    read the stack and variables, evaluate an expression, stop; the user watches it happen in the editor (as the other
+    agent tools). Outside the IDE (Claude Code in a terminal): the same tools from a `bin/jumphp debug` MCP server
+    (a DBGp client in PHP, headless runs with Xdebug), so `claude mcp add` gives them to any session
 - plugins to extend the IDE: a plugin API (tool windows, actions and menus, run configurations, editor features,
   PHP side and interface side), plugins developed and tested like any JumPHP project, and a plugin marketplace on
   jumphp.net (publish, versions, install / update / remove from the IDE)
