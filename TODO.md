@@ -145,6 +145,19 @@ it with no network and no site (shortcuts, uninstaller as now; no update check, 
 (an option of its builder) and in the IDE: Run > Create an Installer… gets it as a third choice beside GitHub and
 a site.
 
+## Native Android app: it still speaks of the browser and of JumPHP
+
+Reported 2026-11-02: Antiriad was published on Google Play as a truly native app (`bin/jumphp android`: PHP and SDL
+built in, no web page, not the TWA), yet when it starts it still shows texts about the browser and about JumPHP. A
+native app should mention neither: no web page is involved any more. To look at later:
+- find which texts (a loading / splash screen, "the game did not start", "thanks for playing", a message of
+  `engine/web/` or of the Android shell, the app's name or description, the Play Store listing?) and where they come
+  from (the Android project of `bin/jumphp android`, the engine's boot when `Platform` thinks it is in a browser, the
+  pages copied into the app);
+- in the native app: no mention of the browser, nor of JumPHP (unless an optional "made with JumPHP" credit the
+  author chooses), only the game's own name and pictures;
+- check on a real phone (`adb`, a screenshot at start) and then publish a new version (versionCode + 1).
+
 ## Cleaning
 
 - the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's
