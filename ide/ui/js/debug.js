@@ -141,9 +141,32 @@ export class DebugPanel {
     if (!config) return null;
     let port;
     try { ({ port } = await backend.invoke('debug.listen')); } catch (e) { notify(e.message, 'error', { title: 'The debugger cannot start' }); return null; }
+    // a project made before the debugger: its bin/jumphp does not start Xdebug yet (the IDE updates JumPHP in it)
+    const supports = () => backend.invoke('jumphp.supports', { feature: 'JUMPHP_XDEBUG' }).then((r) => r.ok, () => true);
+    if (!(await supports())) {
+      await this.app.updateJumphp({ ask: true, why: 'The debugger needs a newer JumPHP in this project: its bin/jumphp does not start Xdebug yet.' });
+      if (!(await supports())) {
+        notify('This project\'s bin/jumphp does not start Xdebug (JUMPHP_XDEBUG): update JumPHP in it, then Debug again.', 'error', { title: 'Debug ' + config.label });
+        return null;
+      }
+    }
     if (!this.breakpoints.size) notify('No breakpoint yet: click in the gutter left of a line of PHP to stop there.', 'info', { title: 'Debug ' + config.label });
     this.app.showTool('debug', true);
-    return this.app.runner.start(config, { JUMPHP_XDEBUG: String(port) });
+    const id = await this.app.runner.start(config, { JUMPHP_XDEBUG: String(port) });
+    if (id !== null && id !== undefined) this.watchConnection(id, config);
+    return id;
+  }
+
+  /** Says so when the program never connects to the debugger (instead of nothing happening). */
+  watchConnection(runId, config) {
+    let connected = false;
+    const offs = [];
+    const stop = () => { offs.forEach((off) => off?.()); clearTimeout(timer); };
+    const warn = (why) => notify(`${config.label}: Xdebug did not connect to the IDE (${why}). The run's output (Run window) may say why; `
+      + 'the first Debug builds the desktop image with Xdebug (about a minute).', 'error', { title: 'Debugger' });
+    offs.push(backend.on('debug.state', (s) => { if ((s.sessions || []).length) { connected = true; stop(); } }));
+    offs.push(backend.on('run.exit', (p) => { if (p.id === runId) { stop(); if (!connected) warn('the program ended first'); } }));
+    const timer = setTimeout(() => { stop(); if (!connected) warn('nothing after 3 minutes'); }, 180000);
   }
 
   async step(how) {

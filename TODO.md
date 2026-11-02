@@ -93,7 +93,8 @@ later iOS).
   breakpoints with conditions, Debug tool window, steps, watches, Claude's debug_* tools in the IDE): a `bin/jumphp
   debug` MCP server for Claude Code in a terminal (the same tools, ide/src/Debug/Debugger.php reused), the async
   runtime (PHP 8.6 ZTS image with Xdebug), games in the browser / jumphp.net/ide (no Xdebug in WebAssembly: a
-  step debugger of its own?), exception breakpoints, "run to cursor", setting a variable's value; try it on
+  step debugger of its own?), desktop apps (Tauri, `ui: webview`: app:run uses the Tauri image, without Xdebug),
+  exception breakpoints, "run to cursor", setting a variable's value; try it on
   Windows / macOS (host.docker.internal)
 - plugins to extend the IDE: a plugin API (tool windows, actions and menus, run configurations, editor features,
   PHP side and interface side), plugins developed and tested like any JumPHP project, and a plugin marketplace on
@@ -144,6 +145,15 @@ it with no network and no site (shortcuts, uninstaller as now; no update check, 
 `bin/jumphp installer <id> --standalone [--windows] [--linux] [--macos]` → `dist/installer/`, in jumphp2installer
 (an option of its builder) and in the IDE: Run > Create an Installer… gets it as a third choice beside GitHub and
 a site.
+
+## IDE: the Claude panel the first time, without jumphp.net's MCP
+
+Reported 2026-11-02: at the first use, opening the Claude panel gives a Claude that does not have jumphp.net's MCP
+server (`jumphp`: projects, publishing, tests, notes) connected. Guide the user more: when the panel opens, check
+whether Claude Code has the `jumphp` MCP server (`claude mcp list` / `claude mcp get jumphp`); if not, say so in the
+panel with what it brings and a button that sets it up (sign in with jumphp.net if needed, make the MCP token, run
+`claude mcp add --transport http --scope user jumphp https://jumphp.net/mcp --header "Authorization: Bearer …"` for
+the user, then check it answers), or at least the command to copy; same check in the welcome screen.
 
 ## Native Android app: it still speaks of the browser and of JumPHP
 

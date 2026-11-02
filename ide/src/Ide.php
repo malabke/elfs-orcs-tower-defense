@@ -15,6 +15,7 @@ use JumPHP\Ide\Gui\FormFile;
 use JumPHP\Ide\Php\Index;
 use JumPHP\Ide\Php\Intelligence;
 use JumPHP\Ide\Php\Source;
+use JumPHP\Ide\Project\JumphpUpdater;
 use JumPHP\Ide\Project\ProjectInfo;
 use JumPHP\Ide\Run\Runner;
 use JumPHP\Ide\Search\Search;
@@ -102,6 +103,11 @@ final class Ide
             $this->docker = new Docker($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
             $this->register('docker.ensure', fn () => $this->docker->ensure());
             $this->register('docker.state', fn () => $this->docker->state());
+            // the project's JumPHP kept as new as the IDE's (bin/jumphp, engine, tools...; never games/)
+            $updater = new JumphpUpdater($this->processes, $root);
+            $this->register('jumphp.check', fn () => $updater->check());
+            $this->register('jumphp.update', fn (array $p) => $updater->update(!empty($p['force'])));
+            $this->register('jumphp.supports', fn (array $p) => ['ok' => str_contains((string)@file_get_contents("$root/bin/jumphp"), (string)($p['feature'] ?? ''))]);
         }
         if ($root !== null && $this->runner !== null) {
             $this->registerDebug($root);

@@ -91,8 +91,16 @@ final class Creator
         }
         $this->progress('Getting the JumPHP template…');
         return $this->run(['git', 'clone', '--depth', '1', self::TEMPLATE, $root], $parent)
-            ->then(function () use ($root) {
-                // a fresh history: the project is the user's (remote jumphp: bin/jumphp update brings new versions)
+            ->then(fn () => $this->run(['git', 'rev-parse', 'HEAD'], $root))
+            ->then(function ($head) use ($root) {
+                // the JumPHP commit its files come from: the IDE keeps them up to date from there (JumphpUpdater)
+                $commit = trim((string)(is_array($head) ? ($head['stdout'] ?? '') : $head));
+                if (preg_match('/^[0-9a-f]{40}$/', $commit)) {
+                    @mkdir("$root/.jumphp", 0777, true);
+                    file_put_contents("$root/" . \JumPHP\Ide\Project\JumphpUpdater::RECORD, json_encode(['repository' => self::TEMPLATE,
+                        'commit' => $commit, 'updated' => gmdate('c')], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+                }
+                // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
                 exec('rm -rf ' . escapeshellarg("$root/.git"));
                 // one project, one game or app: not JumPHP's examples (the playground's projects start the same way)
                 foreach (glob("$root/games/*", GLOB_ONLYDIR) ?: [] as $example) {

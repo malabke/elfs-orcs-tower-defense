@@ -328,6 +328,22 @@ cmd_update() {
     if git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'davidnurdin/jumPhp'; then remote=origin
     else git -C "$ROOT" remote add jumphp "$REPO_URL"; fi
   }
+  git -C "$ROOT" fetch -q "$remote" main || die "cannot fetch JumPHP ($remote)"
+  if ! git -C "$ROOT" rev-parse -q --verify HEAD >/dev/null || ! git -C "$ROOT" merge-base HEAD FETCH_HEAD >/dev/null 2>&1; then
+    # a project with its own history (made by the IDE or composer create-project): JumPHP's files are brought to the
+    # newest (bin, engine, tools, docker...), the project's own (games/, README.md, .env) never touched
+    local latest; latest="$(git -C "$ROOT" rev-parse FETCH_HEAD)"
+    local entries=(); local e
+    while IFS= read -r e; do
+      case "$e" in games|README.md|.jumphp|.env|.git) ;; *) entries+=("$e") ;; esac
+    done < <(git -C "$ROOT" ls-tree --name-only FETCH_HEAD)
+    say "bringing JumPHP's files to ${latest:0:12} (${entries[*]}); games/ untouched"
+    git -C "$ROOT" restore --source=FETCH_HEAD --worktree -- "${entries[@]}" || die "JumPHP's files not updated"
+    mkdir -p "$ROOT/.jumphp"
+    printf '{\n    "repository": "%s",\n    "commit": "%s",\n    "updated": "%s"\n}\n' "$REPO_URL" "$latest" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ROOT/.jumphp/jumphp.json"
+    say "updated (git status shows what changed). The engine changed? bin/jumphp engine:download (or engine:build); then bin/jumphp setup"
+    return
+  fi
   [ -z "$(git -C "$ROOT" status --porcelain)" ] || die "commit your changes first (git status)"
   say "merging $remote/main"
   git -C "$ROOT" pull --no-rebase --no-edit "$remote" main

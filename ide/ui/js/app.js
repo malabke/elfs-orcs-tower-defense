@@ -104,6 +104,7 @@ class App {
     this.updateRunWidget();
     this.restoreTabs();
     this.docker();   // in the background: Docker Desktop started if needed, before the first run asks for it
+    this.updateJumphp();   // the project's JumPHP as new as the IDE (bin/jumphp, engine...; games/ never touched)
     setInterval(() => { if (document.visibilityState === 'visible') this.git.refresh(); }, 15000);
     window.addEventListener('focus', () => { this.git.refresh(); this.editors.reloadFromDisk(); this.tree.refresh(); });
     window.addEventListener('beforeunload', () => this.saveTabs());
@@ -330,6 +331,58 @@ class App {
     this.dockerWait ??= backend.invoke('docker.ensure').catch((e) => ({ state: 'failed', message: e.message || String(e) }))
       .then((s) => { if (s?.state !== 'ready') this.dockerWait = null; return s; });
     return this.dockerWait;
+  }
+
+  /**
+   * Brings the project's JumPHP files to JumPHP's newest (the IDE's) when it opens: at once when the user did not change
+   * them, else asked (the files named). ask: the user asked for it (the debugger needs it): asked even if declined before.
+   * Resolves with true when the project is up to date afterwards.
+   */
+  async updateJumphp({ ask = false, why = '' } = {}) {
+    if (!this.project?.jumphp || backend.kind !== 'native' || !this.actions) return true;
+    if (this.jumphpUpdating) return this.jumphpUpdating;
+    const run = async () => {
+      let plan;
+      try { plan = await backend.invoke('jumphp.check'); } catch (e) {
+        if (ask) notify(e.message, 'error', { title: 'Cannot get the newest JumPHP' });
+        return false;
+      }
+      if (plan.upToDate) { if (plan.latest && plan.current !== plan.latest) await backend.invoke('jumphp.update').catch(() => null); return true; }
+      const declined = prefs.get('jumphpDeclined:' + this.projectKey);
+      if (plan.changed.length && !ask && declined === plan.latest) return false;
+      const apply = async (force) => {
+        const task = this.task('Updating JumPHP in this project…');
+        try {
+          const r = await backend.invoke('jumphp.update', { force });
+          task();
+          const n = (r.updated?.length || 0) + (r.removed?.length || 0);
+          notify(`${n} file(s) of JumPHP updated in this project (bin/jumphp, the engine, tools…; your games are untouched)` + (r.kept?.length ? `; ${r.kept.length} file(s) you changed were kept` : '') + '.', 'success', { title: 'JumPHP updated' });
+          this.tree?.refresh();
+          this.editors?.reloadFromDisk(); this.git?.refresh();
+          return !r.kept?.length;
+        } catch (e) {
+          task();
+          notify(e.message, 'error', { title: 'JumPHP was not updated' });
+          return false;
+        }
+      };
+      if (!plan.changed.length) return apply(false);
+      const list = plan.changed.slice(0, 12).join('\n') + (plan.changed.length > 12 ? `\n… and ${plan.changed.length - 12} more` : '');
+      const text = (why ? why + '\n\n' : '') + (plan.known
+        ? `A newer JumPHP is out. ${plan.changed.length} of its file(s) were changed in this project: update them too (your version is replaced), or keep them (the others are updated)?`
+        : `A newer JumPHP is out. This project does not say which JumPHP it came from: ${plan.changed.length} file(s) of JumPHP differ here (bin/jumphp, the engine…). Update them? Your games (games/) are never touched.`);
+      return new Promise((resolve) => {
+        dialog({ title: 'Update JumPHP in this project', body: el('div', {}, el('p', { style: { whiteSpace: 'pre-wrap' } }, text), el('pre.console', { style: { maxHeight: '180px', overflow: 'auto' } }, list)),
+          buttons: [
+            { label: 'Later', action: () => { prefs.set('jumphpDeclined:' + this.projectKey, plan.latest); resolve(false); } },
+            ...(plan.known ? [{ label: 'Keep my changes', action: async () => resolve(await apply(false)) }] : []),
+            { label: 'Update', primary: true, action: async () => resolve(await apply(true)) },
+          ],
+          onClose: () => resolve(false) });
+      });
+    };
+    this.jumphpUpdating = run().finally(() => { this.jumphpUpdating = null; });
+    return this.jumphpUpdating;
   }
 
   dockerChanged({ state, message }) {
