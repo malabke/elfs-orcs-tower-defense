@@ -1,5 +1,0 @@
-# Actions of the game => keys / pad / touch. The engine already defines:
-#   up, down, left, right, confirm, back, pause (see JumPHP\Kernel\Engine::DEFAULT_ACTIONS)
-actions:
-  add: [Space, pad0:a, touch:tap]
-  shot: [S, pad0:y]

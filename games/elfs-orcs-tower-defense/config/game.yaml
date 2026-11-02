@@ -1,0 +1,19 @@
+# The game. Every key is optional (defaults: JumPHP\Kernel\GameConfig::DEFAULTS).
+game:
+  id: elfs-orcs-tower-defense                  # lower case, unique: folder of the games portal, network room filter
+  title: "Elfs & Orcs Tower Defense"
+  version: 0.1.0
+  description: "Five races. One war. Pick your banner."
+  descriptions: {}              # per language, {fr: "...", en: "..."}: the playground (jumphp.net) shows the visitor's
+  width: 320                    # virtual resolution (pixels of the game, scaled to the window)
+  height: 180
+  scale: 3                      # desktop window = 960 x 540
+  background: [16, 16, 32]
+  start_scene: App\Scene\TitleScene
+  lang: en
+  net_url: ws://localhost:8090/ws   # relay server (bin/jumphp relay up); the page can override with ?net=
+  online: false
+  # what `bin/jumphp test` runs headless (no window), 600 frames = 10 s of game time
+  smoke:
+    scene: App\Scene\PlayScene
+    params: { demo: true }
