@@ -33,9 +33,14 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
   (its level format in a tool window / editor tab), its completion for its config keys, its run configurations
 - `bin/jumphp extension:new <id>` (a skeleton with an example game and tests: GameTestCase), tested in CI on the
   desktop and in the browser build (webshot)
-- a catalogue on jumphp.net (like /ide-plugins: publish, versions, stats, marks), Packagist for the code, and the
-  playground's shared engine loading the extensions a published game requires (today a game's own Composer packages
-  are not supported there)
+- published first as what they are: a GitHub repository and a Packagist package (versions = git tags, `composer
+  require` works anywhere); jumphp.net only indexes them: a marketplace (like /ide-plugins: search, stats, marks,
+  "Add to my project" = `composer require` + its config, from the site, the IDE's Plugins / Extensions window and
+  `bin/jumphp extension:add <game> <vendor/pkg>`), filled from Packagist by their type (`jumphp-extension`)
+- a project kind of its own: "JumPHP extension" (New Project in the IDE, `bin/jumphp extension:new`: a repository
+  ready for Packagist, its example game, its tests, its IDE plugin), next to games, apps and IDE plugins
+- the playground's shared engine loading the extensions a published game requires (today a game's own Composer
+  packages are not supported there)
 
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
