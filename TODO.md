@@ -120,13 +120,6 @@ Done (IDE 0.1.21): `config/lang.yaml` (languages, the texts not translated yet) 
 Done (IDE 0.1.23): the whole libraries indexed in the background after the project (a slice per frame, cached for
 the next start): implementations / subclasses of their classes, classmap classes.
 
-## CLI apps: what is left
-
-Done: `bin/jumphp cli:new` (skeleton-cli/, docs/cli.md, games/hello-cli), run / test / shot (the screen as text) /
-export:standalone (Linux, Windows with its console, macOS executables), the IDE's New Project and Run configurations.
-Done: the page on jumphp.net's docs (/docs/application-cli, 14 languages). Left: full-screen screens on Windows without `stty` (symfony/tui reads
-the terminal with it). Done (2026-11-02): macOS installers for CLI apps (the Mac's executable installed); `bin/jumphp installer` works for CLI apps (it lacked symfony/yaml). The installed command is on the PATH (jumphp2installer 0.2.8, the command step).
-
 ## Windows: Docker through WSL, and a composer install that seemed to loop
 
 - Docker inside WSL without Docker Desktop (Docker Engine installed in a WSL distribution: no Docker Desktop licence, often
