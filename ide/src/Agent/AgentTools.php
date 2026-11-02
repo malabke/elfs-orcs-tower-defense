@@ -30,7 +30,11 @@ final class AgentTools
           the output and the test tree, rather than running bin/jumphp in a shell when the user should see the result;
         - get_state to know what the user is looking at (open files, cursor, selection, run configurations);
         - ask_user when you need a decision from the user (you cannot ask otherwise);
-        - notify for a short message when something is done.
+        - notify for a short message when something is done;
+        - debug_* to debug PHP with Xdebug where the user sees it (breakpoints in the gutter, the Debug window): set
+          breakpoints (debug_breakpoints), run a configuration with the debugger (debug_run: it waits until a breakpoint
+          stops the program), read the variables (debug_variables) or evaluate PHP there (debug_eval), step
+          (debug_step), and always end with debug_step stop or run when done. Prefer it to adding var_dump / echo.
         TXT;
 
     /** @return list<array{name: string, description: string, inputSchema: array<string, mixed>, timeout: float}> */
@@ -48,11 +52,24 @@ final class AgentTools
             self::tool('show_diff', 'Shows the user the changes of a file against the last commit (a diff tab), or the Commit window with every changed file when no path is given.',
                 ['path' => $path], [], 15),
             self::tool('show_tool', 'Shows a tool window of the IDE.',
-                ['tool' => ['type' => 'string', 'enum' => ['project', 'commit', 'structure', 'hierarchy', 'run', 'find', 'problems', 'game', 'git', 'claude', 'publish']]], ['tool'], 10),
+                ['tool' => ['type' => 'string', 'enum' => ['project', 'commit', 'structure', 'hierarchy', 'run', 'find', 'problems', 'game', 'git', 'claude', 'publish', 'debug']]], ['tool'], 10),
             self::tool('find_in_files', 'Shows a search in the IDE\'s Find window (the user sees the matches) and returns how many there are.',
                 ['query' => ['type' => 'string'], 'regex' => ['type' => 'boolean'], 'include' => ['type' => 'string', 'description' => 'a file mask, e.g. *.php or games/pong/*']], ['query'], 30),
             self::tool('run', 'Runs a run configuration of the project in the IDE\'s Run window (the user sees its output, test results as a tree, screenshots) and waits for its end: exit code, tests passed / failed, the end of the output, the screenshot it made. `config` is an id from get_state (e.g. "test:pong", "shot:pong") or a command line like "bin/jumphp test pong".',
                 ['config' => ['type' => 'string'], 'wait' => ['type' => 'boolean', 'description' => 'wait for the end (default true)']], ['config'], 900),
+            self::tool('debug_breakpoints', 'Sets the breakpoints of a file (all of them: lines not given are removed), shown in the IDE\'s gutter, given at once to the programs being debugged; a line can have a condition (a PHP expression: it stops only when true). Without a path: lists them. clear_all removes every breakpoint first.',
+                ['path' => $path, 'lines' => ['type' => 'array', 'items' => ['anyOf' => [$line, ['type' => 'object', 'properties' => ['line' => $line, 'condition' => ['type' => 'string']], 'required' => ['line']]]]],
+                    'clear_all' => ['type' => 'boolean']], [], 15),
+            self::tool('debug_run', 'Runs a run configuration with the debugger (Xdebug, like the IDE\'s Debug: config is an id of get_state or "bin/jumphp test pong", "bin/jumphp shot pong"...) and waits until a breakpoint stops it (then: where, the stack, the local variables), it ends, or `timeout` seconds pass (default 120). Set breakpoints first. A game run headless (shot, test) is best: `run` opens a window and waits for the player.',
+                ['config' => ['type' => 'string'], 'timeout' => ['type' => 'integer', 'minimum' => 5, 'maximum' => 600]], ['config'], 660),
+            self::tool('debug_state', 'Where the debugged program is stopped: file, line, the stack, the variables of a frame (0: where it stopped; 1: its caller...).',
+                ['frame' => ['type' => 'integer', 'minimum' => 0]], [], 15),
+            self::tool('debug_step', 'Moves the stopped program: step_over (the next line), step_into (into the call), step_out (back to the caller), run (to the next breakpoint), stop (ends the program). Waits until it stops again (returns the new state) or ends.',
+                ['action' => ['type' => 'string', 'enum' => ['step_over', 'step_into', 'step_out', 'run', 'stop']], 'timeout' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 600]], ['action'], 660),
+            self::tool('debug_eval', 'Evaluates a PHP expression where the program is stopped ($this->score * 2, count($enemies), $map->tileAt(3, 4)...): its value (and its children, for arrays and objects).',
+                ['expression' => ['type' => 'string']], ['expression'], 30),
+            self::tool('debug_variables', 'The variables of a frame of the stopped program, or the children of one of them (name: its full name as given, e.g. $this->player, $list[3]).',
+                ['name' => ['type' => 'string'], 'frame' => ['type' => 'integer', 'minimum' => 0]], [], 30),
             self::tool('play', 'Plays the file\'s game, as the IDE\'s Play does: a scene file starts the game in that scene, a test file runs only its tests.',
                 ['path' => $path], ['path'], 30),
             self::tool('diagnostics', 'The problems the IDE finds in a PHP file (syntax errors, unknown classes, methods, functions), or in the open files when no path is given.',

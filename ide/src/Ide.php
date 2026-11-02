@@ -4,6 +4,7 @@ namespace JumPHP\Ide;
 
 use JumPHP\Ide\Agent\IdeAgent;
 use JumPHP\Ide\Config\ConfigCompletion;
+use JumPHP\Ide\Debug\Debugger;
 use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Docker;
 use JumPHP\Ide\Async\Processes;
@@ -56,6 +57,9 @@ final class Ide
     /** Docker made ready in the background (a JumPHP project runs everything in it) */
     public ?Docker $docker = null;
 
+    /** Xdebug's debugger: the IDE listens, the programs run with JUMPHP_XDEBUG connect to it */
+    public ?Debugger $debugger = null;
+
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
 
@@ -98,6 +102,9 @@ final class Ide
             $this->docker = new Docker($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
             $this->register('docker.ensure', fn () => $this->docker->ensure());
             $this->register('docker.state', fn () => $this->docker->state());
+        }
+        if ($root !== null && $this->runner !== null) {
+            $this->registerDebug($root);
         }
         if ($root !== null) {
             $this->agent = new IdeAgent(fn (string $event, array $payload) => ($this->emit)($event, $payload));
@@ -161,6 +168,7 @@ final class Ide
         $this->agent?->tick();
         $this->claude?->tick();
         $this->docker?->tick();
+        $this->debugger?->tick();
         if (!$this->indexed) {
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);
@@ -176,6 +184,25 @@ final class Ide
     }
 
     /** The visual editor of forms (graphic PHP apps, JumPHP\Gui): form files <-> arrays, the code behind them. */
+    private function registerDebug(string $root): void
+    {
+        $this->debugger = $debugger = new Debugger($root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+        $session = fn (array $p) => (int)($p['session'] ?? 0);   // 0: the program that is stopped
+        $this->register('debug.listen', fn () => ['port' => $debugger->listen()]);
+        $this->register('debug.status', fn () => $debugger->status());
+        $this->register('debug.breakpoints', fn (array $p) => $debugger->setBreakpoints((string)($p['path'] ?? ''), (array)($p['lines'] ?? [])));
+        $this->register('debug.breakpoints.list', fn () => $debugger->breakpointList());
+        $this->register('debug.breakpoints.clear', fn () => $debugger->clearBreakpoints());
+        $this->register('debug.resume', fn (array $p) => $debugger->resume($session($p), (string)($p['how'] ?? 'run')));
+        $this->register('debug.variables', fn (array $p) => $debugger->variables($session($p), (int)($p['depth'] ?? 0), (int)($p['context'] ?? 0)));
+        $this->register('debug.children', fn (array $p) => $debugger->children($session($p), (string)($p['fullname'] ?? ''), (int)($p['depth'] ?? 0), (int)($p['page'] ?? 0)));
+        $this->register('debug.eval', fn (array $p) => $debugger->evaluate($session($p), (string)($p['expression'] ?? '')));
+        $this->register('debug.close', function () use ($debugger) {
+            $debugger->close();
+            return true;
+        });
+    }
+
     private function registerForms(): void
     {
         // the form also travels as a JSON string: the order of its keys is the file's (a host's JSON may sort objects' keys)
@@ -249,6 +276,8 @@ final class Ide
                 'run' => $this->runner !== null, 'preview' => false, 'tests' => false,
                 'local' => $this->workspace->localPath() !== null,
                 'claude' => $this->claude !== null,
+                // Xdebug through bin/jumphp (JUMPHP_XDEBUG): a JumPHP project run on this computer
+                'debug' => $this->debugger !== null && $this->docker !== null,
             ],
             'root' => $this->workspace->localPath(),
         ]);

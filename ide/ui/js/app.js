@@ -13,6 +13,7 @@ import { GamePanel } from './game.js';
 import { PublishPanel } from './publish.js';
 import { createInstaller } from './installer.js';
 import { ClaudePanel } from './claude.js';
+import { DebugPanel } from './debug.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -85,6 +86,7 @@ class App {
     this.git = new Git(this);
     this.git.refreshSoon = debounce(() => this.git.refresh(), 800);
     this.runner = new Runner(this);
+    if (this.project.capabilities?.run && this.project.capabilities?.debug) this.debugger = new DebugPanel(this);
     this.problems = new Problems(this);
     this.structure = new Structure(this);
     this.hierarchy = new Hierarchy(this);
@@ -117,6 +119,7 @@ class App {
     T('structure', 'left', 'Structure', 'structure', this.structure, 'Alt+7');
     T('hierarchy', 'left', 'Hierarchy', 'hierarchy', this.hierarchy, 'Ctrl+H');
     if (caps.run || caps.tests) T('run', 'bottom', 'Run', 'play', this.runner, 'Alt+4');
+    if (this.debugger) T('debug', 'bottom', 'Debug', 'debug', this.debugger, null);
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
@@ -247,6 +250,7 @@ class App {
     $('sbBranch').addEventListener('click', (e) => this.git?.branchPopup(e.currentTarget));
     $('runConfig').addEventListener('click', (e) => this.runner?.choose(e.currentTarget));
     $('runBtn').addEventListener('click', () => this.actions.run('run'));
+    $('debugBtn').addEventListener('click', () => this.actions.run('debug'));
     $('testBtn').addEventListener('click', () => this.actions.run('test'));
     $('stopBtn').addEventListener('click', () => this.runner?.stop());
     $('pullBtn').addEventListener('click', () => this.git?.pull());
@@ -269,6 +273,7 @@ class App {
     $('runWidget').hidden = !(caps.run && this.project.run?.length) && !caps.tests;
     $('runConfig').hidden = !caps.run;
     $('runBtn').hidden = !caps.run;
+    $('debugBtn').hidden = !this.debugger;
     $('stopBtn').hidden = !caps.run;
     $('previewBtn').hidden = !caps.preview;
     $('publishBtn').hidden = !(backend.kind === 'native' && this.project.playground);
@@ -469,6 +474,21 @@ class App {
       a.add('stop', 'Stop', () => this.runner.stop(), { kbd: 'Ctrl+F2', icon: 'stop' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
       a.add('runConfigs', 'Run Configurations…', () => this.runner.choose($('runConfig')), { kbd: 'Alt+Shift+F10' });
+      if (this.debugger) {
+        const d = this.debugger;
+        const paused = () => !!d.paused;
+        a.add('debug', 'Debug', () => d.debug(), { kbd: 'Shift+F9', icon: 'debug' });
+        a.add('debugResume', 'Resume Program', () => d.step('run'), { kbd: 'F9', icon: 'play', when: paused });
+        a.add('stepOver', 'Step Over', () => d.step('step_over'), { kbd: 'F8', icon: 'stepOver', when: paused });
+        a.add('stepInto', 'Step Into', () => d.step('step_into'), { kbd: 'F7', icon: 'stepInto', when: paused });
+        a.add('stepOut', 'Step Out', () => d.step('step_out'), { kbd: 'Shift+F8', icon: 'stepOut', when: paused });
+        a.add('toggleBreakpoint', 'Toggle Line Breakpoint', () => {
+          const path = this.editors.activePath();
+          const line = this.editors.editor()?.getPosition()?.lineNumber;
+          if (path && line && path.endsWith('.php')) d.toggle(path, line);
+        }, { kbd: 'Ctrl+F8', icon: 'debug' });
+        a.add('debugTool', 'Debug Tool Window', () => this.toggleTool('debug'), { icon: 'debug' });
+      }
       if (backend.kind === 'native') a.add('createInstaller', 'Create an Installer…', () => createInstaller(this), { icon: 'package' });
     } else if (caps.tests) {
       a.add('test', 'Run Tests on jumphp.net', () => this.runner.remoteTests(), { kbd: 'Ctrl+Shift+F10', icon: 'test' });
@@ -500,6 +520,7 @@ class App {
       'alt+4': 'runTool', 'alt+6': 'problemsTool', 'alt+7': 'structure', 'alt+9': 'gitLog', 'alt+3': 'findTool', 'ctrl+alt+s': 'settings',
       'ctrl+shift+f12': 'hideTools', 'alt+f1': 'selectInProject', 'ctrl+s': 'saveAll', 'alt+shift+f10': 'runConfigs', 'ctrl+alt+z': 'rollbackFile',
       'alt+insert': 'newFile', 'ctrl+shift+`': 'branches',
+      'shift+f9': 'debug', 'f9': 'debugResume', 'f8': 'stepOver', 'f7': 'stepInto', 'shift+f8': 'stepOut', 'ctrl+f8': 'toggleBreakpoint',
     };
     let lastShift = 0;
     document.addEventListener('keydown', (e) => {
@@ -513,7 +534,8 @@ class App {
       }
       if (e.key !== 'Shift') lastShift = 0;
       const id = map[key];
-      if (id && this.actions.items.has(id)) {
+      const item = id && this.actions.items.get(id);
+      if (item && (!item.when || item.when())) {
         if (document.querySelector('.overlay') && !['saveAll'].includes(id)) return;
         e.preventDefault();
         e.stopPropagation();
@@ -533,11 +555,11 @@ class App {
     menu([
       section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'closeProject']),
       section('Edit', ['find', 'replace', 'findInFiles', 'replaceInFiles', 'comment']),
-      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'claudeTool', 'runTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
+      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'claudeTool', 'runTool', 'debugTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
-      section('Run', ['run', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'preview', 'previewTab', '-', 'createInstaller']),
+      section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'toggleBreakpoint', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },

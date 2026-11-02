@@ -27,6 +27,7 @@ games/ide/             the desktop app (Tauri, docs/tauri.md): Main (session, pr
 | **Navigation** | Search Everywhere (Double Shift: classes, files, symbols, actions, `:line`), go to file / class / symbol, recent files, find / replace in files (case, words, regex, file masks), back / forward |
 | **Git** | Commit tool window (changes, unversioned files, check boxes, amend), diff with HEAD, commit and push, update (pull), branches (checkout, new, merge, delete), stash, log with the files of each commit and their diff, annotate (blame), rollback |
 | **Run** | the run configurations of the project (`bin/jumphp run / test / shot / build / webshot / serve / export / lint`, per game or app, plus `.jumphp/run.json`), Run tool window with live output, clickable `file:line`, test results (PHPUnit testdox) as a tree, screenshots opened in a tab |
+| **Debugger** (desktop) | Xdebug: click in the gutter left of a line of PHP for a breakpoint (right click: a condition, `Ctrl+F8` at the caret), **Debug** (`Shift+F9`, the bug beside Run) runs the selected configuration with `JUMPHP_XDEBUG=<port>` (`bin/jumphp` then starts PHP in the desktop image with Xdebug, which connects back to the IDE; phpstan, `php -l` and composer run without it). Where it stops: the line marked, the **Debug** tool window with the stack (click a frame), the variables as a tree (read lazily), watches, an expression evaluated there; Resume `F9`, Step Over `F8`, Into `F7`, Out `Shift+F8`, Stop. Breakpoints are kept per project and follow their lines as you edit. Best with headless runs (`shot`, `test`): a game stopped in a window freezes until you resume |
 | **Visual HTML / CSS editor** | `.html` files: Code / Split / Design. Components (drag and drop), layers, inspector (attributes, classes, inline styles), the CSS rules of the linked stylesheets (edited in place), devices (desktop, tablet, phone), undo / redo; the HTML is kept as written (scripts, head, comments). For desktop apps' pages (`games/<app>/ui/`) and game sites (`games/<id>/site/`) |
 | **Play** | green Play in the editor's and the Project view's context menus (`Ctrl+Shift+F10`): a `src/Scene/*.php` starts the game in that scene, a `tests/*Test.php` runs only its tests (results as a tree in Run), else the whole game. Web: the **Game** window (right or bottom) with ⚡ Live reload and the game's console |
 | **Hierarchy, libraries** | Hierarchy tool window (`Ctrl+H`): the class's ancestors as a tree, the classes under it; External Libraries in the Project view (the engine, vendor packages), read only |
@@ -39,7 +40,7 @@ games/ide/             the desktop app (Tauri, docs/tauri.md): Main (session, pr
 | **jumphp.net** (`Alt+J`, desktop) | the game's project on jumphp.net: publish (push + sync), its settings (title, descriptions, category, listed), statistics and players' messages, make its web site (`bin/jumphp site:new`), build the executables (Windows, Linux, macOS, Android) and put them on its page, the installer hosted on jumphp.net (it installs the newest version sent, with shortcuts and updates), or **Run > Create an Installer…** (also in Find Action): choose the systems (Windows, Linux, macOS) and where it goes — jumphp.net, a GitHub release of the project's repository, or another web site (a `dist/installer/` folder to upload at the address given; `bin/jumphp installer`) — then the links to give, the Android and Apple apps with the store steps one by one (links to Play Console, App Store Connect…) |
 
 PhpStorm's keyboard shortcuts: Double Shift, `Ctrl+N`, `Ctrl+Shift+N`, `Ctrl+E`, `Ctrl+B`, `Ctrl+Alt+B`, `Alt+F7`, `Shift+F6`,
-`Ctrl+F12`, `Ctrl+P`, `Ctrl+Q`, `Ctrl+Shift+F` / `R`, `Ctrl+K`, `Ctrl+Shift+K`, `Ctrl+T`, `Shift+F10`, `Ctrl+Shift+F10`, `Ctrl+F2`,
+`Ctrl+F12`, `Ctrl+P`, `Ctrl+Q`, `Ctrl+Shift+F` / `R`, `Ctrl+K`, `Ctrl+Shift+K`, `Ctrl+T`, `Shift+F10`, `Ctrl+Shift+F10`, `Ctrl+F2`, `Shift+F9`, `F7` / `F8` / `F9`, `Ctrl+F8`,
 `Ctrl+D`, `Ctrl+Y`, `Ctrl+W`, `Ctrl+Alt+L`, `Alt+1/0/3/4/6/7/9`, `Ctrl+Alt+Left/Right`, `Alt+Insert`… (Help > Keyboard Shortcuts).
 
 ## How it works
@@ -100,6 +101,11 @@ claude ──HTTP JSON-RPC──▶ McpServer (ide/src/Agent) ──agent.call {
 | `diagnostics` {path?} | the IDE's PHP problems |
 | `ask_user` {question, options} | a dialog; the answer (10 min at most) |
 | `notify` {message, kind} | a notification |
+| `debug_breakpoints` {path, lines, clear_all} | sets a file's breakpoints (lines, or `{line, condition}`), shown in the gutter; no path: the list |
+| `debug_run` {config, timeout} | a configuration under the debugger (as Debug): waits until a breakpoint stops it, then where, the stack, the locals; or it ended / still runs |
+| `debug_state` {frame} / `debug_variables` {name, frame} | where it stopped, a frame's variables, the children of one (`$this->player`) |
+| `debug_step` {action} | step_over, step_into, step_out, run, stop: waits for the next stop |
+| `debug_eval` {expression} | PHP evaluated where it stopped (shown in the Debug window too) |
 
 Add one: its definition in `AgentTools::all()` (name, description, JSON schema, timeout), its `tool_<name>(args)` in
 `AgentTools` of `agent.js`. Tests: `ide/tests/AgentTest.php` (the protocol over a real socket). The web IDE (Claude of
@@ -155,5 +161,5 @@ routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Beare
 
 ## Roadmap
 
-Debugger (Xdebug in the desktop image), terminal tool window, PHP formatting, local history, more refactorings (extract
+The debugger for remote / browser games and from a terminal's Claude Code (a `bin/jumphp debug` MCP server), terminal tool window, PHP formatting, local history, more refactorings (extract
 method / variable, move class), a tile map editor for games, multiple projects in one window, signed macOS / Windows executables.

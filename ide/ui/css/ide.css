@@ -473,3 +473,30 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .claude-tool.ide b { color: #d97757; }
 .claude-ask p { margin: 0 0 10px; white-space: pre-wrap; line-height: 1.5; }
 .claude-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+
+/* the debugger: breakpoints in the gutter, the line where it stopped, the Debug tool window */
+.monaco-editor .dbg-breakpoint::before, .dbg-dot { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+.monaco-editor .dbg-breakpoint { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.monaco-editor .dbg-breakpoint.conditional::before, .dbg-dot.conditional { box-shadow: inset 0 0 0 2px var(--red); background: var(--yellow); }
+.monaco-editor .dbg-breakpoint-line { background: color-mix(in srgb, var(--red) 12%, transparent); }
+.monaco-editor .dbg-current-line { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.monaco-editor .dbg-current { display: flex; align-items: center; justify-content: center; }
+.monaco-editor .dbg-current::after { content: ""; border-left: 8px solid var(--yellow); border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+.monaco-editor .margin-view-overlays .cgmr { cursor: pointer; }
+.debug-view { display: flex; height: 100%; min-height: 0; }
+.debug-frames .row { padding-left: 10px; }
+.debug-frames { width: 34%; min-width: 160px; max-width: 360px; border-right: 1px solid var(--border-2); overflow: auto; }
+.debug-vars { flex: 1; min-width: 0; overflow: auto; font: 12.5px var(--mono); }
+.debug-eval { width: calc(100% - 12px); margin: 6px; padding: 4px 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); border-radius: 4px; font: 12.5px var(--mono); }
+.debug-section { color: var(--text-3); padding: 8px 10px 2px; font: 11px var(--font); text-transform: uppercase; letter-spacing: .04em; }
+.dbg-name { color: var(--purple); }
+.dbg-name.watch { color: var(--blue); }
+.dbg-name.result { color: var(--yellow); }
+.dbg-eq { color: var(--text-3); white-space: pre; }
+.dbg-value { overflow: hidden; text-overflow: ellipsis; }
+.dbg-value.string { color: var(--green); }
+.dbg-value.int, .dbg-value.float { color: var(--blue); }
+.dbg-value.bool, .dbg-value.null { color: var(--orange); }
+.dbg-value.error { color: var(--red); }
+.row .row-action { margin-left: auto; visibility: hidden; background: none; border: 0; color: var(--text-3); cursor: pointer; padding: 0 2px; }
+.row:hover .row-action { visibility: visible; }

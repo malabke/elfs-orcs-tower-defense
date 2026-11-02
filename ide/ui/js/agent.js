@@ -320,7 +320,8 @@ export class AgentTools {
       results: r.results.slice(0, 30).map((f) => ({ path: f.path, lines: f.matches.slice(0, 10).map((m) => m.line) })) };
   }
 
-  async tool_run(args) {
+  /** A run configuration from an id, a label or a command line (bin/jumphp test pong): {config, env}. */
+  resolveRun(args) {
     const runner = this.app.runner;
     if (!runner || !this.app.project?.capabilities?.run) throw new Error('nothing runs in this project here');
     const wanted = String(args.config || '').trim();
@@ -338,6 +339,12 @@ export class AgentTools {
         config = { id: 'adhoc', kind, label: parsed.words.slice(1).join(' '), command: parsed.words };
       }
     }
+    return { config, env };
+  }
+
+  async tool_run(args) {
+    const runner = this.app.runner;
+    const { config, env } = this.resolveRun(args);
     if (args.wait === false) {
       const id = await runner.start(config, env);
       if (id === null || id === undefined) throw new Error(`${config.label} could not start`);
@@ -353,6 +360,101 @@ export class AgentTools {
       screenshot: end.image || undefined,
       output_end: (run?.output || '').slice(-4000),
     };
+  }
+
+  // the debugger (Xdebug): the same one the user drives, shown in the gutter and the Debug window -------------------
+
+  debugger() {
+    if (!this.app.debugger) throw new Error('no debugger here: it needs a JumPHP project run on this computer (bin/jumphp with Docker)');
+    return this.app.debugger;
+  }
+
+  /** Where it stopped, with the variables of a frame (short: the values Xdebug gives at depth 1). */
+  async debugState(frame = 0) {
+    const d = this.debugger();
+    if (!d.paused) return { status: (d.sessions || []).length ? 'running' : 'not debugging', breakpoints: await backend.invoke('debug.breakpoints.list') };
+    const p = d.paused;
+    let variables = [];
+    try { variables = await backend.invoke('debug.variables', { session: p.session, depth: frame }); } catch (e) { variables = [{ name: 'error', value: e.message }]; }
+    return {
+      status: 'paused', session: p.session, path: p.path, line: p.line, frame,
+      stack: p.stack.map((f) => `#${f.level} ${f.where} ${f.path ? `${f.path}:${f.line}` : `(outside the project) line ${f.line}`}`),
+      variables: variables.slice(0, 80).map((v) => ({ name: v.name, type: v.type, value: v.value, expandable: v.children || undefined })),
+    };
+  }
+
+  /** Waits for the program to stop at a breakpoint, end, or the time to pass. */
+  waitDebug(seconds, runId = null, untilEnd = false) {
+    return new Promise((resolve) => {
+      const offs = [];
+      const done = (what) => { offs.forEach((off) => off?.()); clearTimeout(timer); resolve(what); };
+      const timer = setTimeout(() => done('timeout'), seconds * 1000);
+      offs.push(backend.on('debug.paused', () => setTimeout(() => done('paused'), 50)));
+      if (runId !== null) offs.push(backend.on('run.exit', (p) => { if (p.id === runId) done('ended'); }));
+      if (untilEnd) offs.push(backend.on('debug.ended', () => done('ended')));
+    });
+  }
+
+  async tool_debug_breakpoints(args) {
+    const d = this.debugger();
+    if (args.clear_all) d.clearAll();
+    if (args.path) {
+      const path = this.path(args);
+      const lines = (args.lines || []).map((l) => (typeof l === 'object' ? { line: Number(l.line), condition: l.condition || null } : { line: Number(l), condition: null }))
+        .filter((b) => b.line > 0).sort((a, b) => a.line - b.line);
+      await d.set(path, lines);
+      if (lines.length) await this.open(path, lines[0].line);
+    }
+    return { breakpoints: await backend.invoke('debug.breakpoints.list') };
+  }
+
+  async tool_debug_run(args) {
+    const d = this.debugger();
+    const { config, env } = this.resolveRun(args);
+    const id = await this.app.runner.start(config, { ...env, JUMPHP_XDEBUG: String((await backend.invoke('debug.listen')).port) });
+    if (id === null || id === undefined) throw new Error(`${config.label} could not start`);
+    this.app.showTool('debug', true);
+    const what = await this.waitDebug(Number(args.timeout) || 120, id);
+    if (what === 'paused') return this.debugState();
+    const run = this.app.runner.runs.find((r) => r.id === id);
+    return { status: what === 'ended' ? 'the program ended without stopping at a breakpoint' : `still running after ${Number(args.timeout) || 120} s (no breakpoint reached yet: debug_state later, or debug_step stop)`,
+      run: id, exit_code: run?.code, output_end: (run?.output || '').slice(-3000) };
+  }
+
+  async tool_debug_state(args) {
+    return this.debugState(Number(args.frame) || 0);
+  }
+
+  async tool_debug_step(args) {
+    const d = this.debugger();
+    const how = String(args.action || 'step_over');
+    const session = d.paused?.session || d.sessions?.[0]?.id;
+    if (!session) throw new Error('no program is being debugged: debug_run first');
+    if (how === 'stop') { await d.step('stop'); return { status: 'stopped' }; }
+    const wait = this.waitDebug(Number(args.timeout) || 60, null, true);
+    d.step(how);
+    const what = await wait;
+    if (what === 'paused') return this.debugState();
+    return { status: what === 'ended' ? 'the program ended' : 'running (no breakpoint reached yet)' };
+  }
+
+  async tool_debug_eval(args) {
+    const d = this.debugger();
+    if (!d.paused) throw new Error('the program is not stopped: debug_run with a breakpoint first');
+    const expression = String(args.expression || '');
+    const r = await backend.invoke('debug.eval', { session: d.paused.session, expression });
+    d.evaluated = { ...r, name: expression, expression };
+    d.render();
+    return { type: r.type, value: r.value, items: (r.items || []).slice(0, 80).map((v) => ({ name: v.name, type: v.type, value: v.value })) };
+  }
+
+  async tool_debug_variables(args) {
+    const d = this.debugger();
+    if (!d.paused) throw new Error('the program is not stopped');
+    const frame = Number(args.frame) || 0;
+    if (!args.name) return (await this.debugState(frame)).variables;
+    const r = await backend.invoke('debug.children', { session: d.paused.session, fullname: String(args.name), depth: frame });
+    return r ? { name: r.fullname || args.name, type: r.type, value: r.value, items: (r.items || []).slice(0, 200).map((v) => ({ name: v.name, fullname: v.fullname, type: v.type, value: v.value, expandable: v.children || undefined })) } : null;
   }
 
   async tool_play(args) {

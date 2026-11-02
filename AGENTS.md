@@ -179,6 +179,7 @@ the player's files are never touched; `JUMPHP_VAR=<dir>` forces a folder). They 
 | `JUMPHP_REALTIME=1` | headless frames in real time (network tests between two processes) |
 | `JUMPHP_GL=0` / `1` | headless OpenGL off / on (default: on when the game's code calls `gl()` / `opengl()`: real window on Xvfb, Mesa) |
 | `JUMPHP_DEBUG=1` | FPS / scene overlay (F3 toggles it too) |
+| `JUMPHP_XDEBUG=<port>` | step debugging: PHP runs with Xdebug (desktop image + Xdebug, built once) and connects to a debugger listening on that port of this computer (the JumPHP IDE's Debug sets it); composer, phpstan and `php -l` run without it |
 
 Three key-name formats, do not mix them:
 

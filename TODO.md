@@ -89,14 +89,12 @@ later iOS).
 
 ## JumPHP IDE: the next features
 
-- a real-time debugger based on Xdebug: breakpoints in the editor's gutter, step over / into / out, the call stack,
-  variables and watches, evaluating expressions, while the game runs (Xdebug in the desktop image, its DBGp
-  connection to the IDE; the browser version and remote games later)
-  - and Claude uses it too: debugger tools in the IDE's own MCP server (ide/src/Agent/AgentTools.php, what the Claude
-    panel already gets): set / clear breakpoints (with conditions), run a game / a test under the debugger, step,
-    read the stack and variables, evaluate an expression, stop; the user watches it happen in the editor (as the other
-    agent tools). Outside the IDE (Claude Code in a terminal): the same tools from a `bin/jumphp debug` MCP server
-    (a DBGp client in PHP, headless runs with Xdebug), so `claude mcp add` gives them to any session
+- the debugger, what is left (done in IDE 0.1.13: Xdebug in docker/desktop-xdebug through `JUMPHP_XDEBUG`, gutter
+  breakpoints with conditions, Debug tool window, steps, watches, Claude's debug_* tools in the IDE): a `bin/jumphp
+  debug` MCP server for Claude Code in a terminal (the same tools, ide/src/Debug/Debugger.php reused), the async
+  runtime (PHP 8.6 ZTS image with Xdebug), games in the browser / jumphp.net/ide (no Xdebug in WebAssembly: a
+  step debugger of its own?), exception breakpoints, "run to cursor", setting a variable's value; try it on
+  Windows / macOS (host.docker.internal)
 - plugins to extend the IDE: a plugin API (tool windows, actions and menus, run configurations, editor features,
   PHP side and interface side), plugins developed and tested like any JumPHP project, and a plugin marketplace on
   jumphp.net (publish, versions, install / update / remove from the IDE)
@@ -136,6 +134,16 @@ the terminal with it), a macOS installer for CLI apps (executables given as they
   now wait for it, 20 s per check, and say so); check again on Windows with IDE 0.1.12: if it still happens, look at the
   Run window's output with files on Windows (ide/src/Async/Processes.php) and at a `docker build` of the desktop image
   that prints nothing for minutes (the first time: say it in the Run window).
+
+## Installers: a standalone one, with no site behind it
+
+Today `bin/jumphp installer` (jumphp2installer) needs a place online: a GitHub release (`--github`) or a folder on a
+site (`--url`), and the installed game updates itself from there. Add a **standalone installer** (asked 2026-11-02):
+one file per system (Windows, Linux, macOS) that holds the whole game (the standalone executable inside) and installs
+it with no network and no site (shortcuts, uninstaller as now; no update check, or only when a URL is given).
+`bin/jumphp installer <id> --standalone [--windows] [--linux] [--macos]` → `dist/installer/`, in jumphp2installer
+(an option of its builder) and in the IDE: Run > Create an Installer… gets it as a third choice beside GitHub and
+a site.
 
 ## Cleaning
 

@@ -8,6 +8,7 @@ cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 
 DESKTOP_IMAGE="${JUMPHP_DESKTOP_IMAGE:-jumphp/desktop:dev}"
+XDEBUG_IMAGE="${JUMPHP_XDEBUG_IMAGE:-jumphp/desktop-xdebug:dev}"
 # runtime "async" (game.yaml `runtime: async`): PHP 8.6 ZTS + TrueAsync (threads, coroutines)
 ASYNC_IMAGE="${JUMPHP_ASYNC_IMAGE:-jumphp/desktop-async:dev}"
 EMSDK_IMAGE="${JUMPHP_EMSDK_IMAGE:-emscripten/emsdk:3.1.35}"
@@ -181,7 +182,28 @@ php_run() {
   while [ $# -gt 0 ] && [ "$1" != "--" ]; do flags+=("$1"); shift; done
   [ "${1:-}" = "--" ] && shift
   local image; image="$(runtime_image "$wd")"
-  if [ "$image" = "$ASYNC_IMAGE" ]; then
+  # JUMPHP_XDEBUG=<port>: step debugging (the IDE's debugger listens there, on this computer): the desktop image with
+  # Xdebug, which connects back to it at the start of every PHP run (composer, phpstan and php -l left alone: slower
+  # with Xdebug, nothing to stop at)
+  local debug="${JUMPHP_XDEBUG:-}"
+  case " $* " in *" composer "*|*phpstan*|*"php -l"*) debug= ;; esac
+  if [ -n "$debug" ] && [ "$image" = "$DESKTOP_IMAGE" ]; then
+    ensure_desktop_image
+    # made from the desktop image of this computer, again when that one changed (its id is kept as a label)
+    local base; base="$(docker image inspect -f '{{.Id}}' "$DESKTOP_IMAGE")"
+    if [ "$(docker image inspect -f '{{index .Config.Labels "jumphp.base"}}' "$XDEBUG_IMAGE" 2>/dev/null)" != "$base" ]; then
+      say "building $XDEBUG_IMAGE (the desktop runtime with Xdebug, ~1 min the first time)"
+      docker build -q -t "$XDEBUG_IMAGE" --label "jumphp.base=$base" --build-arg "BASE=$DESKTOP_IMAGE" docker/desktop-xdebug >/dev/null || die "Xdebug image not built"
+    fi
+    image="$XDEBUG_IMAGE"
+    local port="${JUMPHP_XDEBUG##*:}"
+    case "$(uname -s)" in
+      Linux) [[ " ${flags[*]-} " == *" --network host "* ]] || flags+=(--network host)
+             flags+=(-e "XDEBUG_CONFIG=client_host=127.0.0.1 client_port=$port") ;;
+      *) flags+=(-e "XDEBUG_CONFIG=client_host=host.docker.internal client_port=$port") ;;
+    esac
+    flags+=(-e XDEBUG_MODE=debug -e XDEBUG_SESSION=jumphp)
+  elif [ "$image" = "$ASYNC_IMAGE" ]; then
     docker image inspect "$ASYNC_IMAGE" >/dev/null 2>&1 || { say "building $ASYNC_IMAGE (PHP 8.6 ZTS + TrueAsync, first time ~15 min)"; docker build -t "$ASYNC_IMAGE" --build-context ext=docker/ext docker/desktop-async; }
   else
     ensure_desktop_image

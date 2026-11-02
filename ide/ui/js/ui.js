@@ -50,6 +50,9 @@ const ICONS = {
   user: '<circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14a5.5 5.5 0 0 1 11 0"/>',
   logout: '<path d="M10 3H13v10h-3M6.5 5L3.5 8l3 3M3.5 8H10"/>',
   history: '<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>',
+  stepOver: '<path d="M2.5 8.5a5.5 5.5 0 0 1 10.5-2.3M13.5 3v3.5H10"/><circle cx="8" cy="12.5" r="1.5"/>',
+  stepInto: '<path d="M8 2v7.5M5 6.5l3 3 3-3"/><circle cx="8" cy="13" r="1.5"/>',
+  stepOut: '<path d="M8 10V2.5M5 5.5l3-3 3 3"/><circle cx="8" cy="13" r="1.5"/>',
   star: '<path d="M8 2l1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3l-3.7 2 .8-4.1L2 6.3l4.2-.5z"/>',
 };
 
