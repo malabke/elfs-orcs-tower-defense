@@ -257,4 +257,14 @@ final class TodoPluginTest extends PluginTestCase
   - public: `GET https://jumphp.net/api/plugins?q=`, `/api/plugins/<id>`, `/api/plugins/<id>/download?version=`;
   - the IDE's (its sign-in token): `POST /api/ide/plugins` (the zip as the body), `GET /api/ide/plugins/mine`,
     `DELETE /api/ide/plugins/<id>?version=`.
+- **Marks**: anyone can give a plugin 1 to 5 stars, on its page (no account needed, as for the games) or in the
+  IDE (Plugins window › Rate…, signed in). The average and the number of marks show on the page, in the list and in
+  the IDE.
+- **Statistics**:
+  - public: the total downloads, those of the last 30 days, the mark;
+  - private, for the plugin's author only: each of the last 30 days (page views, installs and updates from the
+    IDE, .zip downloads from the site), the downloads per version, how many marks of each. They show on the
+    plugin's page when the author is signed in, and in the IDE (Plugins window › Statistics, next to a plugin of
+    the project);
+  - `GET /api/ide/plugins/<id>/stats` (the author's token), `POST /api/ide/plugins/<id>/rating` `{"score": 4}`.
 - jumphp.net never runs a plugin: it only reads its composer.json.

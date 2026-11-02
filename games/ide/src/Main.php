@@ -173,7 +173,12 @@ final class Main implements AppMain
         $c['update.restart'] = fn () => $this->updates->restart();
         // the plugins of jumphp.net (Tools > Plugins…): search, install / update, publish the project's own
         $c['market.list'] = fn (array $p) => $this->marketList((string)($p['q'] ?? ''));
-        $c['market.install'] = fn (array $p) => $this->marketInstall((string)($p['id'] ?? ''), isset($p['version']) ? (string)$p['version'] : null);
+        $c['market.install'] = fn (array $p) => $this->marketInstall((string)($p['id'] ?? ''), isset($p['version']) ? (string)$p['version'] : null,
+            ($p['via'] ?? '') === 'update' ? 'update' : 'install');
+        // a mark (1 to 5) and, for the user's own plugins, their statistics
+        $c['market.rate'] = fn (array $p) => self::deferred($this->playground->request('POST', '/api/ide/plugins/' . rawurlencode((string)($p['id'] ?? '')) . '/rating',
+            ['score' => (int)($p['score'] ?? 0)]));
+        $c['market.stats'] = fn (array $p) => self::deferred($this->playground->request('GET', '/api/ide/plugins/' . rawurlencode((string)($p['id'] ?? '')) . '/stats'));
         $c['market.updates'] = fn (array $p) => $this->pluginUpdates(!empty($p['install']));
         $c['market.auto'] = function (array $p) {
             if (isset($p['on'])) {
@@ -536,7 +541,7 @@ final class Main implements AppMain
             foreach ($updates as $u) {
                 // a closure (not fn): $result shared by reference, not copied
                 $chain = $chain->then(function () use (&$result, $u) {
-                    return $this->marketInstall($u['id'], $u['version'])->then(
+                    return $this->marketInstall($u['id'], $u['version'], 'update')->then(
                         function () use (&$result, $u) {
                             $result['installed'][] = $u['id'];
                         },
@@ -565,7 +570,7 @@ final class Main implements AppMain
     }
 
     /** Downloads a plugin's zip from jumphp.net and installs it (the newest version, or $version). */
-    private function marketInstall(string $id, ?string $version): Deferred
+    private function marketInstall(string $id, ?string $version, string $via = 'install'): Deferred
     {
         if ($this->ide?->plugins === null) {
             return Deferred::rejected(new \RuntimeException('Open a project first.'));
@@ -575,7 +580,8 @@ final class Main implements AppMain
         }
         $work = sys_get_temp_dir() . '/jumphp-plugin-' . bin2hex(random_bytes(4));
         @mkdir($work, 0700, true);
-        $url = $this->playground->server() . '/api/plugins/' . $id . '/download' . ($version !== null ? '?' . http_build_query(['version' => $version]) : '');
+        // via: the plugin's statistics tell the IDE's installs and updates apart
+        $url = $this->playground->server() . '/api/plugins/' . $id . '/download?' . http_build_query(array_filter(['version' => $version, 'via' => $via]));
         $clean = fn () => exec((PHP_OS_FAMILY === 'Windows' ? 'rmdir /s /q ' : 'rm -rf ') . escapeshellarg($work));
         return $this->processes->start(['curl', '-sSfL', '--max-time', '120', '-A', 'jumphp-ide', '-o', "$work/plugin.zip", $url], $work)['done']
             ->then(function (array $r) use ($work, $clean) {

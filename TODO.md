@@ -26,6 +26,12 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
 Packages a game requires (`bin/jumphp composer <id> require vendor/pkg`) that add a whole subsystem to the engine,
 with their own data format and, often, their own editor: a tile engine with its level editor and its map format, a
 particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest system, a particle editor...
+- first extensions to make (each one a package, its example game, its editor if it has data): a collision engine
+  (shapes, polygons, broad phase), a gravity / physics engine (bodies, joints, forces), a particle engine (emitters,
+  an editor with a live preview), a 3D engine (meshes, cameras, lights on OpenGL / WebGL), an SDL effects engine
+  (transitions, screen shakes, palettes, scanlines, distortions), a video maker for TikTok / Shorts (a game's
+  replay or a scripted scene rendered to a vertical MP4 with its sound, captions, a template), a tile engine with
+  its level editor
 - the contract: `"type": "jumphp-extension"` + `extra.jumphp` (services to register in the game's container, scenes,
   asset loaders for their formats, `config/*.yaml` keys with their schema, stubs), discovered by the engine at boot
   (no manual wiring), pure PHP so they run in the browser too (WebAssembly: no extensions of their own)

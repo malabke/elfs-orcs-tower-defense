@@ -3,7 +3,7 @@
 // problems for the files they match, what they ask (notify, open a file, run a command, show / redraw a window),
 // and the Plugins window (installed plugins, the project's plugins being developed, install, enable, remove).
 import { backend } from './backend.js';
-import { el, clear, icon, dialog, notify, confirm, debounce } from './ui.js';
+import { el, clear, icon, dialog, notify, confirm, debounce, menu } from './ui.js';
 import { monaco, pathOf } from './editor.js';
 
 /** 'Ctrl+Alt+T' -> 'ctrl+alt+t', in the order the IDE's key handler writes keys. */
@@ -302,7 +302,9 @@ export class Plugins {
                 notify(err.message, 'error', { title: 'Publish on jumphp.net' });
               }
               e.target.disabled = false;
-            } }, 'Publish on jumphp.net'), el('button.btn.small.primary', { onclick: async () => {
+            } }, 'Publish on jumphp.net'),
+            el('button.btn.small', { title: 'Its statistics on jumphp.net (yours only)', onclick: () => this.stats(m.id, m.title) }, 'Statistics'),
+            el('button.btn.small.primary', { onclick: async () => {
               const r = await backend.invoke('plugins.install', { dir: `${this.app.project.root}/${m.dir}` }).catch((err) => { notify(err.message, 'error'); return null; });
               if (r?.restart) restart(); else if (r?.status === 'active') notify(`${r.name} is installed: its tool windows and actions show after a reload of the window.`, 'success', { title: 'Plugins', actions: [{ label: 'Reload', action: () => location.reload() }] });
               else if (r?.error) notify(r.error, 'error', { title: r.name || 'Plugins' });
@@ -344,14 +346,16 @@ export class Plugins {
         const newer = mine && versionCompare(p.version, mine.installedVersion || mine.version) > 0;
         const label = !mine ? 'Install' : newer ? `Update to ${p.version}` : mine.restart ? 'Restart to use' : 'Installed';
         results.append(el('div.plugin-row', {},
-          el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `, el('span.muted', {}, `by ${p.author} · ${p.downloads} downloads`),
+          el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `,
+            el('span.muted', {}, `by ${p.author} · ${p.downloads} downloads${p.rating ? ` · ★ ${p.rating} (${p.ratingCount})` : ''}`),
             el('div.muted', {}, p.description || '')),
           el('div.plugin-buttons', {},
             el('button.btn.small', { onclick: () => this.app.openUrl(`https://jumphp.net/ide-plugins/${p.id}`) }, 'Page'),
+            mine ? el('button.btn.small', { title: 'Your mark on jumphp.net (signed in)', onclick: (e) => this.rate(p, e.currentTarget, show) }, 'Rate…') : null,
             el(`button.btn.small${!mine || newer ? '.primary' : ''}`, { disabled: !!mine && !newer, onclick: async (e) => {
               e.target.disabled = true;
               try {
-                const r = await backend.invoke('market.install', { id: p.id });
+                const r = await backend.invoke('market.install', { id: p.id, via: mine ? 'update' : 'install' });
                 if (r.restart) restart();
                 else if (r.status === 'active') notify(`${r.name} is installed.`, 'success', { title: 'Plugins', actions: [{ label: 'Reload the Window', action: () => location.reload() }] });
                 else notify(r.error || 'The plugin did not load.', 'error', { title: r.name || 'Plugins' });
@@ -364,6 +368,45 @@ export class Plugins {
     };
     search.addEventListener('keydown', (e) => { if (e.key === 'Enter') show(); });
     show();
+  }
+
+  /** A mark, 1 to 5 stars, on jumphp.net (the IDE's sign-in). */
+  rate(p, at, redraw) {
+    menu([1, 2, 3, 4, 5].reverse().map((score) => ({
+      label: '★'.repeat(score) + '☆'.repeat(5 - score),
+      action: async () => {
+        try {
+          const r = await backend.invoke('market.rate', { id: p.id, score });
+          notify(`Thanks! ${p.name}: ★ ${r.rating} (${r.ratingCount} mark${r.ratingCount > 1 ? 's' : ''}).`, 'success', { title: 'Plugins' });
+          redraw?.();
+        } catch (e) {
+          notify(e.message, 'error', { title: 'Rate a plugin' });
+        }
+      },
+    })), at);
+  }
+
+  /** The private statistics of one of the user's plugins (jumphp.net, 30 days). */
+  async stats(id, title) {
+    let s;
+    try {
+      s = await backend.invoke('market.stats', { id });
+    } catch (e) {
+      notify(e.message.includes('of yours') ? `${title} is not published on jumphp.net by you yet (Publish on jumphp.net).` : e.message, 'error', { title: 'Statistics' });
+      return;
+    }
+    const peak = Math.max(1, ...s.days.map((d) => d.views + d.install + d.update + d.web));
+    const kinds = [['views', 'Page views'], ['install', 'Installs from the IDE'], ['update', 'Updates from the IDE'], ['web', '.zip from the site']];
+    const chart = el('div.plugin-chart', {}, ...s.days.map((d) => el('div.day', { title: `${d.day}: ${kinds.map(([k, l]) => `${l} ${d[k]}`).join(', ')}` },
+      ...kinds.slice().reverse().map(([k]) => el(`span.${k}`, { style: { height: `${Math.round((d[k] / peak) * 100)}%` } })))));
+    dialog({ title: `${title} — statistics (only you see them)`, wide: true, body: el('div.plugin-stats', {},
+      el('p', {}, `${s.downloads} downloads in all · ${s.rating ? `★ ${s.rating} (${s.ratingCount} marks)` : 'no mark yet'}`),
+      el('p.muted', {}, 'The last 30 days'), chart,
+      el('ul.plugin-legend', {}, ...kinds.map(([k, l]) => el('li', {}, el(`i.${k}`), `${l} `, el('b', {}, String(s.totals[k]))))),
+      el('div.plugin-stats-cols', {},
+        el('div', {}, el('h4', {}, 'Per version'), el('ul', {}, ...(Object.entries(s.versions).length ? Object.entries(s.versions).map(([v, n]) => el('li', {}, `${v} `, el('b', {}, String(n)))) : [el('li.muted', {}, '—')]))),
+        el('div', {}, el('h4', {}, 'The marks'), el('ul', {}, ...[5, 4, 3, 2, 1].map((n) => el('li', {}, '★'.repeat(n) + ' ', el('b', {}, String(s.marks[n] ?? 0)))))))),
+      buttons: [{ label: 'Open its Page', action: () => this.app.openUrl(`https://jumphp.net/ide-plugins/${id}`) }, { label: 'Close' }] });
   }
 
   async installFolder() {

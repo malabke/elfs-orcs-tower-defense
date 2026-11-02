@@ -533,3 +533,14 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .plugin-status.error { color: var(--red); }
 .plugin-error { color: var(--red); font-size: 12px; margin-top: 4px; white-space: pre-wrap; }
 .plugin-mcp { color: var(--text-2); font-size: 12px; margin-top: 4px; }
+.plugin-chart { display: flex; align-items: flex-end; gap: 2px; height: 110px; border-bottom: 1px solid var(--border-2); margin: 6px 0; }
+.plugin-chart .day { flex: 1; height: 100%; display: flex; flex-direction: column-reverse; min-width: 3px; }
+.plugin-chart .day span, .plugin-legend i { display: block; }
+.plugin-chart .views, .plugin-legend .views { background: var(--text-3); }
+.plugin-chart .install, .plugin-legend .install { background: var(--accent); }
+.plugin-chart .update, .plugin-legend .update { background: var(--green); }
+.plugin-chart .web, .plugin-legend .web { background: var(--orange); }
+.plugin-legend { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.plugin-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.plugin-stats-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.plugin-stats-cols ul { list-style: none; padding: 0; margin: 0; }
