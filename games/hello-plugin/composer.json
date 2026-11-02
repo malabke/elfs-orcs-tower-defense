@@ -2,6 +2,7 @@
     "name": "jumphp-plugins/hello-plugin",
     "type": "jumphp-ide-plugin",
     "description": "Lists the TODO and FIXME comments of the project, warns about FIXME, completes @todo.",
+    "homepage": "https://github.com/davidnurdin/jumPhp/tree/main/games/hello-plugin",
     "license": "MIT",
     "require-dev": {
         "jumphp/ide": "*"
