@@ -115,7 +115,8 @@ collections, the libraries' functions and classmaps, the stubs' functions, `conf
 Done (IDE 0.1.18): the game's texts in `t('…')` (config/lang.yaml) and its actions in `isPressed('…')` / `isHeld` /
 `isReleased` / `press` / `hold` / `label` (config/input.yaml + the engine's).
 Done (IDE 0.1.19): `config/services.yaml` (_defaults, a service's keys, the project's classes).
-Left: form files / `lang.yaml` itself, the bin/jumphp commands (Run configurations, terminal), a background
+Done (IDE 0.1.20): Run Anything (Ctrl twice): bin/jumphp's commands, then the project's games, completed.
+Left: form files / `lang.yaml` itself, a background
 index of a whole vendor/ (names come from file names today, members when a class is first used).
 
 ## CLI apps: what is left

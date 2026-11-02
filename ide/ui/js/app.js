@@ -528,6 +528,7 @@ class App {
       a.add('stop', 'Stop', () => this.runner.stop(), { kbd: 'Ctrl+F2', icon: 'stop' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
       a.add('runConfigs', 'Run Configurations…', () => this.runner.choose($('runConfig')), { kbd: 'Alt+Shift+F10' });
+      a.add('runAnything', 'Run Anything… (bin/jumphp)', () => this.runner.runAnything(), { kbd: 'Ctrl Ctrl', icon: 'terminal' });
       if (this.debugger) {
         const d = this.debugger;
         const paused = () => !!d.paused;
@@ -582,8 +583,15 @@ class App {
       'shift+f9': 'debug', 'f9': 'debugResume', 'f8': 'stepOver', 'f7': 'stepInto', 'shift+f8': 'stepOut', 'ctrl+f8': 'toggleBreakpoint',
     };
     let lastShift = 0;
+    let lastCtrl = 0;
     document.addEventListener('keydown', (e) => {
       if (!this.project) return;
+      // Ctrl twice: Run Anything (bin/jumphp commands)
+      if (e.key === 'Control' && !e.repeat && !e.shiftKey && !e.altKey) {
+        const now = Date.now();
+        if (now - lastCtrl < 350 && this.project.capabilities?.run && !document.querySelector('.overlay')) { lastCtrl = 0; this.runner?.runAnything(); return; }
+        lastCtrl = now;
+      } else if (e.key !== 'Control') lastCtrl = 0;
       const key = [e.ctrlKey || e.metaKey ? 'ctrl' : '', e.altKey ? 'alt' : '', e.shiftKey ? 'shift' : '', e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase()].filter(Boolean).join('+');
       if (e.key === 'Shift' && !e.repeat) {
         const now = Date.now();
@@ -618,7 +626,7 @@ class App {
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
-      section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'toggleBreakpoint', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
+      section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'toggleBreakpoint', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },

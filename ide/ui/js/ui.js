@@ -232,6 +232,8 @@ function place(box, { x, y }) {
 /**
  * A filterable list popup (branches, run configurations, recent files...). items: [{label, hint, icon, action, group}]
  */
+// items: a list (filtered by what is typed), or a function of the text typed that gives its own list. An item with
+// `complete` puts that text in the field (and keeps the list open) instead of running an action.
 export function chooser(items, { at, placeholder = 'Type to filter', width = 420, footer } = {}) {
   const { layer, close } = overlay(false);
   const box = el('div.popup', { style: { width: width + 'px', padding: '0', display: 'flex', flexDirection: 'column' } });
@@ -242,16 +244,21 @@ export function chooser(items, { at, placeholder = 'Type to filter', width = 420
   const render = () => {
     clear(list);
     const q = input.value.toLowerCase();
-    shown = items.filter((i) => i === '-' || !q || (i.label + ' ' + (i.hint || '')).toLowerCase().includes(q));
+    shown = typeof items === 'function' ? items(input.value) : items.filter((i) => i === '-' || !q || (i.label + ' ' + (i.hint || '')).toLowerCase().includes(q));
     let group = null;
     shown.forEach((item, n) => {
       if (item === '-') return;
       if (item.group && item.group !== group) { group = item.group; list.append(el('div.menu-head', {}, group)); }
       list.append(el(`div.menu-item${n === selected ? '.sel' : ''}`, {
-        onclick: () => { close(); item.action && item.action(); },
+        onclick: () => pick(item),
       }, item.icon ? (typeof item.icon === 'string' ? icon(item.icon) : item.icon) : null, el('span', {}, item.label), item.hint ? el('span.kbd', {}, item.hint) : null));
     });
     if (!shown.filter((i) => i !== '-').length) list.append(el('div.placeholder', {}, 'Nothing found'));
+  };
+  const pick = (item) => {
+    if (typeof item.complete === 'string') { input.value = item.complete; selected = 0; render(); input.focus(); return; }
+    close();
+    item.action && item.action();
   };
   input.addEventListener('input', () => { selected = 0; render(); });
   input.addEventListener('keydown', (e) => {
@@ -259,7 +266,8 @@ export function chooser(items, { at, placeholder = 'Type to filter', width = 420
     const pos = real.indexOf(selected);
     if (e.key === 'ArrowDown') { selected = real[Math.min(real.length - 1, pos + 1)] ?? 0; render(); e.preventDefault(); }
     if (e.key === 'ArrowUp') { selected = real[Math.max(0, pos - 1)] ?? 0; render(); e.preventDefault(); }
-    if (e.key === 'Enter') { const item = shown[selected]; if (item && item !== '-') { close(); item.action && item.action(); } }
+    if (e.key === 'Enter') { const item = shown[selected]; if (item && item !== '-') pick(item); }
+    if (e.key === 'Tab') { const item = shown[selected]; if (item && typeof item.complete === 'string') { e.preventDefault(); pick(item); } }
   });
   box.append(input, list);
   if (footer) box.append(el('div.se-footer', {}, footer));

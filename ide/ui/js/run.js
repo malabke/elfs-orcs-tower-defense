@@ -39,6 +39,39 @@ export class Runner {
     chooser(items, { at, placeholder: 'Run configurations', width: 380 });
   }
 
+  /**
+   * Run Anything (Ctrl twice): type a bin/jumphp command, completed as it is typed (its commands, then the project's
+   * games / apps), Enter runs it in the Run window.
+   */
+  runAnything() {
+    const modules = (this.app.project?.modules || []).filter((m) => m.kind !== 'php').map((m) => m.id);
+    const words = (text) => (text.match(/"[^"]*"?|'[^']*'?|\S+/g) || []).map((w) => w.replace(/^["']|["']$/g, ''));
+    const items = (typed) => {
+      const text = typed.replace(/^\s*(bin\/jumphp|jumphp)\b\s*/, '');
+      const parts = words(text);
+      const ending = /\s$/.test(text) || text === '';
+      const out = [];
+      const known = COMMANDS.find(([name]) => name === parts[0]);
+      if (parts.length <= 1 && !ending) {
+        for (const [name, args, what] of COMMANDS) {
+          if (name.startsWith(parts[0] || '')) out.push({ label: `bin/jumphp ${name} ${args}`.trim(), hint: what, icon: 'terminal', complete: `bin/jumphp ${name} ` });
+        }
+      } else if (parts.length === 0) {
+        for (const [name, args, what] of COMMANDS) out.push({ label: `bin/jumphp ${name} ${args}`.trim(), hint: what, icon: 'terminal', complete: `bin/jumphp ${name} ` });
+      } else if (known && /^\[?<(id|game|app)>/.test(known[1]) && (parts.length === 1 || (parts.length === 2 && !ending))) {
+        for (const id of modules) {
+          if (id.startsWith(parts[1] || '')) out.push({ label: `bin/jumphp ${parts[0]} ${id}`, hint: known[2], icon: 'play', complete: `bin/jumphp ${parts[0]} ${id} ` });
+        }
+      }
+      if (parts.length) {
+        const command = ['bin/jumphp', ...parts];
+        out.push({ label: `Run: ${command.join(' ')}`, icon: 'play', action: () => this.start({ id: 'adhoc', kind: 'run', label: parts.slice(0, 2).join(' '), command }) });
+      }
+      return out.slice(-60);
+    };
+    chooser(items, { placeholder: 'bin/jumphp …  (Tab completes, Enter runs)', width: 560 });
+  }
+
   /** Runs the selected configuration, or the first one of a kind (test) for its module. */
   runSelected(kind = null) {
     let config = this.config();
@@ -406,3 +439,19 @@ function taskText(run) {
     serve: `Serving: ${label.replace(/^Serve /, '')}`, build: `Building: ${label}`, webshot: `Checking in a browser: ${label.replace(/^Browser check /, '')}`,
   }[run.config.kind] || label;
 }
+
+// bin/jumphp's commands (bin/jumphp help) for Run Anything: [name, arguments, what it does]
+const COMMANDS = [
+  ['run', '<id>', 'play it on the desktop'], ['test', '<id>', 'lint, phpstan, PHPUnit, smoke test'], ['shot', '<id> [frames]', 'a headless screenshot'],
+  ['build', '<id>', 'the browser build'], ['serve', '<id> [port]', 'serve the browser build'], ['webshot', '<id> [seconds] [keys]', 'the browser build in headless Chrome'],
+  ['build:remote', '<id>', 'the game as a remote game'], ['install', '<id>', 'composer install'], ['composer', '<id> …', 'composer in the game'],
+  ['php', '<dir> …', 'php in the runtime image'], ['export:standalone', '<id> [--linux] [--windows] [--macos]', 'one executable per system'],
+  ['export:desktop', '<id>', 'a Docker image that runs it'], ['installer', '<id> --github | --url … | --standalone', 'an installer per system'],
+  ['site:new', '<id>', 'a first web site of the game'], ['build:site', '<id>', 'build its web site'], ['siteshot', '<id>', 'check its web site'],
+  ['apple', '<id>', 'Mac, iPhone, iPad apps (GitHub)'], ['twa', '<id> --url …', 'an Android app (Google Play)'], ['video', '<id> <film.mp4>', 'a film for the video widget'],
+  ['app:run', '<id>', 'a desktop app'], ['app:test', '<id>', 'test a desktop app'], ['app:shot', '<id>', 'a desktop app\'s screenshot'], ['app:export', '<id>', 'export a desktop app'],
+  ['new', '<id> ["Title"]', 'a new game'], ['app:new', '<id> ["Title"]', 'a new desktop app'], ['gui:new', '<id> ["Title"]', 'a new graphic app'], ['cli:new', '<id> ["Title"]', 'a new CLI app'],
+  ['deploy', '[id…]', 'to the project\'s server'], ['pages', '[id…]', 'GitHub Pages'], ['relay', 'up | down | logs', 'the multiplayer relay'],
+  ['lint', '', 'php -l + forbidden words'], ['update', '', 'merge the newest JumPHP'], ['engine:download', '', 'the prebuilt WebAssembly engine'],
+  ['engine:build', '', 'build the WebAssembly engine'], ['setup', '[async]', 'build the Docker images'], ['help', '', 'every command'],
+];
