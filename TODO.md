@@ -96,9 +96,10 @@ later iOS).
   step debugger of its own?), desktop apps (Tauri, `ui: webview`: app:run uses the Tauri image, without Xdebug),
   exception breakpoints, "run to cursor", setting a variable's value; try it on
   Windows / macOS (host.docker.internal)
-- plugins, what is left (done: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack, PluginTestCase,
-  Tools > Plugins…): a plugin marketplace on jumphp.net (publish a zip, versions, install / update / remove from the
-  IDE), installing a .zip from the IDE, a plugin's own settings page
+- plugins, what is left (done in IDE 0.1.24-0.1.25: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
+  PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update): updates offered without
+  opening the Plugins window, a plugin's own settings page, plugins in the web IDE (they would run on the server: a
+  sandbox first)
 - editors for a game's resources, inside the IDE: sprites (sheets, animations, palettes), music, sound effects (and
   tiles / levels): see how David's game site with editors does it (its public/js/editor-sprites.js, editor-music.js,
   editor-sfx.js, editor-tiles.js, editor-level.js, templates/editor/; ask David for the repository), made into IDE tool windows / editor

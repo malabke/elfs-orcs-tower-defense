@@ -176,7 +176,21 @@ final class TodoPluginTest extends PluginTestCase
 | `wait($seconds)` | Lets time pass for the timers. |
 | `notifications()`, `opened()`, `ui($do)`, `errors()` | What the plugin asked the interface, and the errors it reported. |
 
-## Sharing a plugin
+## Sharing a plugin: jumphp.net
 
-`bin/jumphp plugin:pack <id>` makes `dist/<id>-<version>.zip`. The zip holds the folder without `vendor/`,
-`tests/`, `var/` and `dist/`. Others install it with "Install from a Folder…" after unzipping it.
+[jumphp.net/ide-plugins](https://jumphp.net/ide-plugins) is the plugins' marketplace.
+
+- **Install**: Tools › Plugins…, section "On jumphp.net". Search, then Install. When a newer version is out, the
+  button says "Update to x.y.z".
+- **Publish**: Tools › Plugins…, "Plugins of this project", then "Publish on jumphp.net". Sign in with jumphp.net
+  first. The IDE packs the folder as `plugin:pack` does and sends that version.
+  - The first account to publish an id owns it.
+  - Each version is kept. To publish again, raise `extra.jumphp-ide.version`.
+  - `homepage` (or `extra.jumphp-ide.repository`), an https address, shows as the plugin's source code.
+- `bin/jumphp plugin:pack <id>` makes the same zip: `dist/<id>-<version>.zip`. It holds the folder without
+  `vendor/`, `tests/`, `var/` and `dist/`.
+- The API:
+  - public: `GET https://jumphp.net/api/plugins?q=`, `/api/plugins/<id>`, `/api/plugins/<id>/download?version=`;
+  - the IDE's (its sign-in token): `POST /api/ide/plugins` (the zip as the body), `GET /api/ide/plugins/mine`,
+    `DELETE /api/ide/plugins/<id>?version=`.
+- jumphp.net never runs a plugin: it only reads its composer.json.

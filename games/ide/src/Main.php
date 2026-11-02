@@ -8,6 +8,7 @@ use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Ide;
 use JumPHP\Ide\Workspace\LocalWorkspace;
 use JumPHP\Async\Task;
+use JumPHP\Ide\Plugin\PluginPackage;
 use JumPHP\Native\FilePicker;
 use JumPHP\Native\Native;
 use JumPHP\Native\Shell;
@@ -164,6 +165,10 @@ final class Main implements AppMain
         $c['update.check'] = fn () => $this->updates->check(true);
         $c['update.install'] = fn () => $this->updates->install();
         $c['update.restart'] = fn () => $this->updates->restart();
+        // the plugins of jumphp.net (Tools > Plugins…): search, install / update, publish the project's own
+        $c['market.list'] = fn (array $p) => $this->marketList((string)($p['q'] ?? ''));
+        $c['market.install'] = fn (array $p) => $this->marketInstall((string)($p['id'] ?? ''), isset($p['version']) ? (string)$p['version'] : null);
+        $c['market.publish'] = fn (array $p) => $this->marketPublish((string)($p['dir'] ?? ''));
         // a plugin updated or being developed: PHP cannot unload its classes, the IDE starts again with them
         $c['plugins.restart'] = function () {
             $this->app->updater()->relaunch();
@@ -468,6 +473,87 @@ final class Main implements AppMain
             return $data;
         }, function (\Throwable $e) use ($headers) {
             @unlink($headers);
+            throw $e;
+        });
+    }
+
+    /** jumphp.net's IDE plugins (its public API: no sign-in needed). */
+    private function marketList(string $query): Deferred
+    {
+        $url = $this->playground->server() . '/api/plugins' . ($query !== '' ? '?' . http_build_query(['q' => $query]) : '');
+        return $this->processes->start(['curl', '-sS', '--max-time', '20', '-H', 'Accept: application/json', '-A', 'jumphp-ide', $url], sys_get_temp_dir())['done']
+            ->then(function (array $r) {
+                $data = json_decode((string)$r['stdout'], true);
+                if ($r['code'] !== 0 || !is_array($data) || !isset($data['plugins'])) {
+                    throw new \RuntimeException('jumphp.net cannot be reached: ' . trim((string)($r['stderr'] ?: $r['stdout'])));
+                }
+                return $data['plugins'];
+            });
+    }
+
+    /** Downloads a plugin's zip from jumphp.net and installs it (the newest version, or $version). */
+    private function marketInstall(string $id, ?string $version): Deferred
+    {
+        if ($this->ide?->plugins === null) {
+            return Deferred::rejected(new \RuntimeException('Open a project first.'));
+        }
+        if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $id)) {
+            return Deferred::rejected(new \InvalidArgumentException("No plugin '$id'."));
+        }
+        $work = sys_get_temp_dir() . '/jumphp-plugin-' . bin2hex(random_bytes(4));
+        @mkdir($work, 0700, true);
+        $url = $this->playground->server() . '/api/plugins/' . $id . '/download' . ($version !== null ? '?' . http_build_query(['version' => $version]) : '');
+        $clean = fn () => exec((PHP_OS_FAMILY === 'Windows' ? 'rmdir /s /q ' : 'rm -rf ') . escapeshellarg($work));
+        return $this->processes->start(['curl', '-sSfL', '--max-time', '120', '-A', 'jumphp-ide', '-o', "$work/plugin.zip", $url], $work)['done']
+            ->then(function (array $r) use ($work, $clean) {
+                try {
+                    if ($r['code'] !== 0 || !is_file("$work/plugin.zip")) {
+                        throw new \RuntimeException('The download failed: ' . trim((string)$r['stderr']));
+                    }
+                    $dir = PluginPackage::unpack("$work/plugin.zip", "$work/unpacked");
+                    return $this->ide->plugins->install($dir);
+                } finally {
+                    $clean();
+                }
+            }, function (\Throwable $e) use ($clean) {
+                $clean();
+                throw $e;
+            });
+    }
+
+    /** Packs a plugin's folder (the project's) and publishes that version on jumphp.net. */
+    private function marketPublish(string $dir): Deferred
+    {
+        $token = $this->session['token'] ?? null;
+        if ($token === null) {
+            return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first (the account menu, top right).'));
+        }
+        try {
+            $zip = PluginPackage::pack($dir, sys_get_temp_dir() . '/jumphp-plugin-' . bin2hex(random_bytes(4)) . '.zip');
+        } catch (\Throwable $e) {
+            return Deferred::rejected($e);
+        }
+        $headers = (string)tempnam(sys_get_temp_dir(), 'jph');
+        chmod($headers, 0600);
+        file_put_contents($headers, "Authorization: Bearer $token\nAccept: application/json\nContent-Type: application/zip\nUser-Agent: jumphp-ide\n");
+        $started = $this->processes->start(['curl', '-sS', '-X', 'POST', '-H', "@$headers", '--data-binary', '@' . $zip['file'], '-w', '\n%{http_code}',
+            $this->playground->server() . '/api/ide/plugins'], dirname($zip['file']));
+        $clean = function () use ($headers, $zip): void {
+            @unlink($headers);
+            @unlink($zip['file']);
+        };
+        return $started['done']->then(function (array $r) use ($clean) {
+            $clean();
+            $lines = explode("\n", rtrim((string)$r['stdout']));
+            $status = (int)array_pop($lines);
+            $data = json_decode(implode("\n", $lines), true);
+            if ($r['code'] !== 0 || $status < 200 || $status >= 300) {
+                throw new \RuntimeException(is_array($data) && isset($data['error']) ? (string)$data['error']
+                    : 'Publishing failed (' . ($status ?: 'curl: ' . trim((string)$r['stderr'])) . ')');
+            }
+            return $data;
+        }, function (\Throwable $e) use ($clean) {
+            $clean();
             throw $e;
         });
     }

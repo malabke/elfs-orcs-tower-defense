@@ -141,4 +141,29 @@ final class PluginHostTest extends TestCase
         self::assertDirectoryDoesNotExist("$this->dir/user/gamma");
         self::assertSame([], $again->handle('plugins.list', []));
     }
+
+    public function testAPluginGoesIntoAZipAndBackAsJumphpNetPublishesIt(): void
+    {
+        $source = $this->plugin("$this->dir/dev", 'delta', "\$ide->action('a', 'A', fn () => 'delta');");
+        mkdir("$source/vendor/x", 0777, true);
+        file_put_contents("$source/vendor/x/big.php", '<?php');
+        mkdir("$source/tests");
+        $zip = \JumPHP\Ide\Plugin\PluginPackage::pack($source);
+        self::assertSame("$source/dist/delta-1.0.0.zip", $zip['file']);
+        self::assertSame(2, $zip['files']);       // composer.json, src/P.php
+        $dir = \JumPHP\Ide\Plugin\PluginPackage::unpack($zip['file'], "$this->dir/unpacked");
+        self::assertSame("$this->dir/unpacked/delta", $dir);
+        $ide = $this->ide();
+        self::assertSame('active', $ide->handle('plugins.install', ['dir' => $dir])['status']);
+        self::assertSame(['message' => 'delta'], $ide->handle('plugins.action', ['id' => 'plugin:delta:a']));
+
+        $evil = "$this->dir/evil.zip";
+        $z = new \ZipArchive();
+        $z->open($evil, \ZipArchive::CREATE);
+        $z->addFromString('a/composer.json', '{}');
+        $z->addFromString('b/x.php', '<?php');
+        $z->close();
+        $this->expectExceptionMessage('one folder');
+        \JumPHP\Ide\Plugin\PluginPackage::unpack($evil, "$this->dir/unpacked2");
+    }
 }

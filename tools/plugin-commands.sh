@@ -46,6 +46,7 @@ cmd_plugin_test() {
 cmd_plugin_pack() {
   local dir; dir="$(game_dir "${1:-}")"
   is_plugin "${1:-}" || die "$dir is not an IDE plugin (config/game.yaml kind: plugin)"
+  ensure_vendor "$dir"
   php_run "$dir" -- php /workspace/tools/plugin-pack.php . || die "packaging failed"
 }
 

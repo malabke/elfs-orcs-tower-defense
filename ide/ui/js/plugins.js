@@ -14,6 +14,16 @@ function keyOf(kbd) {
   return [parts.includes('ctrl') || parts.includes('cmd') ? 'ctrl' : '', parts.includes('alt') ? 'alt' : '', parts.includes('shift') ? 'shift' : '', key].filter(Boolean).join('+');
 }
 
+/** -1, 0, 1: version a against b ('0.10.0' > '0.9.1'). */
+function versionCompare(a, b) {
+  const pa = String(a).split(/[.+-]/).map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).split(/[.+-]/).map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) ? 1 : -1;
+  }
+  return 0;
+}
+
 /** A glob of a plugin ('*.php', 'config/*', '*') as a test of a path (or of its file name). */
 function globTest(pattern) {
   const re = new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
@@ -234,7 +244,16 @@ export class Plugins {
         for (const m of dev) {
           const loaded = list.find((p) => p.id === m.id);
           body.append(el('div.plugin-row', {}, el('div.plugin-main', {}, el('b', {}, m.title), el('span.muted', {}, ` ${m.dir}/`)),
-            el('div.plugin-buttons', {}, el('button.btn.small.primary', { onclick: async () => {
+            el('div.plugin-buttons', {}, el('button.btn.small', { title: 'Packs it (like bin/jumphp plugin:pack) and publishes this version on jumphp.net, for everyone', onclick: async (e) => {
+              e.target.disabled = true;
+              try {
+                const r = await backend.invoke('market.publish', { dir: `${this.app.project.root}/${m.dir}` });
+                notify(`${r.name} ${r.version} is published on jumphp.net.`, 'success', { title: 'Plugins', actions: [{ label: 'Open its Page', action: () => this.app.openUrl(r.page) }] });
+              } catch (err) {
+                notify(err.message, 'error', { title: 'Publish on jumphp.net' });
+              }
+              e.target.disabled = false;
+            } }, 'Publish on jumphp.net'), el('button.btn.small.primary', { onclick: async () => {
               const r = await backend.invoke('plugins.install', { dir: `${this.app.project.root}/${m.dir}` }).catch((err) => { notify(err.message, 'error'); return null; });
               if (r?.restart) restart(); else if (r?.status === 'active') notify(`${r.name} is installed: its tool windows and actions show after a reload of the window.`, 'success', { title: 'Plugins', actions: [{ label: 'Reload', action: () => location.reload() }] });
               else if (r?.error) notify(r.error, 'error', { title: r.name || 'Plugins' });
@@ -242,9 +261,56 @@ export class Plugins {
             } }, loaded ? 'Update in the IDE' : 'Install in the IDE'))));
         }
       }
+      if (backend.kind === 'native') await this.market(body, list, draw, restart);
     };
     await draw();
     return d;
+  }
+
+  /** jumphp.net's plugins (https://jumphp.net/ide-plugins): search, install, update. */
+  async market(body, installed, draw, restart) {
+    const results = el('div.plugins-market');
+    const search = el('input.pv-input', { type: 'search', placeholder: 'Search jumphp.net\'s plugins', value: this.marketQuery || '' });
+    body.append(el('h4', {}, 'On jumphp.net'), search, results);
+    const show = async () => {
+      this.marketQuery = search.value.trim();
+      clear(results);
+      results.append(el('div.placeholder', {}, 'Loading…'));
+      let found;
+      try {
+        found = await backend.invoke('market.list', { q: this.marketQuery });
+      } catch (e) {
+        clear(results);
+        results.append(el('div.placeholder', {}, e.message));
+        return;
+      }
+      clear(results);
+      if (!found.length) results.append(el('div.placeholder', {}, this.marketQuery ? 'No plugin matches.' : 'No plugin on jumphp.net yet.'));
+      for (const p of found) {
+        const mine = installed.find((x) => x.id === p.id);
+        const newer = mine && versionCompare(p.version, mine.version) > 0;
+        const label = !mine ? 'Install' : newer ? `Update to ${p.version}` : 'Installed';
+        results.append(el('div.plugin-row', {},
+          el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `, el('span.muted', {}, `by ${p.author} · ${p.downloads} downloads`),
+            el('div.muted', {}, p.description || '')),
+          el('div.plugin-buttons', {},
+            el('button.btn.small', { onclick: () => this.app.openUrl(`https://jumphp.net/ide-plugins/${p.id}`) }, 'Page'),
+            el(`button.btn.small${!mine || newer ? '.primary' : ''}`, { disabled: !!mine && !newer, onclick: async (e) => {
+              e.target.disabled = true;
+              try {
+                const r = await backend.invoke('market.install', { id: p.id });
+                if (r.restart) restart();
+                else if (r.status === 'active') notify(`${r.name} is installed.`, 'success', { title: 'Plugins', actions: [{ label: 'Reload the Window', action: () => location.reload() }] });
+                else notify(r.error || 'The plugin did not load.', 'error', { title: r.name || 'Plugins' });
+              } catch (err) {
+                notify(err.message, 'error', { title: 'Plugins' });
+              }
+              draw();
+            } }, label))));
+      }
+    };
+    search.addEventListener('keydown', (e) => { if (e.key === 'Enter') show(); });
+    show();
   }
 
   async installFolder() {
