@@ -2,7 +2,7 @@
 game:
   id: ide
   title: "JumPHP IDE"
-  version: 0.1.2
+  version: 0.1.3
   description: "An IDE for PHP games and apps (JumPHP): code intelligence, Git, run and tests, visual HTML editor."
   lang: en
   ui: webview
@@ -12,6 +12,9 @@ game:
     pages: vendor/jumphp/ide/ui     # ide/ui through Composer's path repository
     tick_hz: 60
     native_commands: true
+    # the installed IDE updates itself from this signed file (games/ide/tools/release.sh writes it; src/SelfUpdate.php)
+    update:
+      url: https://raw.githubusercontent.com/davidnurdin/jumPhp/main/games/ide/installer/update.json
     window:
       url: index.html
       width: 1280

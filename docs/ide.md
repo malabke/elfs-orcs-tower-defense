@@ -30,6 +30,8 @@ games/ide/             the desktop app (Tauri, docs/tauri.md): Main (session, pr
 | **Play** | green Play in the editor's and the Project view's context menus (`Ctrl+Shift+F10`): a `src/Scene/*.php` starts the game in that scene, a `tests/*Test.php` runs only its tests (results as a tree in Run), else the whole game. Web: the **Game** window (right or bottom) with ⚡ Live reload and the game's console |
 | **Hierarchy, libraries** | Hierarchy tool window (`Ctrl+H`): the class's ancestors as a tree, the classes under it; External Libraries in the Project view (the engine, vendor packages), read only |
 | **Claude** | desktop: the Claude tool window (`Alt+8`) talks to the Claude Code of your computer (`claude -p` in the project's folder): its answers, the files it reads and edits (click to open), the commands it runs, as they come; the conversation goes on; what it may do: edit files, plan only, ask, full auto. "Ask Claude about the Selection" in the editor's menu |
+| **Claude, seen working** | the eye of the Claude window (**Follow**, on by default): the IDE shows what Claude does as it does it. The file it reads opens at the lines it reads (blue), what an edit replaces is marked before (orange) and what it wrote after (green), its commands appear in the Run window with their output, its searches in Find, its plan (TodoWrite) above the conversation, the file in the Project view. The keyboard stays in the Claude window and nothing moves while you type in an editor |
+| **Claude drives the IDE** | the IDE gives the Claude it starts its own tools (an MCP server, `jumphp-ide`, see below): open a file, point at lines with a note, show a diff or a tool window, run a run configuration in the Run window and read its result, play a scene, the problems of a file, what you are looking at (open files, cursor, selection), ask you a question in a dialog, a notification |
 | **Claude on the web** | jumphp.net/ide uses the Claude Code of your computer: `bin/jumphp claude:connect` (or the account menu › Claude for jumphp.net) opens the JumPHP IDE, authorized once in the browser; it takes the web IDE's messages, runs Claude on a copy of the project with your drafts (`~/.cache/jumphp/claude-bridge/`), streams the answer back, and the files Claude changed become drafts |
 | **Projects** | sign in with jumphp.net, your projects, clone, open a folder, clone any repository, New Project: game, desktop app, hybrid game, Amstrad CPC remake (`.dsk` kept local), port of an open-source game |
 | **Games kept alone** | a repository holding only the game (`config/game.yaml` at its root, `composer.json` → `../../engine`) runs too: the IDE keeps its own JumPHP clone (the toolkit, in its data folder), links the game into it as `games/<id>` and runs `bin/jumphp` there |
@@ -73,6 +75,35 @@ One interface, one PHP core, two hosts:
   in the playground's sandbox. The engine's classes and SDL / OpenGL / OpenAL functions resolve there too (sources and stubs
   installed with the IDE by the playground's `bin/ide-install`). Branches, log, blame and local runs are desktop only.
 
+### The IDE's tools for an AI (MCP)
+
+Each `claude -p` the Claude window starts gets `--mcp-config` (a file only you can read, in the temporary folder) naming
+the IDE's MCP server: HTTP on `127.0.0.1`, a random port, a random token (`Authorization: Bearer`), refused to web pages
+(Origin). Its tools are allowed (`--allowedTools mcp__jumphp-ide`) and told to Claude (`--append-system-prompt`).
+
+```
+claude ──HTTP JSON-RPC──▶ McpServer (ide/src/Agent) ──agent.call {call, tool, args}──▶ ide/ui/js/agent.js
+       ◀── tool result ─── IdeAgent (waits, timeout) ◀──── agent.reply {call, result | error} ───┘  (does it on screen)
+```
+
+| Tool | |
+|---|---|
+| `get_state` | open files, the active one with its cursor and selected text, tool windows, run configurations (ids), problems |
+| `open_file` {path, line, end_line} | opens and selects |
+| `highlight` {path, start_line, end_line, message} / `clear_highlights` | marks lines with a note (violet) until cleared |
+| `show_diff` {path?} | the diff with HEAD, or the Commit window |
+| `show_tool` {tool} | project, commit, run, find, problems, game, git… |
+| `find_in_files` {query, regex, include} | shown in Find, the counts returned |
+| `run` {config, wait} | a configuration id (`test:pong`) or `bin/jumphp test|shot|build|webshot|lint|run|app:test… <id>` (only bin/jumphp's, not any program): in the Run window; returns exit code, tests, screenshot, end of the output |
+| `play` {path} | as the IDE's Play (a scene, a test file) |
+| `diagnostics` {path?} | the IDE's PHP problems |
+| `ask_user` {question, options} | a dialog; the answer (10 min at most) |
+| `notify` {message, kind} | a notification |
+
+Add one: its definition in `AgentTools::all()` (name, description, JSON schema, timeout), its `tool_<name>(args)` in
+`AgentTools` of `agent.js`. Tests: `ide/tests/AgentTest.php` (the protocol over a real socket). The web IDE (Claude of
+your computer through jumphp.net) has Follow, not the tools yet.
+
 ## Commands
 
 ```bash
@@ -92,16 +123,25 @@ Environment: `JUMPHP_IDE_SERVER` (another jumphp.net, e.g. `http://jumphp.localh
 projects are cloned, default `~/JumPHP-Projects`), `JUMPHP_IDE_PROJECT` (open this folder), `JUMPHP_IDE_EVAL` (JavaScript run
 in the page once loaded: checks and screenshots).
 
-**Releases**: `bin/jumphp app:export ide --linux --windows --macos`, the three files (`ide-linux-x86_64`,
-`ide-windows-x86_64.exe`, `ide-macos.zip`) attached to a GitHub release tagged `ide-v<version>` (game.yaml `version`),
-then bump `games/ide/installer/version.json` on main: the installers (`JumPHP-IDE-setup.exe`, `-setup-linux-x86_64`,
-`-setup-macos.zip`, [jumphp2installer](https://github.com/davidnurdin/jumphp2installer)) read `games/ide/installer/` on
-main through raw.githubusercontent.com, so the ones already given install the new version: no need to remake them.
-Not `tools/github-release.sh` (it points them to the repository's newest release, which is JumPHP's, not the IDE's).
+**Releases**: bump game.yaml `version`, then `games/ide/tools/release.sh "What is new."`. It runs
+`bin/jumphp app:release ide --linux --windows --macos` (the executables + `update.json` signed with
+`~/.jumphp/keys/ide-update.pem`: **keep a copy of that key**, without it the installed IDEs can never be updated again;
+its public half is `games/ide/config/update.pub`, inside the IDE), attaches them to the GitHub release `ide-v<version>`
+(with the installers of the previous release), checks every address answers, then commits and pushes
+`games/ide/installer/update.json` and `version.json` on main. The installers already given read `version.json` there
+and install the newest version: no need to remake them.
+
+**The IDE updates itself** (`games/ide/src/SelfUpdate.php`): 8 s after it starts and every 6 hours it reads
+`games/ide/installer/update.json` on main (game.yaml `app.update.url`), checks its signature, and when the version is
+newer downloads it, checks its SHA-256 and puts it in place of its executable, in the background; a notification then
+offers *Restart Now* (otherwise the next start runs it). Help > Check for Updates…, Help > Update Automatically (on by
+default). Run from its sources it only says a newer version is out. `JUMPHP_UPDATE_URL` tries another update.json,
+`JUMPHP_IDE_UPDATES=0` turns the checks off (tests). IDEs older than 0.1.3 have no updater: reinstall them once.
+Not `tools/github-release.sh` (it points the installers to the repository's newest release, which is JumPHP's, not the IDE's).
 Remaking them (another installer version, pictures, `install.yaml`): from a jumphp2installer clone, with the package
 folder copied into it and its base installers in `bases/` (`gh release download installer-v… -p 'jumphp2installer-*'`):
 `bin/jumphp php . tools/package-release.php <pkg> https://raw.githubusercontent.com/davidnurdin/jumPhp/main/games/ide/installer/ bases out`,
-then `gh release upload ide-v<version> out/JumPHP-IDE-setup*`. `games/ide/tools/installer-banner.php` remakes its pictures.
+then `gh release upload ide-v<version> out/JumPHP-IDE-setup*`. `games/ide/tools/installer-banner.php` remakes its pictures (the banner, the icon, and `jumphp-ide.ico` for the Windows shortcuts).
 
 The IDE's own files: `~/.local/share/ide` (exported) or `games/ide/var/` (session, recent projects, PHP index cache).
 A project's IDE settings: `.jumphp/ide.json` (its jumphp.net project, a CPC disc path), kept out of git

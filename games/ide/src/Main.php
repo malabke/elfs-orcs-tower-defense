@@ -37,6 +37,7 @@ final class Main implements AppMain
     private float $nextScan = 0;
 
     private ClaudeBridge $bridge;
+    private SelfUpdate $updates;
     private string $filesSignature = '';
 
     public function boot(App $app): void
@@ -55,7 +56,10 @@ final class Main implements AppMain
         if (getenv('JUMPHP_IDE_CRASH_REPORTS') !== '0') {
             $crashes->send($this->playground);
         }
+        // the IDE keeps itself up to date (SelfUpdate: game.yaml app.update.url, games/ide/tools/release.sh)
+        $this->updates = new SelfUpdate($app);
         $this->registerCommands();
+        $this->updates->start();
         // bin/jumphp claude:connect, or the option kept from last time: this computer's Claude answers the web IDE
         if (getenv('JUMPHP_IDE_BRIDGE') === '1' || $app->options->get('claudeBridge', false)) {
             if (!empty($this->session['token'])) {
@@ -156,6 +160,11 @@ final class Main implements AppMain
             'project' => $this->ide !== null ? $this->info() : null,
             'version' => $this->app->config->get('version'),
         ];
+        $c['update.state'] = fn () => $this->updates->state();
+        $c['update.check'] = fn () => $this->updates->check(true);
+        $c['update.install'] = fn () => $this->updates->install();
+        $c['update.restart'] = fn () => $this->updates->restart();
+        $c['update.auto'] = fn (array $p) => $this->updates->setAuto(!empty($p['on']));
         $c['session.login'] = fn () => $this->login();
         $c['session.cancelLogin'] = function () {
             $this->loopback?->fail('sign-in cancelled');
@@ -190,6 +199,7 @@ final class Main implements AppMain
             ->then(fn (string $path) => $this->openProject($path));
         $c['projects.open'] = fn (array $p) => $this->openProject((string)($p['path'] ?? ''));
         $c['projects.close'] = function () {
+            $this->ide?->agent?->close();
             $this->ide = null;
             $this->app->options->set('reopen', false);
             return true;
@@ -303,6 +313,7 @@ final class Main implements AppMain
     {
         $workspace = new LocalWorkspace($path);
         $root = (string)$workspace->localPath();
+        $this->ide?->agent?->close();
         $this->ide = new Ide($workspace, $this->app->storage->path('cache'), function (string $event, array $payload): void {
             $this->app->send($event, $payload);
         }, $this->processes);

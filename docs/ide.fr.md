@@ -28,6 +28,16 @@ commits.
 - **Éditeur visuel HTML / CSS** : les fichiers `.html` en Code / Split / Design (composants à glisser, calques,
   inspecteur, règles CSS des feuilles liées, tailles d'écran) ; le HTML reste tel qu'écrit. Pour les pages des
   applications de bureau et les sites des jeux.
+- **Claude** (bureau) : la fenêtre Claude (`Alt+8`) parle au Claude Code de l'ordinateur. **Suivre** (l'œil, actif par
+  défaut) : l'IDE montre ce que fait Claude au moment où il le fait : le fichier lu s'ouvre aux lignes lues (bleu), ce
+  qu'une modification remplace est marqué avant (orange) et ce qu'il a écrit après (vert), ses commandes apparaissent
+  dans Run avec leur sortie, ses recherches dans Find, son plan au-dessus de la conversation ; le clavier reste dans la
+  fenêtre Claude et rien ne bouge pendant que vous tapez.
+- **Claude pilote l'IDE** : l'IDE donne au Claude qu'il lance ses propres outils (serveur MCP `jumphp-ide` sur
+  `127.0.0.1`, jeton aléatoire) : ouvrir un fichier, pointer des lignes avec une note, montrer un diff ou une fenêtre,
+  lancer une configuration dans Run et lire son résultat, jouer une scène, les problèmes d'un fichier, ce que vous
+  regardez (fichiers ouverts, curseur, sélection), vous poser une question, une notification. Détails : `docs/ide.md`
+  (« The IDE's tools for an AI »).
 - **Projets** : connexion jumphp.net, vos projets, clonage, ouvrir un dossier, cloner un dépôt, Nouveau projet : jeu,
   application de bureau, jeu hybride, remake Amstrad CPC (le `.dsk` reste sur l'ordinateur), portage d'un jeu libre.
 
@@ -48,6 +58,15 @@ et votre Docker (nécessaire, comme toujours, à `bin/jumphp run / test` des pro
 Variables : `JUMPHP_IDE_SERVER` (un autre jumphp.net), `JUMPHP_IDE_PROJECTS` (où cloner, par défaut
 `~/JumPHP-Projects`), `JUMPHP_IDE_PROJECT` (ouvrir ce dossier), `JUMPHP_IDE_EVAL` (JavaScript lancé dans la page : tests,
 captures).
+
+**Mises à jour** : l'IDE installé se met à jour tout seul (`games/ide/src/SelfUpdate.php`). 8 s après son démarrage puis
+toutes les 6 heures, il lit `games/ide/installer/update.json` sur main, vérifie sa signature, télécharge la version plus
+récente, vérifie son SHA-256 et remplace son exécutable en arrière-plan ; une notification propose alors *Restart Now*
+(sinon le prochain démarrage la lance). Aide > Check for Updates…, Aide > Update Automatically (activé par défaut).
+Publier une version : augmenter `version` dans game.yaml, puis `games/ide/tools/release.sh "Les nouveautés."` (export
+Linux, Windows, macOS, `update.json` signé avec `~/.jumphp/keys/ide-update.pem` — **gardez une copie de cette clé** —,
+release GitHub `ide-v<version>`, puis `update.json` et `version.json` poussés sur main). Les IDE plus anciens que la 0.1.3
+n'ont pas cette mise à jour : à réinstaller une fois.
 
 Le fonctionnement détaillé (cœur, index PHP, connexion par boucle locale, version web sur les brouillons) :
 [ide.md](ide.md).

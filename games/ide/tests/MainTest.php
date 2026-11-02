@@ -29,6 +29,7 @@ final class MainTest extends AppTestCase
         file_put_contents($this->project . '/games/demo/src/Scene/PlayScene.php', "<?php\nnamespace App\\Scene;\n\nfinal class PlayScene\n{\n    public int \$score = 0;\n    public function addPoint(): void { \$this->score++; }\n}\n");
         putenv('JUMPHP_IDE_PROJECT=' . $this->project);
         putenv('JUMPHP_IDE_SERVER=http://127.0.0.1:9');
+        putenv('JUMPHP_IDE_UPDATES=0');    // no update check against GitHub during the tests
         parent::setUp();
     }
 

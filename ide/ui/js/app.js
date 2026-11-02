@@ -51,6 +51,10 @@ class App {
     backend.on('bridge.status', (st) => this.bridgeStatus(st));
     if (backend.kind === 'native') backend.invoke('bridge.status').then((st) => this.bridgeStatus(st)).catch(() => null);
     if (backend.kind === 'native') {
+      backend.on('update.state', (st) => this.updateState(st));
+      backend.invoke('update.state').then((st) => this.updateState(st)).catch(() => null);
+    }
+    if (backend.kind === 'native') {
       const state = await backend.invoke('session.state');
       this.session = state;
       if (state.project) await this.projectOpened(state.project, false);
@@ -474,7 +478,11 @@ class App {
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },
         { label: 'JumPHP Documentation', action: () => this.openUrl('https://jumphp.net/docs') },
-        { label: 'About JumPHP IDE', action: () => dialog({ title: 'JumPHP IDE', body: el('p', {}, 'An IDE for PHP games and apps, written in PHP (JumPHP) with Monaco, the editor of VS Code.') }) },
+        ...(backend.kind === 'native' && this.updates && this.updates.state !== 'off' ? ['-',
+          { label: 'Check for Updates…', icon: 'download', action: () => this.checkForUpdates() },
+          { label: 'Update Automatically', checked: !!this.updates.auto, action: () => backend.invoke('update.auto', { on: !this.updates.auto }).then((st) => this.updateState(st)) },
+          '-'] : []),
+        { label: 'About JumPHP IDE', action: () => dialog({ title: 'JumPHP IDE', body: el('p', {}, `JumPHP IDE ${this.updates?.current || ''} — an IDE for PHP games and apps, written in PHP (JumPHP) with Monaco, the editor of VS Code.`) }) },
       ] },
     ].map((s) => (s.items && !s.items.length ? null : s)).filter(Boolean), at);
   }
@@ -495,6 +503,37 @@ class App {
   }
 
   /** The status bar shows when this computer's Claude answers the web IDE. */
+  /** The IDE's own updates (games/ide/src/SelfUpdate.php): installed in the background, then one click to restart. */
+  updateState(st, force = false) {
+    const before = this.updates?.state;
+    this.updates = st;
+    if (!st || (st.state === before && !force)) return;
+    const restart = { label: 'Restart Now', action: () => this.restartForUpdate() };
+    if (st.state === 'installed') {
+      notify(`JumPHP IDE ${st.version} is installed: restart to use it (or it starts next time).${st.notes ? ' ' + st.notes : ''}`, 'success', { title: 'Update', actions: [restart, { label: 'Later', action: () => null }], timeout: 0 });
+    } else if (st.state === 'available' && (force || !(st.installable && st.auto))) {
+      const actions = st.installable ? [{ label: 'Install', action: () => backend.invoke('update.install').then((s) => this.updateState(s)) }] : [];
+      notify(`JumPHP IDE ${st.version} is out (this one: ${st.current}).${st.installable ? '' : ' Run from its sources: update them with git.'}`, 'info', { title: 'Update', actions, timeout: 0 });
+    } else if (st.manual && st.state === 'latest') {
+      notify(`JumPHP IDE ${st.current} is the newest version.`, 'info', { title: 'Update' });
+    } else if (st.manual && st.state === 'error') {
+      notify(st.error || 'Cannot check for updates.', 'error', { title: 'Update' });
+    } else if ((st.manual || force) && st.state === 'installing') {
+      notify(`Downloading JumPHP IDE ${st.version}…`, 'info', { title: 'Update' });
+    }
+  }
+
+  /** Help > Check for Updates: the answer comes as an update.state event (or at once: installing, installed). */
+  checkForUpdates() {
+    backend.invoke('update.check').then((st) => this.updateState(st, st.state !== 'checking'))
+      .catch((e) => notify(e.message, 'error', { title: 'Update' }));
+  }
+
+  async restartForUpdate() {
+    try { await this.editors?.saveAll?.(); } catch { /* the files are saved as one types anyway */ }
+    backend.invoke('update.restart').catch((e) => notify(e.message, 'error', { title: 'Update' }));
+  }
+
   bridgeStatus(st) {
     let item = document.getElementById('sbBridge');
     if (!st?.on) { item?.remove(); return; }

@@ -15,3 +15,11 @@ shared interface `ide/ui` (through Composer's path repository: `vendor/jumphp/id
   `window.jumphpIde`, the workbench; `jumphp.send('log', …)` prints to the output). Open the PNG.
 - Never block the frame (rule 2); never write in a project outside what the user asked; the IDE's notes about a project
   go to `.jumphp/ide.json` (excluded from git); no personal data in HTTP requests (the device name is generic).
+
+## Updates and releases
+
+The installed IDE updates itself: `src/SelfUpdate.php` (checks `installer/update.json` on main 8 s after start and every
+6 h, installs a newer signed version in the background, the page offers Restart Now; commands `update.*`, page
+`updateState()` in `ide/ui/js/app.js`). A release = bump game.yaml `version`, then `tools/release.sh "notes"` (never
+by hand: update.json must be signed with `~/.jumphp/keys/ide-update.pem` and pushed only once the GitHub release files
+answer). Tests set `JUMPHP_IDE_UPDATES=0` so nothing reaches GitHub.
