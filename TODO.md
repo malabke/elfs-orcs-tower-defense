@@ -123,6 +123,20 @@ export:standalone (Linux, Windows with its console, macOS executables), the IDE'
 Left: a page on jumphp.net's docs (14 languages), full-screen screens on Windows without `stty` (symfony/tui reads
 the terminal with it), a macOS installer for CLI apps (executables given as they are today).
 
+## Windows: Docker through WSL, and a composer install that seemed to loop
+
+- Docker inside WSL without Docker Desktop (Docker Engine installed in a WSL distribution: no Docker Desktop licence, often
+  faster): when `docker info` does not answer on Windows but `wsl -e docker info` does, run bin/jumphp inside WSL
+  (`wsl -e bash -lc 'cd "$(wslpath ...)" && bin/jumphp ...'`), from the IDE (JumPHP\Ide\Async\Docker: a "wsl" state,
+  the Runner wraps the commands) and from bin/jumphp itself. To try on a real Windows: the project on C:\ seen as /mnt/c
+  is slow in WSL (volumes in Docker even more): maybe offer to keep projects in the WSL file system (\\wsl$\...),
+  Docker Desktop staying the default (it runs on WSL 2 already).
+- Reported on Windows (2026-11-02, before Docker was started by the IDE): `composer install` of a new project seemed to
+  run forever (its status bar task stayed, nothing in the Run window). Likely Docker not answering (bin/jumphp and the IDE
+  now wait for it, 20 s per check, and say so); check again on Windows with IDE 0.1.12: if it still happens, look at the
+  Run window's output with files on Windows (ide/src/Async/Processes.php) and at a `docker build` of the desktop image
+  that prints nothing for minutes (the first time: say it in the Run window).
+
 ## Cleaning
 
 - the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's
