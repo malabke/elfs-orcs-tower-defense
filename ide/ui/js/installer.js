@@ -8,7 +8,8 @@ import { el, dialog, notify, confirm, prefs } from './ui.js';
 
 const SYSTEMS = [['windows', 'Windows'], ['linux', 'Linux'], ['macos', 'macOS']];
 // the run configurations that build each system (games, apps)
-const BUILDS = { game: { windows: 'standalone-windows', linux: 'standalone', macos: 'macos' }, app: { windows: 'export-windows', linux: 'export', macos: 'export-macos' } };
+const BUILDS = { game: { windows: 'standalone-windows', linux: 'standalone', macos: 'macos' }, app: { windows: 'export-windows', linux: 'export', macos: 'export-macos' },
+  cli: { windows: 'standalone-windows', linux: 'standalone' } };
 
 /** Opens the wizard; resolves when it is closed. */
 export async function createInstaller(app, { where: initial } = {}) {
@@ -32,6 +33,10 @@ export async function createInstaller(app, { where: initial } = {}) {
       const f = local.files[s.id];
       s.note.textContent = f ? ` built: ${f.path.split('/').pop()}` : s.id === 'macos' ? ' not built yet: built on GitHub first (~10-40 min)' : ' built first';
       if (s.id === 'macos') s.box.checked = !!f;
+      // a CLI app's Mac executables are given as they are (no .app to install): Windows and Linux installers
+      const cli = m?.kind === 'cli' && s.id === 'macos';
+      s.box.disabled = cli;
+      if (cli) { s.box.checked = false; s.note.textContent = ' CLI apps: give the two Mac executables as they are'; }
     }
   };
   module.addEventListener('change', refreshLocal);
@@ -75,7 +80,7 @@ export async function createInstaller(app, { where: initial } = {}) {
 }
 
 async function make(app, { module, systems, where, url, version, local }) {
-  const kind = module.kind === 'app' ? 'app' : 'game';
+  const kind = module.kind === 'app' ? 'app' : module.kind === 'cli' ? 'cli' : 'game';
   const config = (system) => app.runner.configs.find((c) => c.id === `${BUILDS[kind][system]}:${module.id}`);
   const build = async (system) => {
     const c = config(system);

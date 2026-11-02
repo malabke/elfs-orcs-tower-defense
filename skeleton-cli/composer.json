@@ -1,0 +1,27 @@
+{
+    "name": "jumphp-apps/skeleton-cli",
+    "description": "A JumPHP CLI app",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.4.1",
+        "symfony/console": "^8.0",
+        "symfony/tui": "^8.1"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "platform-check": false
+    }
+}

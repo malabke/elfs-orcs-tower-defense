@@ -101,8 +101,8 @@ later iOS).
   PHP side and interface side), plugins developed and tested like any JumPHP project, and a plugin marketplace on
   jumphp.net (publish, versions, install / update / remove from the IDE)
 - editors for a game's resources, inside the IDE: sprites (sheets, animations, palettes), music, sound effects (and
-  tiles / levels): see how the Sonic project does it (github.com/davidnurdin/sonicGameSite: public/js/editor-sprites.js,
-  editor-music.js, editor-sfx.js, editor-tiles.js, editor-level.js, templates/editor/), made into IDE tool windows / editor
+  tiles / levels): see how David's game site with editors does it (its public/js/editor-sprites.js, editor-music.js,
+  editor-sfx.js, editor-tiles.js, editor-level.js, templates/editor/; ask David for the repository), made into IDE tool windows / editor
   tabs that read and write the game's assets/
 - AI generation from these editors: for each kind (pictures, music, sound effects...) the online AIs that do it best
   (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
@@ -116,14 +116,12 @@ collections, the libraries' functions and classmaps, the stubs' functions, `conf
 Left: `services.yaml` / form files / `lang.yaml`, the bin/jumphp commands (Run configurations, terminal), a background
 index of a whole vendor/ (names come from file names today, members when a class is first used).
 
-## A "CLI app" template: full terminal applications (TUI)
+## CLI apps: what is left
 
-- a new kind of project beside games, desktop apps and graphic apps: `bin/jumphp cli:new <id>` from a
-  `skeleton-cli/`, an application that lives in the terminal (commands, and full-screen text interfaces: lists,
-  forms, tables, progress, keyboard and mouse), ideally built on symfony/tui (Fabien Potencier's TUI component)
-- run / test (its PHPUnit tests, a headless terminal for the screens) / export: one executable per system that
-  KEEPS its console (Windows exports are GUI programs since 0.1.6: `JUMPHP_STANDALONE_CONSOLE=1`, to make a
-  game.yaml / kind setting), a project type in the IDE's New Project, docs and an example in games/
+Done: `bin/jumphp cli:new` (skeleton-cli/, docs/cli.md, games/hello-cli), run / test / shot (the screen as text) /
+export:standalone (Linux, Windows with its console, macOS executables), the IDE's New Project and Run configurations.
+Left: a page on jumphp.net's docs (14 languages), full-screen screens on Windows without `stty` (symfony/tui reads
+the terminal with it), a macOS installer for CLI apps (executables given as they are today).
 
 ## Cleaning
 

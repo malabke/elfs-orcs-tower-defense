@@ -1,0 +1,8 @@
+# A JumPHP CLI app: it lives in the terminal (commands, and full-screen text screens built on symfony/tui).
+# bin/jumphp run / test / export:standalone work on it as on a game (docs/cli.md).
+game:
+  id: hello-cli
+  title: "Hello CLI"
+  version: 0.1.0
+  description: "A task list in the terminal: commands (add, list, done) and a full-screen screen (ui)."
+  kind: cli

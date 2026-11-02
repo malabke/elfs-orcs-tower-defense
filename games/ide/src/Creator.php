@@ -105,6 +105,7 @@ final class Creator
                 $command = match ($kind) {
                     'app' => ['bin/jumphp', 'app:new', $id, $title],
                     'gui' => ['bin/jumphp', 'gui:new', $id, $title],
+                    'cli' => ['bin/jumphp', 'cli:new', $id, $title],
                     'gui-mobile' => ['bin/jumphp', 'gui:new', $id, $title, '--mobile'],
                     default => ['bin/jumphp', 'new', $id, $title],
                 };

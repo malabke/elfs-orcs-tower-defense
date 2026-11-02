@@ -44,7 +44,7 @@ export class PublishPanel {
   link(label, url) { return el('a', { href: url, onclick: (e) => { e.preventDefault(); this.app.openUrl(url); } }, label); }
 
   /** 'app' for an application (desktop app, graphic app), else 'game': the words of this window (as jumphp.net) */
-  get noun() { return ['app', 'gui'].includes(this.module?.kind) ? 'app' : 'game'; }
+  get noun() { return ['app', 'gui', 'cli'].includes(this.module?.kind) ? 'app' : 'game'; }
 
   section(id, title, build) {
     const box = el('details.pub-section', { open: this.open.has(id) || undefined, ontoggle: () => {

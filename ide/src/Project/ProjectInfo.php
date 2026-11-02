@@ -15,6 +15,7 @@ final class ProjectInfo
         'game' => 'Game',
         'app' => 'Desktop app (HTML + PHP)',
         'gui' => 'Graphic app (forms, no HTML)',
+        'cli' => 'CLI app (terminal)',
         'hybrid' => 'Hybrid game (SDL + HTML windows)',
         'cpc' => 'Amstrad CPC remake',
         'port' => 'Port of an open-source game',
@@ -63,7 +64,7 @@ final class ProjectInfo
         $yaml = $this->workspace->read($prefix . 'config/game.yaml');
         $get = fn (string $key) => preg_match('/^\s*' . $key . ':\s*["\']?([^"\'#\n]*?)["\']?\s*(?:#.*)?$/m', $yaml, $m) ? trim($m[1]) : null;
         $ui = $get('ui');
-        $kind = $ui === 'webview' ? 'app' : ($ui === 'hybrid' ? 'hybrid' : ($get('kind') === 'gui' ? 'gui' : 'game'));
+        $kind = $ui === 'webview' ? 'app' : ($ui === 'hybrid' ? 'hybrid' : (in_array($get('kind'), ['gui', 'cli'], true) ? $get('kind') : 'game'));
         $brief = $this->workspace->exists($prefix . 'BRIEF.md') ? $this->workspace->read($prefix . 'BRIEF.md') : '';
         if ($kind === 'game' && preg_match('/\b(amstrad|cpc|\.dsk|dsk2jumphp)\b/i', $brief)) {
             $kind = 'cpc';
@@ -97,6 +98,17 @@ final class ProjectInfo
             foreach ($modules as $m) {
                 $id = $m['id'];
                 $app = $m['kind'] === 'app';
+                if ($m['kind'] === 'cli') {
+                    // a CLI app (docs/cli.md): run (no terminal here: its plain output), tests, its screen as text, executables
+                    $configs[] = ['id' => "run:$id", 'label' => "Run $id", 'group' => $id, 'icon' => 'play', 'command' => ['bin/jumphp', 'run', $id], 'kind' => 'run'];
+                    $configs[] = ['id' => "test:$id", 'label' => "Test $id", 'group' => $id, 'icon' => 'test', 'command' => ['bin/jumphp', 'test', $id], 'kind' => 'test'];
+                    $configs[] = ['id' => "shot:$id", 'label' => "Screen of $id (as text)", 'group' => $id, 'icon' => 'terminal', 'command' => ['bin/jumphp', 'shot', $id], 'kind' => 'tool'];
+                    $configs[] = ['id' => "standalone:$id", 'label' => "Executable of $id (Linux)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'export:standalone', $id], 'kind' => 'build'];
+                    $configs[] = ['id' => "standalone-windows:$id", 'label' => "Executable of $id (Windows)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'export:standalone', $id, '--windows'], 'kind' => 'build'];
+                    $configs[] = ['id' => "standalone-macos:$id", 'label' => "Executables of $id (macOS)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'export:standalone', $id, '--macos'], 'kind' => 'build'];
+                    $configs[] = ['id' => "install:$id", 'label' => "composer install ($id)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'install', $id], 'kind' => 'tool'];
+                    continue;
+                }
                 $configs[] = ['id' => "run:$id", 'label' => "Run $id", 'group' => $id, 'icon' => 'play', 'command' => ['bin/jumphp', $app ? 'app:run' : 'run', $id], 'kind' => 'run'];
                 $configs[] = ['id' => "test:$id", 'label' => "Test $id", 'group' => $id, 'icon' => 'test', 'command' => ['bin/jumphp', $app ? 'app:test' : 'test', $id], 'kind' => 'test'];
                 $configs[] = ['id' => "shot:$id", 'label' => "Screenshot $id", 'group' => $id, 'icon' => 'camera', 'command' => ['bin/jumphp', $app ? 'app:shot' : 'shot', $id], 'kind' => 'shot'];

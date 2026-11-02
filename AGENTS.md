@@ -54,6 +54,7 @@ engine/                 the framework: composer package jumphp/engine, namespace
 skeleton/               template of a game, copied by `bin/jumphp new`
 skeleton-app/           template of a desktop app (Tauri), copied by `bin/jumphp app:new` (§16)
 skeleton-gui/           template of a graphic app (forms, JumPHP\Gui), copied by `bin/jumphp gui:new` (§17)
+skeleton-cli/           template of a CLI app (terminal: Symfony Console + symfony/tui), copied by `bin/jumphp cli:new` (§18)
 tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C library PHP loads with FFI; §16)
 ide/                    JumPHP IDE: package jumphp/ide, PHP core (JumPHP\Ide\) + HTML interface, shared by games/ide
                         (the desktop app) and jumphp.net/ide (docs/ide.md)
@@ -145,6 +146,7 @@ games/<id>/
 | `bin/jumphp export:standalone <id> [--linux] [--windows]` | the game as one executable for players (dist/standalone/; docs/standalone.md) |
 | `bin/jumphp installer <id> --github \| --url https://site/folder/ [--windows] [--linux] [--macos] [--version X]` | an **installer** per system (jumphp2installer: shortcuts, uninstaller, always installs the newest version): `--github` = a release `v<version>` of the project's repository (gh, public repo), `--url` = `dist/installer/` to upload at that address. Builds Windows / Linux first (`--no-build`: the existing ones); macOS: an existing build. jumphp.net: the IDE (Run > Create an Installer…). Publishing: only when asked |
 | `bin/jumphp gui:new <id> ["Title"] [--mobile]` | a **graphic app** (forms made in the IDE's visual editor, `JumPHP\Gui`, no HTML; §17); then run / test / shot / build / export as a game |
+| `bin/jumphp cli:new <id> ["Title"]` | a **CLI app** (commands + full-screen text screens in the terminal, §18); then run / test / shot (the screen as text) / export:standalone as a game |
 | `bin/jumphp video <id> <film.mp4> [name] [fps]` | a film as frames + sound for the `video` widget (`assets/videos/<name>/`) |
 | `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them; `app:export --windows --macos`; `app:release` (updates); `build` = the app in the browser |
 | `bin/jumphp tauri:setup` / `tauri:build` / `tauri:download` | the Tauri image / the runtime library `build/tauri/linux-x86_64/libjumphp_tauri.so`, built or downloaded (done automatically when needed) |
@@ -999,6 +1001,7 @@ background), then ~10.
   (`bin/jumphp php ide vendor/bin/phpunit`), its interface checked with `games/ide/tools/shot.sh`.
 - `games/hello-gui/` — a graphic app (§17): a form made in the visual editor (responsive grid of two panels), its code
   behind, saved contacts, game tests.
+- `games/hello-cli/` — a CLI app (§18): a task list, commands and a full-screen screen, tested on a virtual terminal.
 - `games/hello-desktop/` — a desktop app (Tauri, §16): a notepad, HTML page + PHP (files, native dialogs, PHP clock,
   drag and drop, quit confirmation), tested with `AppTestCase`.
 - `engine/stubs/sdl.stub.php` — every raw SDL / SDL_image / SDL_mixer / SDL_ttf function and constant.
@@ -1084,3 +1087,21 @@ Full guide: `docs/gui.md`. Example: `games/hello-gui`.
   Check with `bin/jumphp shot <id>` (and a phone width: `--mobile` apps are 390 dp wide).
 - Don'ts: no game-style `actions()` for the forms (they read the mouse, touch and keys themselves); no HTML;
   colours as '#rrggbb'; never block (rule 2).
+
+
+## 18. CLI apps: applications in the terminal
+
+When the user wants a command-line tool, "a CLI", "a TUI", a program "in the terminal": `bin/jumphp cli:new <id>
+"Title"` (`skeleton-cli/`, `config/game.yaml kind: cli`). Full guide: `docs/cli.md`. Example: `games/hello-cli`.
+
+- Commands: Symfony Console, one class per command in `src/Command/` (`#[AsCommand]`), registered in `src/Main.php`.
+- Full-screen screens: symfony/tui in `src/Ui/` (`Tui`, widgets, `onInput` / `onSelect` / `onSubmit`, `run()` /
+  `stop()`); with no terminal (a pipe), fall back to plain output.
+- `bin/jumphp run <id> [command...]` (in this terminal), `test` (php -l, phpstan, phpunit, `php app.php list`),
+  `shot <id> [seconds]` (the real program in a pseudo-terminal, `JUMPHP_KEYS='[[1,"a"],[1.5,"\r"]]'`: **read** the
+  screen text it prints / writes in `var/screenshots/screen.txt`), `export:standalone <id> --linux --windows --macos`
+  (one executable each, a console program on Windows).
+- Tests as you go: `ApplicationTester` for commands, a `VirtualTerminal` for screens (`simulateInput()`, `tick()`,
+  `ScreenBuffer::getScreen()`).
+- Don'ts: no SDL / engine scenes, no `sleep()` inside a screen (`scheduleInterval()`), data only in `Main::boot()`'s
+  folder; no browser build (a terminal program).

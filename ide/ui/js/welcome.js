@@ -8,6 +8,7 @@ const KINDS = [
   { id: 'gui', icon: 'app', title: 'Graphic app (no HTML)', text: 'Windows made in the visual editor: buttons, lists, pictures, a responsive grid; the code behind in PHP. PC, Mac, web.', playground: false },
   { id: 'gui-mobile', icon: 'app', title: 'Mobile app', text: 'The same for phones (iOS and Android): portrait forms made in the visual editor, exported as native apps.', playground: false },
   { id: 'app', icon: 'app', title: 'Desktop app', text: 'HTML / CSS pages with PHP behind them (Tauri): a tool, an editor, a utility.', playground: false },
+  { id: 'cli', icon: 'terminal', title: 'CLI app', text: 'A program in the terminal: commands, and full-screen text screens (Symfony Console + symfony/tui). One executable per system.', playground: false },
   { id: 'hybrid', icon: 'hybrid', title: 'Hybrid game', text: 'An SDL game with HTML windows beside it (control panel, editor).', playground: false },
   { id: 'cpc', icon: 'disk', title: 'Amstrad CPC remake', text: 'Remake an Amstrad CPC game from its .dsk disc: same graphics, music and rules.', playground: true },
   { id: 'port', icon: 'fork', title: 'Port of an open-source game', text: 'Port a game whose source code is open (C, JS, Python…) to PHP.', playground: true },
@@ -131,7 +132,7 @@ export class Welcome {
   async renderForm(form, kind) {
     clear(form);
     const s = this.state;
-    const title = el('input.input', { placeholder: kind.id === 'app' ? 'Notes' : kind.id.startsWith('gui') ? 'Contacts' : 'Star Hopper' });
+    const title = el('input.input', { placeholder: kind.id === 'app' ? 'Notes' : kind.id === 'cli' ? 'Todo' : kind.id.startsWith('gui') ? 'Contacts' : 'Star Hopper' });
     const description = el('input.input', { placeholder: 'One sentence: what it is' });
     const brief = el('textarea.input', { rows: 5, placeholder: kind.id === 'cpc' ? 'Which game, what to keep from the original…' : 'What it should be: the idea, the rules, the controls… (your Claude reads it in BRIEF.md)' });
     const folder = el('input.input', { value: s.projectsDir || '' });
@@ -177,7 +178,7 @@ export class Welcome {
         el('button.btn', { onclick: async () => { const f = await backend.invoke('native.open', { folder: true }).catch(() => null); if (f) folder.value = f; } }, 'Choose…'))),
       el('p', { style: { color: 'var(--text-3)', fontSize: '12px' } }, kind.playground
         ? 'Creates the GitHub repository through jumphp.net (from the JumPHP template, with BRIEF.md), clones it here and opens it.'
-        : `Makes a JumPHP project in a new folder (git clone of the template + bin/jumphp ${kind.id.startsWith('gui') ? 'gui:new' : 'app:new'}), then opens it. It can be pushed to GitHub later.`),
+        : `Makes a JumPHP project in a new folder (git clone of the template + bin/jumphp ${kind.id.startsWith('gui') ? 'gui:new' : kind.id === 'cli' ? 'cli:new' : 'app:new'}), then opens it. It can be pushed to GitHub later.`),
       el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('button.btn.primary', { onclick: async (e) => {
         const button = e.currentTarget;
         if (extra.dsk && !extra.dsk.value.trim() && !(await extra.pick())) { notify('Choose the .dsk disc of the game to remake.', 'warning', { title: 'Amstrad CPC remake' }); return; }

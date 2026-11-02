@@ -110,6 +110,11 @@ Games (<game> = a folder of games/, e.g. pong)
   pages [game...]           build the games (default: all) + a home page, publish them on the gh-pages
                             branch of the git remote (GitHub Pages; the branch is replaced each time)
 
+CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; docs/cli.md)
+  cli:new <app> [title]     create games/<app> from skeleton-cli/ (config/game.yaml: kind: cli)
+                            then run <app> [command...] / test <app> / shot <app> (the screen as text: JUMPHP_KEYS)
+                            / export:standalone <app> [--linux] [--windows] [--macos] (one executable, console kept)
+
 Desktop apps (Tauri: native windows with HTML / CSS / JS pages, driven by PHP; native only, docs/tauri.md)
   app:new <app> [title]     create games/<app> from skeleton-app/ (config/game.yaml: ui: webview)
   app:run <app>             open the app on your screen
@@ -700,6 +705,7 @@ cmd_apple() {
 # built here for Linux: ~15 min once)
 cmd_export_standalone() {
   local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift
+  if is_cli "$game" && [ -z "${JUMPHP_STANDALONE_BOOT:-}" ]; then cmd_cli_export "$game" "$@"; return; fi
   local targets=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -707,7 +713,7 @@ cmd_export_standalone() {
       --windows) targets+=(windows-x86_64) ;;
       --macos-arm64) targets+=(macos-arm64) ;;     # desktop apps (app:export --macos), not games: bin/jumphp apple
       --macos-x86_64) targets+=(macos-x86_64) ;;
-      *) die "unknown option $1 (--linux, --windows)" ;;
+      *) die "unknown option $1 (--linux, --windows$(is_cli "$game" && echo ', --macos'))" ;;
     esac
     shift
   done
@@ -729,7 +735,7 @@ cmd_export_standalone() {
     log="$(mktemp)"
     docker run --rm $TTY_FLAGS --user "$(id -u):$(id -g)" "${WS[@]}" -v "$home/standalone:/cache" \
       -e HOME=/tmp -e GAME="$game" -e TARGET="$target" -e JUMPHP_STANDALONE_PHP -e JUMPHP_STANDALONE_BUILD \
-      -e JUMPHP_STANDALONE_EXTENSIONS -e JUMPHP_STANDALONE_SPC -e JUMPHP_STANDALONE_BOOT -e JUMPHP_STANDALONE_NATIVE -e JUMPHP_STANDALONE_NATIVE_DIR -e JUMPHP_STANDALONE_INI \
+      -e JUMPHP_STANDALONE_EXTENSIONS -e JUMPHP_STANDALONE_SPC -e JUMPHP_STANDALONE_BOOT -e JUMPHP_STANDALONE_NATIVE -e JUMPHP_STANDALONE_NATIVE_DIR -e JUMPHP_STANDALONE_INI -e JUMPHP_STANDALONE_CONSOLE \
       "$image" bash /workspace/tools/standalone.sh | tee "$log"
     out="$(sed -n 's/^OUT=//p' "$log")"; rm -f "$log"
     [ -n "$out" ] || die "no executable for $target (see above)"
@@ -848,6 +854,7 @@ cmd_cli_uninstall() {
 
 cmd_run() {
   if is_app "${1:-}"; then cmd_app_run "$@"; return; fi
+  if is_cli "${1:-}"; then cmd_cli_run "$@"; return; fi
   local dir; dir="$(game_dir "${1:-}")"
   ensure_vendor "$dir"
   local flags=(--network host -e "JUMPHP_NET_URL=${JUMPHP_NET_URL:-}" -e "JUMPHP_DEBUG=${JUMPHP_DEBUG:-}"
@@ -895,6 +902,7 @@ cmd_test() {
     return
   fi
   if is_app "$target"; then cmd_app_test "$@"; return; fi
+  if is_cli "$target"; then cmd_cli_test "$@"; return; fi
   local dir; dir="$(game_dir "$target")"
   ensure_vendor "$dir"
   live_announce
@@ -928,6 +936,7 @@ cmd_test() {
 
 cmd_shot() {
   if is_app "${1:-}"; then cmd_app_shot "$@"; return; fi
+  if is_cli "${1:-}"; then cmd_cli_shot "$@"; return; fi
   local dir; dir="$(game_dir "${1:-}")"
   local frames="${2:-120}" out="${3:-var/screenshots/shot.png}"
   ensure_vendor "$dir"
@@ -957,6 +966,7 @@ cmd_site_new() {
 
 cmd_build() {
   local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  is_cli "$game" && die "$dir is a CLI app: it runs in a terminal, not in a web page (bin/jumphp export:standalone $game)"
   [ -f "$ENGINE_DIR/php-web.mjs" ] && [ -f "$ENGINE_DIR/php-web.wasm" ] || die "no engine in build/engine: bin/jumphp engine:build first"
   ensure_videos "$dir"
   say "staging $dir (composer --no-dev, container dump)"
@@ -1218,7 +1228,7 @@ cmd_pages() {
   local games=("$@")
   if [ ${#games[@]} -eq 0 ]; then
     # desktop apps (ui: webview) have no browser build: not published
-    for d in "$ROOT"/games/*/; do [ -f "$d/config/game.yaml" ] && ! is_app "$(basename "$d")" && games+=("$(basename "$d")"); done
+    for d in "$ROOT"/games/*/; do [ -f "$d/config/game.yaml" ] && ! is_app "$(basename "$d")" && ! is_cli "$(basename "$d")" && games+=("$(basename "$d")"); done
   fi
   [ ${#games[@]} -gt 0 ] || die "no game to publish"
 
@@ -1269,6 +1279,9 @@ cmd_doctor() {
 # desktop apps (Tauri): app:* and tauri:* (docs/tauri.md)
 # shellcheck source=../tools/app-commands.sh
 . "$ROOT/tools/app-commands.sh"
+# CLI apps (kind: cli): cli:new, and run / test / shot / export:standalone of their folders (docs/cli.md)
+# shellcheck source=../tools/cli-commands.sh
+. "$ROOT/tools/cli-commands.sh"
 
 main() {
   # `bin/jumphp` alone in a project without a game yet (composer create-project, fresh clone): the wizard
@@ -1322,6 +1335,7 @@ main() {
     tauri:build) cmd_tauri_build ;;
     tauri:download) cmd_tauri_download "$@" ;;
     app:new) cmd_app_new "$@" ;;
+    cli:new) cmd_cli_new "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;
     app:shot) cmd_app_shot "$@" ;;
