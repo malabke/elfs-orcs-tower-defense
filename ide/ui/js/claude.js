@@ -53,7 +53,8 @@ export class ClaudePanel {
       onchange: () => { this.effort = this.effortSelect.value; prefs.set('claudeEffort', this.effort); } },
       ...EFFORTS.map(([v, label]) => el('option', { value: v, selected: v === this.effort }, label)));
     this.fillModels();
-    this.node = el('div.claude-panel', {}, this.plan, this.log, el('div.claude-compose', {}, this.input,
+    this.mcpBanner = el('div.claude-mcp', { hidden: true });
+    this.node = el('div.claude-panel', {}, this.mcpBanner, this.plan, this.log, el('div.claude-compose', {}, this.input,
       el('div.claude-bar', {},
         el('button.btn.small', { title: 'Mention the file open in the editor', onclick: () => this.mentionFile() }, icon('file'), 'File'),
         el('button.btn.small', { title: 'Paste the selected code with its place', onclick: () => this.addSelection() }, icon('code'), 'Selection'),
@@ -99,9 +100,50 @@ export class ClaudePanel {
     this.say(s.available ? (s.version || 'Claude Code') : (this.remote ? 'not connected' : 'not installed'));
     if (!s.available) this.notInstalled();
     else if (was === false) { clear(this.log); for (const item of this.history) this.renderItem(item); if (!this.history.length) this.placeholder(); }
+    if (s.available && !this.remote && backend.kind === 'native') this.checkMcp({ quiet: true });
     // the web IDE: keep looking for the computer while it is not connected
     clearTimeout(this.statusTimer);
     if (this.remote && !s.available) this.statusTimer = setTimeout(() => this.checkStatus(), 5000);
+  }
+
+  /**
+   * jumphp.net's MCP server in Claude Code: without it, Claude can not see the user's projects there, publish, run the
+   * tests on jumphp.net, keep notes. When it is missing, a banner offers to set it up (signing in first if needed).
+   */
+  async checkMcp({ quiet = false } = {}) {
+    const m = await backend.invoke('claude.mcp.status').catch(() => null);
+    this.showMcp(m, quiet);
+    return m;
+  }
+
+  showMcp(m, quiet = false) {
+    this.mcp = m;
+    clear(this.mcpBanner);
+    if (!m || m.installed || !m.claude || (prefs.get('claudeMcpLater') && quiet)) { this.mcpBanner.hidden = true; return; }
+    this.mcpBanner.hidden = false;
+    const why = m.url ? `Claude Code has a jumphp server, but for another address (${m.url}).` : `Claude Code is not connected to ${m.server || 'jumphp.net'} yet.`;
+    this.mcpBanner.append(
+      el('div.claude-mcp-text', {}, el('b', {}, 'Connect Claude to jumphp.net'), el('br'),
+        `${why} Connected, Claude sees your projects there, publishes them, runs their tests on jumphp.net, reads the players' feedback and keeps notes for each project.`
+        + (m.signedIn ? '' : ' You sign in with jumphp.net first (in your browser).')),
+      el('div.claude-mcp-actions', {},
+        el('button.btn.primary.small', { onclick: (e) => this.installMcp(e.currentTarget) }, m.signedIn ? 'Connect' : 'Sign in and connect'),
+        el('button.btn.small', { title: 'Hide this (Find Action: Connect Claude to jumphp.net)', onclick: () => { prefs.set('claudeMcpLater', true); this.mcpBanner.hidden = true; } }, 'Later')));
+  }
+
+  async installMcp(button = null) {
+    if (button) { button.disabled = true; button.textContent = 'Connecting…'; }
+    const task = this.app.task?.('Connecting Claude to jumphp.net…');
+    try {
+      await backend.invoke('claude.mcp.install');
+      notify('Claude Code now has jumphp.net\'s tools (the "jumphp" MCP server, for every project of this computer). A new conversation uses them.', 'success', { title: 'Claude connected to jumphp.net' });
+      prefs.set('claudeMcpLater', false);
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Claude was not connected to jumphp.net' });
+    } finally {
+      task?.();
+      await this.checkMcp();
+    }
   }
 
   title() { return 'Claude'; }

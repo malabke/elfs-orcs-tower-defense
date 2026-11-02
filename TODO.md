@@ -146,15 +146,6 @@ it with no network and no site (shortcuts, uninstaller as now; no update check, 
 (an option of its builder) and in the IDE: Run > Create an Installer… gets it as a third choice beside GitHub and
 a site.
 
-## IDE: the Claude panel the first time, without jumphp.net's MCP
-
-Reported 2026-11-02: at the first use, opening the Claude panel gives a Claude that does not have jumphp.net's MCP
-server (`jumphp`: projects, publishing, tests, notes) connected. Guide the user more: when the panel opens, check
-whether Claude Code has the `jumphp` MCP server (`claude mcp list` / `claude mcp get jumphp`); if not, say so in the
-panel with what it brings and a button that sets it up (sign in with jumphp.net if needed, make the MCP token, run
-`claude mcp add --transport http --scope user jumphp https://jumphp.net/mcp --header "Authorization: Bearer …"` for
-the user, then check it answers), or at least the command to copy; same check in the welcome screen.
-
 ## Cleaning
 
 - the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's

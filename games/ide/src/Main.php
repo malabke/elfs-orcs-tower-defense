@@ -190,6 +190,15 @@ final class Main implements AppMain
             return $this->bridge->enable($on);
         };
 
+        // jumphp.net's MCP server in this computer's Claude Code (the Claude panel offers it when it is missing)
+        $mcp = fn () => new \JumPHP\Ide\Claude\McpSetup($this->processes, $this->ide?->workspace->localPath() ?? (getenv('HOME') ?: sys_get_temp_dir()));
+        $c['claude.mcp.status'] = fn () => $mcp()->status($this->playground->server()) + [
+            'signedIn' => !empty($this->session['token']), 'server' => parse_url($this->playground->server(), PHP_URL_HOST)];
+        $c['claude.mcp.install'] = function () use ($mcp) {
+            $install = fn () => $mcp()->install($this->playground->server(), (string)$this->session['token']);
+            return empty($this->session['token']) ? $this->login()->then(fn () => $install()) : $install();
+        };
+
         $c['projects.remote'] = fn () => self::deferred($this->playground->projects())->then(fn (array $list) => array_map(function (array $p) {
             $p['localPath'] = $this->localPathOf($p);
             return $p;

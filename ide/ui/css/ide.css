@@ -500,3 +500,7 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .dbg-value.error { color: var(--red); }
 .row .row-action { margin-left: auto; visibility: hidden; background: none; border: 0; color: var(--text-3); cursor: pointer; padding: 0 2px; }
 .row:hover .row-action { visibility: visible; }
+
+/* the Claude panel: jumphp.net's MCP server missing */
+.claude-mcp { margin: 8px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); font-size: 12.5px; line-height: 1.5; }
+.claude-mcp-actions { display: flex; gap: 6px; margin-top: 8px; }

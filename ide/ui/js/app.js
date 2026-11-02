@@ -549,6 +549,11 @@ class App {
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
     }
     if (this.claude) a.add('claudeTool', 'Claude', () => this.toggleTool('claude'), { kbd: 'Alt+8', icon: 'claude' });
+    if (this.claude && backend.kind === 'native') a.add('claudeMcp', 'Connect Claude to jumphp.net', async () => {
+      this.showTool('claude');
+      const m = await this.claude.checkMcp();
+      if (m?.installed) notify(`Claude Code already has jumphp.net's tools (the "jumphp" MCP server, ${m.scope} scope).`, 'success', { title: 'Claude and jumphp.net' });
+    }, { icon: 'globe' });
     if (caps.preview) {
       a.add('preview', 'Play the Game', () => this.game.play(), { kbd: 'Shift+F10', icon: 'play' });
       a.add('gameTool', 'Game', () => this.toggleTool('game'), { kbd: 'Alt+5', icon: 'game' });
