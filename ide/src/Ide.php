@@ -5,6 +5,7 @@ namespace JumPHP\Ide;
 use JumPHP\Ide\Agent\IdeAgent;
 use JumPHP\Ide\Config\ConfigCompletion;
 use JumPHP\Ide\Async\Deferred;
+use JumPHP\Ide\Async\Docker;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Claude\ClaudeCode;
 use JumPHP\Ide\Git\Git;
@@ -52,6 +53,9 @@ final class Ide
     /** the IDE's tools for that Claude (an MCP server; the interface carries them out) */
     public ?IdeAgent $agent = null;
 
+    /** Docker made ready in the background (a JumPHP project runs everything in it) */
+    public ?Docker $docker = null;
+
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
 
@@ -89,6 +93,11 @@ final class Ide
         }
         if ($this->runner !== null) {
             $this->registerRun();
+        }
+        if ($root !== null && $workspace->exists('bin/jumphp')) {
+            $this->docker = new Docker($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+            $this->register('docker.ensure', fn () => $this->docker->ensure());
+            $this->register('docker.state', fn () => $this->docker->state());
         }
         if ($root !== null) {
             $this->agent = new IdeAgent(fn (string $event, array $payload) => ($this->emit)($event, $payload));
@@ -151,6 +160,7 @@ final class Ide
         $this->processes->poll();
         $this->agent?->tick();
         $this->claude?->tick();
+        $this->docker?->tick();
         if (!$this->indexed) {
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);

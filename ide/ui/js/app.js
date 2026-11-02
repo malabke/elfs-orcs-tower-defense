@@ -101,6 +101,7 @@ class App {
     this.updateHeader();
     this.updateRunWidget();
     this.restoreTabs();
+    this.docker();   // in the background: Docker Desktop started if needed, before the first run asks for it
     setInterval(() => { if (document.visibilityState === 'visible') this.git.refresh(); }, 15000);
     window.addEventListener('focus', () => { this.git.refresh(); this.editors.reloadFromDisk(); this.tree.refresh(); });
     window.addEventListener('beforeunload', () => this.saveTabs());
@@ -308,6 +309,37 @@ class App {
     node.textContent = text;
     clearTimeout(this.statusTimer);
     this.statusTimer = setTimeout(() => { node.textContent = ''; }, 4000);
+  }
+
+  /**
+   * Docker, made ready in the background when a JumPHP project opens (JumPHP\Ide\Async\Docker: Docker Desktop is
+   * started when it is not running): a status bar task meanwhile, nothing waits but the runs that need it.
+   * Resolves with its state ({state, message}).
+   */
+  docker() {
+    if (!this.project?.jumphp || backend.kind !== 'native') return Promise.resolve({ state: 'ready' });
+    if (!this.dockerListening) {
+      this.dockerListening = true;
+      backend.on('docker.state', (s) => this.dockerChanged(s));
+    }
+    this.dockerWait ??= backend.invoke('docker.ensure').catch((e) => ({ state: 'failed', message: e.message || String(e) }))
+      .then((s) => { if (s?.state !== 'ready') this.dockerWait = null; return s; });
+    return this.dockerWait;
+  }
+
+  dockerChanged({ state, message }) {
+    const busy = state === 'checking' || state === 'starting';
+    if (busy) {
+      this.dockerTask ??= this.task(message);
+      this.dockerTask.update(message, null);
+      if (state === 'starting') this.dockerStarted = true;
+      return;
+    }
+    this.dockerTask?.();
+    this.dockerTask = null;
+    if (state === 'ready' && this.dockerStarted) notify(message, 'success', { title: 'Docker' });
+    if (state === 'missing' || state === 'failed') notify(message, 'error', { title: 'Docker', actions: [{ label: 'Retry', action: () => this.docker() }] });
+    this.dockerStarted = false;
   }
 
   /**

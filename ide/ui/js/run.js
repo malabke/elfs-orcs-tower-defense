@@ -52,6 +52,8 @@ export class Runner {
   async start(config, env = {}) {
     if (!this.caps.run) return;
     await this.app.editors.saveAll(true);
+    // bin/jumphp runs everything in Docker: wait until the IDE has it running (it starts Docker Desktop by itself)
+    if (/(^|[\/])jumphp$/.test(String(config.command?.[0] || ''))) await this.app.docker();
     try {
       const { id, label } = await backend.invoke('run.start', { id: config.id, command: config.id === 'adhoc' ? config.command : undefined, kind: config.kind, env });
       const shown = Object.entries(env).map(([k, v]) => `${k}=${v} `).join('');

@@ -2,6 +2,7 @@
 
 namespace JumPHP\Ide\Tests;
 
+use JumPHP\Ide\Async\Docker;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Git\Git;
 use JumPHP\Ide\Ide;
@@ -167,6 +168,49 @@ final class CoreTest extends TestCase
     }
 
     /** Windows' way (no non-blocking pipes): the output through temporary files, read as it grows; stdin a pipe. */
+    public function testDockerDesktopIsStartedInTheBackgroundWhenDockerDoesNotAnswer(): void
+    {
+        $saved = (string)getenv('PATH');
+        @mkdir("$this->dir/fake", 0777, true);
+        // a docker that answers only once "Docker Desktop" (the launch command: touch) has started
+        file_put_contents("$this->dir/fake/docker", "#!/bin/sh\n[ -f \"$this->dir/desktop-up\" ] && { echo 29.1.0; exit 0; }\necho 'Cannot connect to the Docker daemon' >&2; exit 1\n");
+        chmod("$this->dir/fake/docker", 0755);
+        putenv("PATH=$this->dir/fake:$saved");
+        try {
+            $states = [];
+            $processes = new Processes();
+            $docker = new Docker($processes, $this->dir, function (string $event, array $payload) use (&$states) {
+                $states[] = $payload['state'];
+            }, 'Linux', ['touch', "$this->dir/desktop-up"]);
+            $ready = $docker->ensure();
+            self::assertSame($ready, $docker->ensure(), 'one wait for everyone');
+            for ($i = 0; $i < 400 && !$ready->isDone(); $i++) {
+                $processes->poll();
+                $docker->tick();
+                usleep(20000);
+            }
+            self::assertSame('ready', $ready->result()['state']);
+            self::assertSame(['checking', 'starting', 'ready'], $states);
+            self::assertSame('ready', $docker->ensure()->result()['state'], 'known at once afterwards');
+        } finally {
+            putenv("PATH=$saved");
+        }
+    }
+
+    public function testNoDockerIsSaidAtOnce(): void
+    {
+        $saved = (string)getenv('PATH');
+        putenv('PATH=/nonexistent');
+        try {
+            $docker = new Docker(new Processes(), $this->dir, fn () => null, 'Linux', ['true']);
+            $state = $docker->ensure()->result();
+            self::assertSame('missing', $state['state']);
+            self::assertStringContainsString('Install Docker Desktop', $state['message']);
+        } finally {
+            putenv("PATH=$saved");
+        }
+    }
+
     public function testProgramsRunWithTheirOutputInFilesAsOnWindows(): void
     {
         $processes = new Processes(files: true);
