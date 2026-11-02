@@ -368,8 +368,9 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .placeholder.small { font-size: 12px; padding: 4px 30px; text-align: left; }
 
 /* the Claude tool window: a conversation with the Claude Code of this computer ------------------------------- */
-.claude-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.claude-log { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; user-select: text; }
+/* fills the tool window's body exactly: the compose box always stays in view */
+.claude-panel { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.claude-log { flex: 1; min-height: 0; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; user-select: text; }
 .claude-msg { padding: 8px 10px; border-radius: 8px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .claude-msg.user { background: var(--selection); align-self: flex-end; max-width: 90%; }
 .claude-msg.assistant { background: var(--panel-2); white-space: normal; }
@@ -387,10 +388,10 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .claude-thinking { font-size: 12px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
 .claude-thinking .spinner { width: 10px; height: 10px; border: 2px solid var(--text-3); border-top-color: var(--accent); border-radius: 50%; animation: claude-spin 0.8s linear infinite; }
 @keyframes claude-spin { to { transform: rotate(360deg); } }
-.claude-compose { border-top: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.claude-compose { flex: none; max-height: 60%; overflow: auto; border-top: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .claude-input { resize: vertical; min-height: 54px; font: inherit; }
 .claude-bar { display: flex; gap: 6px; align-items: center; }
-.claude-select { flex: 1; min-width: 0; height: 26px; padding: 0 6px; font-size: 12px; }
+.claude-select { flex: 1; min-width: 0; height: auto; min-height: 28px; padding: 3px 6px; font-size: 12px; line-height: 1.4; }
 .claude-empty { margin: auto; text-align: center; }
 .tw-check { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); cursor: pointer; padding: 0 4px; border-radius: 4px; }
 .tw-check input { margin: 0; width: 12px; height: 12px; }
