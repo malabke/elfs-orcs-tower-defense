@@ -224,7 +224,11 @@ export class Plugins {
         body.append(el('div.plugin-row', {},
           el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `, el(`span.plugin-status.${p.status}`, {}, status), p.restart ? el('span.muted', {}, ' — restart to update') : null,
             p.source !== 'user' ? el('span.muted', {}, p.source === 'project' ? ' — this project\'s' : ' — in development') : null,
-            el('div.muted', {}, p.description || ''), p.error ? el('div.plugin-error', {}, p.error) : null),
+            el('div.muted', {}, p.description || ''), p.error ? el('div.plugin-error', {}, p.error) : null,
+            ...(() => {
+              const tools = (this.contributions.mcp || []).filter((t) => t.plugin === p.id).map((t) => t.name);
+              return tools.length ? [el('div.plugin-mcp', { title: 'Claude Code calls them mcp__jumphp-ide__<name>' }, `Tools for Claude: ${tools.join(', ')}`)] : [];
+            })()),
           el('div.plugin-buttons', {},
             el('label', {}, el('input', { type: 'checkbox', checked: p.status !== 'disabled', onchange: async (e) => {
               await backend.invoke('plugins.enable', { id: p.id, on: e.target.checked }).catch((err) => notify(err.message, 'error'));

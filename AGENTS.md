@@ -1120,8 +1120,10 @@ guide: `docs/ide-plugins.md`. Example: `games/hello-plugin`.
 - `composer.json` `extra.jumphp-ide` (id, name, version, class) + `autoload` psr-4 in a namespace of its own
   (`JumphpPlugins\<Id>\`); no package of its own at run time.
 - The class implements `JumPHP\Ide\Plugin\Plugin::activate(Api $ide)`: `action()`, `toolWindow()` (`Ui::` nodes,
-  callbacks in PHP), `runConfiguration()`, `completion()`, `diagnostics()`, `on('file.saved')`, `every()`,
-  `notify()`, `openFile()`, `workspace()`, `setting()`.
+  callbacks in PHP), `runConfiguration()`, `completion()`, `diagnostics()`, `mcpTool()` (a tool for Claude on the
+  IDE's MCP server: `mcp__jumphp-ide__plugin_<id>_<name>`), `on('file.saved')`, `every()`, `notify()`, `openFile()`,
+  `workspace()`, `setting()`.
+- Share it: Tools > Plugins… > "Publish on jumphp.net" (https://jumphp.net/ide-plugins), or `bin/jumphp plugin:pack`.
 - Tests as you go: `tests/*Test.php` extend `JumPHP\Ide\Testing\PluginTestCase` (`project()`, `action()`,
-  `toolText()`, `click()`, `submit()`, `complete()`, `problems()`, `save()`). `bin/jumphp test <id>` must pass.
+  `toolText()`, `click()`, `submit()`, `complete()`, `problems()`, `save()`, `mcp()`). `bin/jumphp test <id>` must pass.
 - Don'ts: never block (the IDE's frame), no network waits, nothing written outside the project / its settings.

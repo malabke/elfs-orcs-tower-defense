@@ -75,6 +75,21 @@ final class AgentTest extends TestCase
         self::assertSame('nope.php does not exist', $response['body']['result']['content'][0]['text']);
     }
 
+    public function testThePluginsToolsAreOfferedBesideTheIdesAndRunInPhp(): void
+    {
+        $this->agent->setExtraTools(fn () => [['name' => 'plugin_todos_count', 'description' => '[Todos] count', 'inputSchema' => ['type' => 'object', 'properties' => new \stdClass()]]],
+            fn (string $tool, array $args) => $args['n'] > 0 ? ['count' => $args['n'] * 2] : throw new \RuntimeException('n must be > 0'));
+        $names = array_column($this->rpc(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'])['body']['result']['tools'], 'name');
+        self::assertContains('open_file', $names);
+        self::assertContains('plugin_todos_count', $names);
+        $ok = $this->rpc(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'tools/call', 'params' => ['name' => 'plugin_todos_count', 'arguments' => ['n' => 21]]]);
+        self::assertSame(['count' => 42], json_decode($ok['body']['result']['content'][0]['text'], true));
+        self::assertSame([], $this->events, 'a plugin\'s tool does not go through the interface');
+        $error = $this->rpc(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'tools/call', 'params' => ['name' => 'plugin_todos_count', 'arguments' => ['n' => 0]]]);
+        self::assertTrue($error['body']['result']['isError']);
+        self::assertSame('n must be > 0', $error['body']['result']['content'][0]['text']);
+    }
+
     public function testWithoutTheTokenNothingIsAnswered(): void
     {
         $response = $this->rpc(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'], null, 'Bearer wrong');

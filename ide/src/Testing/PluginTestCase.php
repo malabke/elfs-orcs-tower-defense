@@ -135,6 +135,33 @@ abstract class PluginTestCase extends TestCase
         return $this->plugins->diagnostics($path, $text);
     }
 
+    /**
+     * Calls one of the plugin's tools for Claude, as the IDE's MCP server does ($name: the plugin's own name, or the
+     * whole plugin_<id>_<name>); a Deferred is waited for while it settles at once.
+     *
+     * @param array<string, mixed> $args
+     */
+    protected function mcp(string $name, array $args = []): mixed
+    {
+        $full = str_starts_with($name, 'plugin_') ? $name
+            : 'plugin_' . str_replace('-', '_', (string)json_decode((string)file_get_contents($this->pluginDir() . '/composer.json'), true)['extra']['jumphp-ide']['id']) . '_' . $name;
+        $value = $this->plugins->callMcpTool($full, $args);
+        if ($value instanceof \JumPHP\Ide\Async\Deferred) {
+            self::assertTrue($value->isDone(), "the tool $full did not answer at once");
+            if ($value->error() !== null) {
+                throw $value->error();
+            }
+            return $value->result();
+        }
+        return $value;
+    }
+
+    /** @return list<string> the MCP names of the tools Claude gets from the plugins */
+    protected function mcpTools(): array
+    {
+        return array_column($this->plugins->mcpTools(), 'name');
+    }
+
     /** Writes a file as the editor saves it (the plugins hear file.saved). */
     protected function save(string $path, string $content): void
     {

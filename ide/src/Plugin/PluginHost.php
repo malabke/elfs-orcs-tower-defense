@@ -32,6 +32,9 @@ final class PluginHost
     /** @var list<array{plugin: string, event: string, listener: \Closure}> */
     private array $listeners = [];
 
+    /** @var array<string, array{plugin: string, name: string, description: string, inputSchema: array<string, mixed>, handler: \Closure}> MCP tools for Claude */
+    private array $mcp = [];
+
     /** @var list<array{plugin: string, every: float, next: float, work: \Closure}> */
     private array $timers = [];
 
@@ -109,6 +112,7 @@ final class PluginHost
         $this->providers = array_values(array_filter($this->providers, $keep));
         $this->listeners = array_values(array_filter($this->listeners, $keep));
         $this->timers = array_values(array_filter($this->timers, $keep));
+        $this->mcp = array_filter($this->mcp, $keep);
     }
 
     // what plugins add (Api) ----------------------------------------------------------------------------------------
@@ -149,6 +153,43 @@ final class PluginHost
     public function addProvider(string $kind, PluginInfo $plugin, string $pattern, \Closure $provider): void
     {
         $this->providers[] = ['kind' => $kind, 'plugin' => $plugin->id, 'pattern' => $pattern, 'provider' => $provider];
+    }
+
+    /** The MCP name of a plugin's tool: plugin_<id>_<name> (Claude Code calls it mcp__jumphp-ide__plugin_<id>_<name>). */
+    public function mcpName(PluginInfo $plugin, string $name): string
+    {
+        return 'plugin_' . str_replace('-', '_', $plugin->id) . '_' . $name;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $properties JSON Schema of each argument
+     * @param list<string> $required
+     */
+    public function addMcpTool(PluginInfo $plugin, string $name, string $description, \Closure $handler, array $properties, array $required): string
+    {
+        if (!preg_match('/^[a-z][a-z0-9_]{0,40}$/', $name)) {
+            throw new \InvalidArgumentException("MCP tool name '$name': lower case letters, digits and _");
+        }
+        $full = $this->mcpName($plugin, $name);
+        $schema = ['type' => 'object', 'properties' => $properties ?: new \stdClass()];
+        if ($required) {
+            $schema['required'] = $required;
+        }
+        $this->mcp[$full] = ['plugin' => $plugin->id, 'name' => $full, 'description' => "[{$plugin->name}] $description", 'inputSchema' => $schema, 'handler' => $handler];
+        return $full;
+    }
+
+    /** @return list<array{name: string, description: string, inputSchema: array<string, mixed>}> the plugins' tools for Claude */
+    public function mcpTools(): array
+    {
+        return array_values(array_map(fn ($t) => ['name' => $t['name'], 'description' => $t['description'], 'inputSchema' => $t['inputSchema']], $this->mcp));
+    }
+
+    /** Runs a plugin's MCP tool: its value (or a Deferred of it); its exception is the tool's error. @param array<string, mixed> $args */
+    public function callMcpTool(string $name, array $args): mixed
+    {
+        $tool = $this->mcp[$name] ?? throw new \InvalidArgumentException("no plugin tool '$name'");
+        return $this->call($tool['plugin'], fn () => ($tool['handler'])($args));
     }
 
     public function addListener(PluginInfo $plugin, string $event, \Closure $listener): void
@@ -214,6 +255,7 @@ final class PluginHost
                 'icon' => $t['window']->icon, 'plugin' => $t['plugin']], $this->tools)),
             'run' => $this->runConfigurations(),
             'providers' => array_map(fn ($p) => ['kind' => $p['kind'], 'pattern' => $p['pattern'], 'plugin' => $p['plugin']], $this->providers),
+            'mcp' => array_values(array_map(fn ($t) => ['name' => $t['name'], 'description' => $t['description'], 'plugin' => $t['plugin']], $this->mcp)),
         ];
     }
 

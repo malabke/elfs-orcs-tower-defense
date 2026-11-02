@@ -72,6 +72,22 @@ final class Api
     }
 
     /**
+     * A tool for Claude: the IDE's MCP server (jumphp-ide, given to the Claude it starts) offers it beside its own, as
+     * plugin_<id>_<name> (Claude Code: mcp__jumphp-ide__plugin_<id>_<name>). The handler gets the arguments and returns
+     * what Claude reads: a string, an array (sent as JSON), an MCP result (['content' => [...]]) or a Deferred of one;
+     * an exception is the tool's error. Describe it well: Claude chooses its tools from their descriptions.
+     *
+     * @param callable(array<string, mixed>): mixed $handler
+     * @param array<string, array<string, mixed>> $properties each argument's JSON Schema: ['path' => ['type' => 'string', 'description' => '...']]
+     * @param list<string> $required
+     * @return string the tool's MCP name
+     */
+    public function mcpTool(string $name, string $description, callable $handler, array $properties = [], array $required = []): string
+    {
+        return $this->host->addMcpTool($this->plugin, $name, $description, $handler(...), $properties, $required);
+    }
+
+    /**
      * A listener: 'file.saved' (string $path), 'files.changed' (outside the editor: git, a run).
      *
      * @param callable $listener

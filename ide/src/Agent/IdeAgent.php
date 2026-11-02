@@ -17,6 +17,12 @@ final class IdeAgent
 
     private ?McpServer $server = null;
 
+    /** @var (\Closure(): list<array{name: string, description: string, inputSchema: array<string, mixed>}>)|null the plugins' tools */
+    private ?\Closure $extraTools = null;
+
+    /** @var (\Closure(string, array<string, mixed>): mixed)|null runs one of them (in PHP, not in the interface) */
+    private ?\Closure $extraCall = null;
+
     /** @param callable(string $event, array $payload): void $emit */
     public function __construct(private $emit)
     {
@@ -26,10 +32,29 @@ final class IdeAgent
     public function server(): McpServer
     {
         if ($this->server === null) {
-            $this->server = new McpServer(fn (string $tool, array $args) => $this->call($tool, $args), AgentTools::all(), AgentTools::INSTRUCTIONS);
+            $this->server = new McpServer(fn (string $tool, array $args) => $this->call($tool, $args),
+                fn () => [...AgentTools::all(), ...($this->extraTools !== null ? ($this->extraTools)() : [])], AgentTools::INSTRUCTIONS);
         }
         $this->server->start();
         return $this->server;
+    }
+
+    /**
+     * Tools of the IDE's plugins beside its own: listed with them, run by $call (a value or a Deferred of it).
+     *
+     * @param \Closure(): list<array{name: string, description: string, inputSchema: array<string, mixed>}> $tools
+     * @param \Closure(string, array<string, mixed>): mixed $call
+     */
+    public function setExtraTools(\Closure $tools, \Closure $call): void
+    {
+        $this->extraTools = $tools;
+        $this->extraCall = $call;
+    }
+
+    /** @return list<array{name: string, description: string, inputSchema: array<string, mixed>}> every tool offered */
+    public function tools(): array
+    {
+        return [...AgentTools::all(), ...($this->extraTools !== null ? ($this->extraTools)() : [])];
     }
 
     /**
@@ -54,6 +79,14 @@ final class IdeAgent
     public function call(string $tool, array $args): Deferred
     {
         $definition = AgentTools::find($tool);
+        if ($definition === null && $this->extraCall !== null && in_array($tool, array_column(($this->extraTools)(), 'name'), true)) {
+            try {
+                $value = ($this->extraCall)($tool, $args);
+            } catch (\Throwable $e) {
+                return Deferred::rejected($e);
+            }
+            return $value instanceof Deferred ? $value : Deferred::resolved($value);
+        }
         if ($definition === null) {
             return Deferred::rejected(new \InvalidArgumentException("no tool '$tool'"));
         }

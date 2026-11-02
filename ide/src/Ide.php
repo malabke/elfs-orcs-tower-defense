@@ -162,6 +162,9 @@ final class Ide
             $dirs["$root/.jumphp/plugins"] = 'project';
         }
         $this->plugins->loadFrom($dirs);
+        // their tools for Claude, beside the IDE's own on its MCP server (jumphp-ide)
+        $plugins = $this->plugins;
+        $this->agent?->setExtraTools(fn () => $plugins->mcpTools(), fn (string $tool, array $args) => $plugins->callMcpTool($tool, $args));
         return $this->plugins;
     }
 

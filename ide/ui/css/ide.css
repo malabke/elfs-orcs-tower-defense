@@ -532,3 +532,4 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .plugin-status.active { color: var(--green); }
 .plugin-status.error { color: var(--red); }
 .plugin-error { color: var(--red); font-size: 12px; margin-top: 4px; white-space: pre-wrap; }
+.plugin-mcp { color: var(--text-2); font-size: 12px; margin-top: 4px; }

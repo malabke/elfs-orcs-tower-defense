@@ -35,7 +35,9 @@ commits.
   applications de bureau et les sites des jeux.
 - **Plugins** (bureau) : des plugins en PHP (docs/ide-plugins.md) ajoutent des actions (menus, Find Action, raccourcis),
   des fenêtres d'outils, des configurations d'exécution, de la complétion et des problèmes pour les fichiers qu'ils
-  choisissent. Tools › Plugins… les installe (un dossier, les plugins du projet), les active, les retire ;
+  choisissent, et des **outils pour Claude** sur le serveur MCP de l'IDE (`mcp__jumphp-ide__plugin_<id>_<nom>`).
+  Tools › Plugins… les installe (un dossier, les plugins du projet, [jumphp.net/ide-plugins](https://jumphp.net/ide-plugins)),
+  les met à jour, les active, les retire, et publie ceux du projet sur jumphp.net ;
   `bin/jumphp plugin:new` en crée un, testé sans fenêtre (PluginTestCase).
 - **Claude** (bureau) : la fenêtre Claude (`Alt+8`) parle au Claude Code de l'ordinateur. **Suivre** (l'œil, actif par
   défaut) : l'IDE montre ce que fait Claude au moment où il le fait : le fichier lu s'ouvre aux lignes lues (bleu), ce

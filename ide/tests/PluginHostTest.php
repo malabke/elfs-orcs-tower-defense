@@ -67,6 +67,20 @@ final class PluginHostTest extends TestCase
         self::assertTrue($ide->handle('project.info', [])['capabilities']['plugins']);
     }
 
+    public function testAPluginsToolsReachTheIdesMcpServer(): void
+    {
+        $this->plugin("$this->dir/user", 'my-tools', "\$ide->mcpTool('greet', 'Says hello', fn (array \$a) => 'hello ' . \$a['who'], ['who' => ['type' => 'string']], ['who']);");
+        $ide = $this->ide();
+        $tools = $ide->agent?->tools() ?? [];
+        $mine = array_values(array_filter($tools, fn ($t) => $t['name'] === 'plugin_my_tools_greet'));
+        self::assertSame('[My-tools] Says hello', $mine[0]['description']);
+        self::assertSame(['who'], $mine[0]['inputSchema']['required']);
+        self::assertSame('hello Ada', $ide->agent->call('plugin_my_tools_greet', ['who' => 'Ada'])->result());
+        self::assertSame(['plugin_my_tools_greet'], array_column($ide->handle('plugins.contributions', [])['mcp'], 'name'));
+        $ide->handle('plugins.enable', ['id' => 'my-tools', 'on' => false]);
+        self::assertSame([], array_values(array_filter(array_column($ide->agent->tools(), 'name'), fn ($n) => str_starts_with($n, 'plugin_'))));
+    }
+
     public function testAFailingPluginIsReportedAndNeverTakesTheIdeDown(): void
     {
         $this->plugin("$this->dir/user", 'broken', "\$ide->action('x', 'X', fn () => 1); throw new \\RuntimeException('boom');");

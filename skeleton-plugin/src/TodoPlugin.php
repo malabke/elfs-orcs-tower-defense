@@ -14,6 +14,7 @@ use JumPHP\Ide\Plugin\Ui;
  * - an action (Tools menu, Find Action, Ctrl+Alt+T): how many in the open file;
  * - problems: a FIXME is underlined as a warning while one types;
  * - completion: "@todo" in a PHP comment;
+ * - a tool for Claude (the IDE's MCP server): list_todos;
  * - a setting kept by the IDE (FIXME only), a listener (the list follows the saved files).
  */
 final class TodoPlugin implements Plugin
@@ -39,6 +40,15 @@ final class TodoPlugin implements Plugin
 
         $ide->completion('*.php', fn (EditorState $at) => preg_match('/(\/\/|\*)\s*@?t?o?d?o?$/i', $at->before())
             ? [['label' => '@todo', 'insert' => '@todo ', 'detail' => 'a TODO the TODOs window lists']] : []);
+
+        $ide->mcpTool('list_todos', 'The TODO and FIXME comments of the project: path, line, tag, text. Use it to find what is left to do.',
+            function (array $args) use ($ide): array {
+                $all = $this->todos ??= $this->scan($ide);
+                return array_values(array_filter($all, fn ($t) => (empty($args['fixme_only']) || $t['tag'] === 'FIXME')
+                    && (empty($args['path']) || str_starts_with($t['path'], (string)$args['path']))));
+            },
+            ['fixme_only' => ['type' => 'boolean', 'description' => 'only the FIXME ones'],
+                'path' => ['type' => 'string', 'description' => 'only under this folder or file of the project, e.g. games/pong/src']]);
 
         $ide->on('file.saved', function (string $path): void {
             if ($this->todos !== null) {

@@ -35,6 +35,7 @@ final class AgentTools
           breakpoints (debug_breakpoints), run a configuration with the debugger (debug_run: it waits until a breakpoint
           stops the program), read the variables (debug_variables) or evaluate PHP there (debug_eval), step
           (debug_step), and always end with debug_step stop or run when done. Prefer it to adding var_dump / echo.
+        Tools named plugin_<plugin>_<name> come from the IDE plugins the user installed: their descriptions say what they do.
         TXT;
 
     /** @return list<array{name: string, description: string, inputSchema: array<string, mixed>, timeout: float}> */

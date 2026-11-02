@@ -26,9 +26,10 @@ final class McpServer
     /**
      * @param callable(string $tool, array $args): mixed $call a value or a Deferred of it (an array with `content`
      *        is passed as is; anything else becomes JSON text)
-     * @param list<array{name: string, description: string, inputSchema: array<string, mixed>}> $tools
+     * @param list<array{name: string, description: string, inputSchema: array<string, mixed>}>|\Closure(): list<array{name: string, description: string, inputSchema: array<string, mixed>}> $tools
+     *        a closure: asked at each tools/list (the plugins' tools)
      */
-    public function __construct(private $call, private array $tools, private string $instructions = '', private string $name = AgentTools::SERVER)
+    public function __construct(private $call, private array|\Closure $tools, private string $instructions = '', private string $name = AgentTools::SERVER)
     {
         $this->token = bin2hex(random_bytes(24));
     }
@@ -209,7 +210,7 @@ final class McpServer
             case 'tools/list':
                 return Deferred::resolved(self::result($id, ['tools' => array_map(fn (array $t) => [
                     'name' => $t['name'], 'description' => $t['description'], 'inputSchema' => $t['inputSchema'],
-                ], $this->tools)]));
+                ], $this->tools instanceof \Closure ? ($this->tools)() : $this->tools)]));
             case 'tools/call':
                 $name = (string)($params['name'] ?? '');
                 $args = is_array($params['arguments'] ?? null) ? $params['arguments'] : [];

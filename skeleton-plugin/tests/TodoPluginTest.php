@@ -64,4 +64,13 @@ final class TodoPluginTest extends PluginTestCase
         self::assertSame(['@todo'], $this->complete('a.php', "<?php\n// @to|"));
         self::assertSame([], $this->complete('a.php', "<?php\n\$x = |"));
     }
+
+    public function testClaudeListsTheTodosThroughTheIdesMcpServer(): void
+    {
+        $this->project(['src/A.php' => "<?php\n// TODO: sound\n// FIXME: crash\n", 'docs/b.md' => "<!-- TODO: write -->\n"]);
+        self::assertContains('plugin_' . str_replace('-', '_', basename($this->pluginDir())) . '_list_todos', $this->mcpTools());
+        self::assertCount(3, $this->mcp('list_todos'));
+        self::assertSame([['path' => 'src/A.php', 'line' => 3, 'tag' => 'FIXME', 'text' => 'crash']], $this->mcp('list_todos', ['fixme_only' => true]));
+        self::assertSame(['write'], array_column($this->mcp('list_todos', ['path' => 'docs']), 'text'));
+    }
 }

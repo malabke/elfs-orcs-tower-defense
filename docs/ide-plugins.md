@@ -7,6 +7,7 @@ user's computer. It can add:
 - tool windows, built from simple PHP nodes;
 - run configurations;
 - completion and problems for the files it chooses;
+- **tools for Claude**, on the IDE's MCP server;
 - listeners and timers.
 
 You develop a plugin like any JumPHP project: one folder, `bin/jumphp test` to test it, and tests that use the
@@ -88,6 +89,8 @@ final class TodoPlugin implements Plugin
         $ide->on('file.saved', fn (string $path) => $window->refresh());
         $ide->diagnostics('*.php', fn (string $path, string $text) => [['line' => 3, 'message' => '...', 'severity' => 'warning']]);
         $ide->completion('config/*.yaml', fn (EditorState $at) => [['label' => 'speed', 'insert' => 'speed: ', 'detail' => 'pixels per second']]);
+        $ide->mcpTool('list_todos', 'The TODO comments of the project: path, line, text.', fn (array $args) => $this->todos($args['path'] ?? ''),
+            ['path' => ['type' => 'string', 'description' => 'only under this folder']]);
         $ide->runConfiguration('assets', 'Rebuild the assets', ['bin/jumphp', 'php', 'games/x', 'tools/assets.php'], ['kind' => 'build']);
     }
 }
@@ -100,6 +103,7 @@ final class TodoPlugin implements Plugin
 | `runConfiguration($id, $label, $command, [kind, icon, group])` | Adds a run configuration to the Run widget: the command runs in the project's folder, with its output in the Run window. |
 | `completion($glob, fn (EditorState) => items)` | Completion in the files that match: `label`, `insert`, `detail`, `kind` (text, keyword, value, property, method, function, class, snippet). |
 | `diagnostics($glob, fn ($path, $text) => problems)` | Problems in the files that match, checked as the user types: `line`, `column`, `endLine`, `endColumn`, `message`, `severity` (warning or error). |
+| `mcpTool($name, $description, fn (array $args), $properties, $required)` | Adds a tool for Claude, on the IDE's MCP server (see below). Returns its MCP name. |
 | `on('file.saved' \| 'files.changed', fn)` | A listener. `file.saved` gets the path; `files.changed` means files changed outside the editor (git, a run). |
 | `every($seconds, fn)` | A timer, called on the IDE's frame. |
 | `notify($message, $kind)`, `openFile($path, $line)`, `showToolWindow($id)`, `run($command, $label)` | Asks the interface to show a notification, open a file at a line, show a tool window, or run a command in the Run window. |
@@ -133,6 +137,55 @@ Icons use the IDE's names:
 - file, folder, search, find, settings;
 - plus, minus, close, star, globe;
 - package, terminal, history, code, game, app, plugin.
+
+## Tools for Claude (MCP)
+
+The IDE runs an MCP server, `jumphp-ide`, for the Claude Code it starts. That covers:
+- the Claude tool window;
+- jumphp.net's web IDE, through `bin/jumphp claude:connect`.
+
+Claude uses it to drive the IDE: open files, point at lines, run configurations, debug. A plugin adds its own tools
+to that server with `mcpTool()`:
+
+```php
+$ide->mcpTool('list_todos', 'The TODO and FIXME comments of the project: path, line, tag, text. Use it to find what is left to do.',
+    function (array $args) use ($ide): array {
+        return array_values(array_filter($this->scan($ide), fn ($t) => empty($args['fixme_only']) || $t['tag'] === 'FIXME'));
+    },
+    ['fixme_only' => ['type' => 'boolean', 'description' => 'only the FIXME ones'],
+        'path' => ['type' => 'string', 'description' => 'only under this folder of the project']],
+    [],      // the required arguments
+);
+```
+
+- **Name**: `$name` is lower case letters, digits and `_`. The server offers the tool as `plugin_<id>_<name>`, with
+  the `-` of the id written `_`: `plugin_todo_finder_list_todos`. Claude Code sees it as
+  `mcp__jumphp-ide__plugin_todo_finder_list_todos`.
+- **Description**: the server puts the plugin's name in front of it, as `[TODO Finder] …`. Claude chooses its tools
+  from their descriptions: say what the tool returns and when to use it.
+- **Arguments**: the JSON Schema of each argument, and which ones are required.
+- **What the handler returns** is what Claude reads:
+  - a string;
+  - an array, sent as JSON;
+  - a whole MCP result, `['content' => [['type' => 'text', 'text' => '…']]]` (images too);
+  - a `JumPHP\Ide\Async\Deferred` of one of these, for work that ends later.
+
+  An exception is the tool's error: Claude reads its message.
+- **Where it runs**: in PHP, in the IDE, on its frame, not in the interface. Never block. For long work, return a
+  `Deferred` and settle it from `every()`.
+- **Permissions**: the IDE lets its Claude use every tool of `jumphp-ide` without asking (`--allowedTools
+  mcp__jumphp-ide`), so a plugin's tools run without a question. A tool that changes files or runs commands should
+  say so in its description, and the plugin should ask the user itself when needed (a notification or a tool
+  window).
+- **When the list changes**: Claude Code reads the tool list when it starts. A plugin installed or enabled later
+  gives its tools to the next conversation.
+- **Where to see them**: the Plugins window lists each plugin's tools ("Tools for Claude"). `bin/jumphp test`
+  counts them.
+
+In tests:
+- `$this->mcp('list_todos', ['fixme_only' => true])` calls the tool as the server does. It waits for a `Deferred`
+  that settles at once.
+- `$this->mcpTools()` lists the MCP names.
 
 ## The rules
 
@@ -174,6 +227,8 @@ final class TodoPluginTest extends PluginTestCase
 | `problems($path, $text)` | The problems the plugin finds. |
 | `save($path, $content)` | Saves a file as the editor does, so the plugin hears `file.saved`. |
 | `wait($seconds)` | Lets time pass for the timers. |
+| `mcp($name, $args)` | Calls one of the plugin's tools for Claude. |
+| `mcpTools()` | The MCP names of the plugin's tools. |
 | `notifications()`, `opened()`, `ui($do)`, `errors()` | What the plugin asked the interface, and the errors it reported. |
 
 ## Sharing a plugin: jumphp.net

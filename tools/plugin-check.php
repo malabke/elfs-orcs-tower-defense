@@ -29,5 +29,5 @@ if (($loaded['status'] ?? '') !== 'active' || $errors) {
     fwrite(STDERR, ($loaded['error'] ?? '') . "\n" . implode("\n", $errors) . "\n");
     exit(1);
 }
-printf("%s %s: %d action(s), %d tool window(s), %d run configuration(s), %d provider(s)\n", $loaded['name'], $loaded['version'],
-    count($c['actions']), count($c['tools']), count($c['run']), count($c['providers']));
+printf("%s %s: %d action(s), %d tool window(s), %d run configuration(s), %d provider(s), %d tool(s) for Claude\n", $loaded['name'], $loaded['version'],
+    count($c['actions']), count($c['tools']), count($c['run']), count($c['providers']), count($c['mcp']));
