@@ -9,6 +9,10 @@ app:
   icon: jumphp-ide-icon.png
   banner: jumphp-ide-banner.png
 
+# where the installs are counted: the IDE's installer package on jumphp.net (its studio statistics), also for the
+# setups of the GitHub release (which have no server of their own)
+stats: https://jumphp.net/installers/api/packages/fq3zba5t/stats
+
 version:
   latest: https://raw.githubusercontent.com/davidnurdin/jumPhp/main/games/ide/installer/version.json
 
