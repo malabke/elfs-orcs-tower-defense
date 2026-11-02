@@ -1,8 +1,9 @@
 // Create an Installer… (Run menu, Find Action, the jumphp.net window): an installer per system of the game / app
 // (jumphp2installer: shortcuts, uninstaller, always the newest version), put on jumphp.net (the game's downloads and
-// the installer the site makes), in a GitHub release of the project's repository, or in a folder for any web site
-// (dist/installer/). The last two are bin/jumphp installer, run in the Run window; jumphp.net is the jumphp.net
-// window's own commands (playground.upload, playground.installer).
+// the installer the site makes), in a GitHub release of the project's repository, in a folder for any web site
+// (dist/installer/), or standalone (the game inside each installer: no site, no network). The last three are
+// bin/jumphp installer, run in the Run window; jumphp.net is the jumphp.net window's own commands (playground.upload,
+// playground.installer).
 import { backend } from './backend.js';
 import { el, dialog, notify, confirm, prefs } from './ui.js';
 
@@ -45,6 +46,7 @@ export async function createInstaller(app, { where: initial } = {}) {
     jumphp ? ['jumphp', 'jumphp.net', 'The installer hosted on jumphp.net: the game\'s page offers it, its numbers are in the jumphp.net window.'] : null,
     ['github', 'GitHub', 'A release v<version> of the project\'s repository (public): the installers always install its newest release.'],
     ['dir', 'Another web site', 'A folder (dist/installer/) to put at the address you give, on any host: you upload it yourself.'],
+    ['standalone', 'Standalone', 'The game inside each installer (dist/installer/): installs with no site and no network (a USB key, a shop). It never updates itself: make it again for a new version.'],
   ].filter(Boolean);
   let where = initial && choices.some((c) => c[0] === initial) ? initial : prefs.get(key('where'), choices[0][0]);
   if (!choices.some((c) => c[0] === where)) where = choices[0][0];
@@ -115,11 +117,17 @@ async function make(app, { module, systems, where, url, version, local }) {
       result(app, 'jumphp.net', Object.entries(d.installer?.files || {}).map(([p, link]) => [p.replace('-x86_64', ''), link]), d.installer?.page);
       return;
     }
-    const command = ['bin/jumphp', 'installer', module.id, ...(where === 'github' ? ['--github'] : ['--url', url]), '--version', version, ...systems.map((s) => `--${s}`)];
-    step(where === 'github' ? 'building, then the GitHub release…' : 'building the folder…', 0.3);
+    const target = { github: ['--github'], standalone: ['--standalone'] }[where] || ['--url', url];
+    const command = ['bin/jumphp', 'installer', module.id, ...target, '--version', version, ...systems.map((s) => `--${s}`)];
+    step(where === 'github' ? 'building, then the GitHub release…' : where === 'standalone' ? 'building the installers…' : 'building the folder…', 0.3);
     const end = await app.runner.startAndWait({ id: 'adhoc', kind: 'build', label: `Installer of ${module.id}`, command });
     if (!end || end.code !== 0) { notify('The installer could not be made: see the Run window.', 'error', { title: 'Installer' }); return; }
     const made = JSON.parse((await backend.invoke('file.read', { path: `${module.dir ? module.dir + '/' : ''}dist/installer/installer.json` })).content || '{}');
+    if (where === 'standalone') {
+      const files = Object.entries(made.installers || {}).map(([system, i]) => [system, `${made.folder}/${i.file}`]);
+      result(app, 'standalone', files, null, 'One file per system, the game inside: give them as they are (no site, no network needed). They install this version, with a shortcut and an uninstaller.');
+      return;
+    }
     const links = Object.entries(made.installers || {}).map(([system, i]) => [system, i.url]);
     if (where === 'github') result(app, 'GitHub', links, made.installers ? links[0]?.[1].replace(/\/download\/[^/]+$/, '') : null);
     else result(app, 'your web site', links, null, `Put every file of ${made.folder}/ at ${url} (nothing renamed), then give these links. A new version: make the installer again and replace the files.`);

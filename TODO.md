@@ -136,15 +136,12 @@ the terminal with it), a macOS installer for CLI apps (executables given as they
   Run window's output with files on Windows (ide/src/Async/Processes.php) and at a `docker build` of the desktop image
   that prints nothing for minutes (the first time: say it in the Run window).
 
-## Installers: a standalone one, with no site behind it
+## Installers: the standalone one's uninstaller
 
-Today `bin/jumphp installer` (jumphp2installer) needs a place online: a GitHub release (`--github`) or a folder on a
-site (`--url`), and the installed game updates itself from there. Add a **standalone installer** (asked 2026-11-02):
-one file per system (Windows, Linux, macOS) that holds the whole game (the standalone executable inside) and installs
-it with no network and no site (shortcuts, uninstaller as now; no update check, or only when a URL is given).
-`bin/jumphp installer <id> --standalone [--windows] [--linux] [--macos]` → `dist/installer/`, in jumphp2installer
-(an option of its builder) and in the IDE: Run > Create an Installer… gets it as a third choice beside GitHub and
-a site.
+`bin/jumphp installer --standalone` (done 2026-11-02, jumphp2installer 0.2.6) writes, as every installer does, a copy
+of itself as the uninstaller: the game is inside it too (hello-world: a 31 MB game, a 63 MB uninstaller). Make the
+uninstaller without the package (the base installer kept beside the payload, or the PHAR rewritten without
+game/payload/ at install time: Phar needs phar.readonly=0 in the installer's php.ini).
 
 ## jumphp.net: big downloads are slow and sometimes cut
 

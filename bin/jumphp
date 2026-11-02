@@ -91,10 +91,11 @@ Games (<game> = a folder of games/, e.g. pong)
   export:standalone <game> [--linux] [--windows]
                             the game as one executable, nothing to install (PHP, SDL, OpenGL, OpenAL inside):
                             dist/standalone/<game>-linux-x86_64 and/or <game>-windows-x86_64.exe (docs/standalone.md)
-  installer <game> --github | --url https://site/folder/ [--windows] [--linux] [--macos] [--version X] [--no-build]
+  installer <game> --github | --url https://site/folder/ | --standalone [--windows] [--linux] [--macos] [--version X] [--no-build]
                             an installer per system (jumphp2installer: shortcuts, uninstaller, always the newest version):
                             --github: a release v<version> of the project's repository (gh); --url: a folder to put at
-                            that address, dist/installer/. Builds Windows / Linux first (apps too); macOS: an existing
+                            that address, dist/installer/; --standalone: the game inside each installer (no site, no
+                            network, no update). Builds Windows / Linux first (apps too); macOS: an existing
                             build (bin/jumphp macos <game>, app:export --macos). On jumphp.net: the IDE's jumphp.net window
   twa <game> [--url URL] [--package ID] [--name NAME] [--same-version]
                             the game as an Android app for Google Play (Trusted Web Activity, Bubblewrap):
@@ -803,15 +804,16 @@ cmd_installer() {
     case "$1" in
       --github) target=github ;;
       --url) target=dir; url="${2:-}"; shift ;;
+      --standalone) target=standalone ;;
       --windows|--linux|--macos) platforms+=("${1#--}") ;;
       --version) version="${2:-}"; shift ;;
       --no-build) build=0 ;;
       --jumphp) die "on jumphp.net: the JumPHP IDE (jumphp.net window, or Create an Installer…) sends the files and makes it" ;;
-      *) die "unknown option $1 (--github, --url https://..., --windows --linux --macos, --version X, --no-build)" ;;
+      *) die "unknown option $1 (--github, --url https://..., --standalone, --windows --linux --macos, --version X, --no-build)" ;;
     esac
     shift
   done
-  [ -n "$target" ] || die "where: --github (a release of the project's repository) or --url https://site/folder/ (a folder to put there)"
+  [ -n "$target" ] || die "where: --github (a release of the project's repository), --url https://site/folder/ (a folder to put there) or --standalone (the game inside each installer, no site)"
   if [ ${#platforms[@]} -eq 0 ]; then
     platforms=(windows linux)
     compgen -G "$ROOT/$dir/dist/apple/*-macos.zip" >/dev/null || compgen -G "$ROOT/$dir/dist/standalone/*-macos.zip" >/dev/null && platforms+=(macos)
@@ -834,12 +836,25 @@ cmd_installer() {
     fi
   fi
   ensure_installer_bases
+  # standalone: base installers that look for the package inside them (jumphp2installer 0.2.6+), else the newest now
+  if [ "$target" = standalone ] && ! grep -q 'Binary::PAYLOAD' "$ROOT/.cache/installer-bases/jumphp2installer-linux-x86_64"; then
+    rm -f "$ROOT"/.cache/installer-bases/jumphp2installer-*
+    ensure_installer_bases
+    grep -q 'Binary::PAYLOAD' "$ROOT/.cache/installer-bases/jumphp2installer-linux-x86_64" \
+      || die "the base installers of jumphp2installer's newest release cannot hold a game (0.2.6 or newer is needed)"
+  fi
   local list; list="$(IFS=,; echo "${platforms[*]}")"
-  say "$dir: the installer ($list, v$version, $([ "$target" = github ] && echo "GitHub release of $repo" || echo "$url"))"
+  local where; case "$target" in github) where="GitHub release of $repo" ;; standalone) where="standalone: the game inside" ;; *) where="$url" ;; esac
+  say "$dir: the installer ($list, v$version, $where)"
   local args=(--target "$target" --version "$version" --platforms "$list" --publisher "$(git -C "$ROOT" config user.name 2>/dev/null || true)")
-  [ "$target" = github ] && args+=(--repo "$repo") || args+=(--url "$url")
-  php_run . -- php tools/game-installer.php "$dir" .cache/installer-bases "${args[@]}"
+  case "$target" in github) args+=(--repo "$repo") ;; dir) args+=(--url "$url") ;; esac
+  php_run . -- php -d phar.readonly=0 tools/game-installer.php "$dir" .cache/installer-bases "${args[@]}"
   local out="$ROOT/$dir/dist/installer"
+  if [ "$target" = standalone ]; then
+    say "done: ${out#"$ROOT"/}/ — one installer per system, the game inside (no network needed, no update):"
+    sed -nE 's/^ *"file": "([^"]+)".*/  \1/p' "$out/installer.json" >&2
+    return
+  fi
   if [ "$target" = github ]; then
     local tag="v$version" files=()
     mapfile -t files < <(find "$out" -maxdepth 1 -type f ! -name installer.json | sort)

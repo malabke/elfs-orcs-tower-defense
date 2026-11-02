@@ -5,6 +5,8 @@
 //   --target github  the files of a GitHub release: the installers read the repository's newest release, so they
 //                    always install the newest version (bin/jumphp uploads them with gh)
 //   --target dir     a folder to put at --url on any web host (the installers read install.yaml there)
+//   --target standalone  one installer per system with the game inside it (Binary::embedFile()): installs with no
+//                    network and no site, never updates (run with php -d phar.readonly=0)
 // Plus installer.json: what was made and the links to give. Run from the repository's root, in Docker.
 //
 //   php tools/game-installer.php <games/id> <bases folder> --target github --repo owner/repo [--version 1.0]
@@ -45,6 +47,10 @@ if ($opts['target'] === 'github') {
     $source = 'github:' . $opts['repo'];
     $base = 'https://github.com/' . $opts['repo'] . '/releases/latest/download/';
     $versionRule = ['github' => $opts['repo']];
+} elseif ($opts['target'] === 'standalone') {
+    $source = $base = '';
+    $versionRule = null;
+    filter_var(ini_get('phar.readonly'), FILTER_VALIDATE_BOOL) && $fail('--target standalone needs php -d phar.readonly=0');
 } elseif ($opts['target'] === 'dir') {
     preg_match('#^https?://[^\s]+$#', $opts['url']) || $fail('--url: the https:// address where the folder will be put');
     $base = $source = rtrim($opts['url'], '/') . '/';
@@ -75,7 +81,11 @@ if (is_dir($out)) {
     }
 }
 @mkdir($out, 0777, true);
-$copy = static fn (string $from, string $name) => copy($from, "$out/$name") || $fail("cannot write $out/$name");
+$standalone = $opts['target'] === 'standalone';
+// standalone: the package is made in a folder per system, then put inside its installer (only the installers stay)
+$package = $standalone ? sys_get_temp_dir() . "/jumphp-installer-$id-" . getmypid() : $out;
+@mkdir($package, 0777, true);
+$copy = static fn (string $from, string $name) => copy($from, "$package/$name") || $fail("cannot write $package/$name");
 
 // the package: the executables under fixed names (installed games take the newest one each time)
 $names = ['windows' => "$id-windows-x86_64.exe", 'linux' => "$id-linux-x86_64", 'macos' => "$id-macos.zip"];
@@ -94,35 +104,40 @@ foreach (['assets/icon.png', 'assets/thumbnail.png'] as $candidate) {
 }
 
 // the script: what the playground writes for a game, with the package's own files
-$desktop = array_values(array_intersect(['windows', 'linux'], array_keys($found)));
-$steps = [];
-$run = [];
-foreach ($desktop as $os) {
-    $steps[] = ['download' => $names[$os], 'os' => $os];
-    $run[$os] = "{folder}/$id" . ($os === 'windows' ? '.exe' : '');
-}
-if ($desktop !== []) {
-    $steps[] = ['copy' => ['from' => '{download}', 'to' => "{folder}/$id{exe}"], 'os' => $desktop];
-    if (in_array('linux', $desktop, true)) {
-        $steps[] = ['executable' => "{folder}/$id", 'os' => 'linux'];
+$scriptOf = static function (array $found, ?array $versionRule) use ($id, $title, $publisher, $names, $version, &$icon): array {
+    $desktop = array_values(array_intersect(['windows', 'linux'], array_keys($found)));
+    $steps = [];
+    $run = [];
+    foreach ($desktop as $os) {
+        $steps[] = ['download' => $names[$os], 'os' => $os];
+        $run[$os] = "{folder}/$id" . ($os === 'windows' ? '.exe' : '');
     }
-    $steps[] = ['shortcut' => ['target' => "{folder}/$id{exe}", 'where' => 'both'], 'if' => 'desktop', 'os' => $desktop];
+    if ($desktop !== []) {
+        $steps[] = ['copy' => ['from' => '{download}', 'to' => "{folder}/$id{exe}"], 'os' => $desktop];
+        if (in_array('linux', $desktop, true)) {
+            $steps[] = ['executable' => "{folder}/$id", 'os' => 'linux'];
+        }
+        $steps[] = ['shortcut' => ['target' => "{folder}/$id{exe}", 'where' => 'both'], 'if' => 'desktop', 'os' => $desktop];
+    }
+    if (isset($found['macos'])) {
+        $steps[] = ['download' => $names['macos'], 'os' => 'macos'];
+        $steps[] = ['extract' => '{folder}', 'os' => 'macos'];
+    }
+    $steps[] = 'uninstaller';
+    return [
+        'installer' => 1,
+        'app' => ['name' => $title, 'publisher' => $publisher] + ($icon !== null ? ['icon' => $icon] : []),
+        'version' => $versionRule ?? $version,
+        'pages' => ['welcome', ['folder' => '{programs}/{app}'], ['options' => ['desktop' => 'A shortcut on the desktop']], 'install',
+            $run !== [] ? ['finish' => ['run' => $run]] : 'finish'],
+        'steps' => $steps,
+    ];
+};
+if (!$standalone) {
+    $script = $scriptOf($found, $versionRule);
+    file_put_contents("$out/install.yaml", "# The installer of $id (bin/jumphp installer): it installs the newest version put at its address.\n" . Yaml::dump($script, 4, 2));
+    $files[] = 'install.yaml';
 }
-if (isset($found['macos'])) {
-    $steps[] = ['download' => $names['macos'], 'os' => 'macos'];
-    $steps[] = ['extract' => '{folder}', 'os' => 'macos'];
-}
-$steps[] = 'uninstaller';
-$script = [
-    'installer' => 1,
-    'app' => ['name' => $title, 'publisher' => $publisher] + ($icon !== null ? ['icon' => $icon] : []),
-    'version' => $versionRule,
-    'pages' => ['welcome', ['folder' => '{programs}/{app}'], ['options' => ['desktop' => 'A shortcut on the desktop']], 'install',
-        $run !== [] ? ['finish' => ['run' => $run]] : 'finish'],
-    'steps' => $steps,
-];
-file_put_contents("$out/install.yaml", "# The installer of $id (bin/jumphp installer): it installs the newest version put at its address.\n" . Yaml::dump($script, 4, 2));
-$files[] = 'install.yaml';
 if ($opts['target'] === 'dir') {
     file_put_contents("$out/version.json", json_encode(['version' => $version]) . "\n");
     $files[] = 'version.json';
@@ -139,17 +154,40 @@ foreach (['windows' => ['jumphp2installer-windows-x86_64.exe', "$name-setup.exe"
     }
     is_file("$bases/$from") || $fail("no base installer $bases/$from");
     try {
-        Binary::patchFile("$bases/$from", "$out/$to", $source, 'static');
+        if ($standalone) {
+            // this system's package alone: its executable, the icon, a script of this version
+            $one = "$package/$platform";
+            @mkdir($one, 0777, true);
+            rename("$package/{$names[$platform]}", "$one/{$names[$platform]}");
+            $icon !== null && copy("$package/$icon", "$one/$icon");
+            file_put_contents("$one/install.yaml", "# The standalone installer of $id $version (bin/jumphp installer --standalone).\n"
+                . Yaml::dump($scriptOf([$platform => $found[$platform]], null), 4, 2));
+            Binary::embedFile("$bases/$from", "$out/$to", $one);
+        } else {
+            Binary::patchFile("$bases/$from", "$out/$to", $source, 'static');
+        }
     } catch (Throwable $e) {
         $fail("$from: " . $e->getMessage());
     }
     $setups[$platform] = $to;
 }
+if ($standalone) {
+    $rm = static function (string $path) use (&$rm): void {
+        if (is_dir($path)) {
+            array_map($rm, glob("$path/*") ?: []);
+            @rmdir($path);
+        } else {
+            @unlink($path);
+        }
+    };
+    $rm($package);
+    $files = [];
+}
 
 $result = [
     'target' => $opts['target'], 'source' => $source, 'version' => $version, 'folder' => $out,
     'files' => [...$files, ...array_values($setups)],
-    'installers' => array_map(static fn (string $f) => ['file' => $f, 'url' => $base . $f], $setups),
+    'installers' => array_map(static fn (string $f) => ['file' => $f] + ($standalone ? [] : ['url' => $base . $f]), $setups),
 ];
 file_put_contents("$out/installer.json", json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 foreach ($result['installers'] as $platform => $i) {
