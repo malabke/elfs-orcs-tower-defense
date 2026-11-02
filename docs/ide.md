@@ -66,7 +66,8 @@ One interface, one PHP core, two hosts:
   processes read a little at every frame (`Processes`), results are `Deferred`.
 - **The PHP index** (`Php\Index`): every PHP file of the project analysed with nikic/php-parser (declarations, references with
   the receiver's type when the file tells it), a few ms per frame, cached; libraries (Composer `vendor/`) found by their PSR-4
-  prefixes and analysed when a class is needed; PHP's own classes and functions by Reflection.
+  prefixes and analysed when a class is needed, then all of them in the background once the project is done (`indexLibraries()`:
+  their implementations and subclasses, classmap classes; cached in `<cache>.libraries`); PHP's own classes and functions by Reflection.
 - **Desktop**: `games/ide` is a JumPHP desktop app (docs/tauri.md). The pages call one command, `ide`; Main answers the session
   and project commands and hands the rest to the open project's `Ide`. Sign-in: a loopback (as native apps do OAuth): the IDE
   listens on `127.0.0.1:<random port>`, opens `jumphp.net/ide/connect`, you authorize, jumphp.net sends the browser back with a

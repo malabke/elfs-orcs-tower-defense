@@ -149,6 +149,107 @@ final class Index
         return ['done' => count($this->files), 'total' => count($this->files) + $pending];
     }
 
+    /** @var list<string>|null the library files still to analyze in the background (null: not listed yet) */
+    private ?array $libraryQueue = null;
+    private int $libraryTotal = 0;
+    /** @var array<string, array<string, mixed>> the libraries' entries of the last run (path => entry), by mtime */
+    private array $libraryCache = [];
+
+    /**
+     * The whole libraries (vendor/, the engine...) analyzed in the background, after the project: implementations
+     * and subclasses of their classes, classmap classes, members without opening them first. For at most $budget
+     * seconds; true when every file is done. A cache (<cache>.libraries) keeps them for the next start.
+     */
+    public function indexLibraries(float $budget): bool
+    {
+        $start = microtime(true);
+        if ($this->libraryQueue === null) {
+            $this->libraryCache = $this->loadLibraryCache();
+            $queue = [];
+            foreach ($this->libraries() as $library) {
+                foreach ($this->libraryFiles($library['dir']) as $relative) {
+                    $queue[$library['dir'] . '/' . $relative] = true;
+                }
+            }
+            foreach ($this->classmap as [, $path]) {
+                $queue[$path] = true;
+            }
+            $this->libraryQueue = array_keys($queue);
+            $this->libraryTotal = count($this->libraryQueue);
+        }
+        while ($this->libraryQueue) {
+            $path = array_pop($this->libraryQueue);
+            if (!isset($this->files[$path]) && !isset($this->libraries[$path])) {
+                $mtime = $this->libraryMtime($path);
+                $cached = $this->libraryCache[$path] ?? null;
+                if ($cached !== null && $mtime !== null && (float)($cached['mtime'] ?? -1) === $mtime) {     // JSON: 12.0 comes back as 12
+                    $this->libraries[$path] = $cached;
+                    $this->register($cached);
+                } elseif ($this->loadLibraryFile($path) && $mtime !== null) {
+                    $this->libraries[$path]['mtime'] = $mtime;
+                }
+            }
+            if (microtime(true) - $start > $budget) {
+                return false;
+            }
+        }
+        if ($this->libraryCache !== [] || $this->libraryTotal > 0) {
+            $this->libraryCache = [];
+            $this->saveLibraryCache();
+        }
+        return true;
+    }
+
+    /** @return array{done: int, total: int} */
+    public function libraryProgress(): array
+    {
+        return ['done' => $this->libraryTotal - count($this->libraryQueue ?? []), 'total' => $this->libraryTotal];
+    }
+
+    /** The libraries changed (composer install): listed and analyzed again. */
+    public function invalidateLibraries(): void
+    {
+        foreach ([&$this->classes, &$this->functions] as &$names) {
+            $names = array_filter($names, fn (string $path): bool => !isset($this->libraries[$path]));
+        }
+        unset($names);
+        $this->libraryQueue = null;
+        $this->libraryListing = [];
+        $this->libraries = [];
+        $this->psr4 = [];
+        $this->stubsLoaded = false;
+        $this->autoloadFilesLoaded = false;
+    }
+
+    private function libraryMtime(string $path): ?float
+    {
+        if (str_starts_with($path, '/')) {
+            $t = @filemtime($path);
+            return $t === false ? null : (float)$t;
+        }
+        return $this->workspace->mtime($path);
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function loadLibraryCache(): array
+    {
+        if ($this->cacheFile === null || !is_file($this->cacheFile . '.libraries')) {
+            return [];
+        }
+        $data = json_decode((string)@file_get_contents($this->cacheFile . '.libraries'), true);
+        return is_array($data) && ($data['version'] ?? 0) === self::VERSION && is_array($data['files'] ?? null) ? $data['files'] : [];
+    }
+
+    private function saveLibraryCache(): void
+    {
+        if ($this->cacheFile === null) {
+            return;
+        }
+        @mkdir(dirname($this->cacheFile), 0777, true);
+        @file_put_contents($this->cacheFile . '.libraries', json_encode(['version' => self::VERSION, 'files' => $this->libraries],
+            JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
     /** Analyzes one project file now (saved or opened). */
     public function update(string $path, ?string $content = null): void
     {

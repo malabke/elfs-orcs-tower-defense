@@ -48,6 +48,8 @@ final class Ide
     private $emit;
 
     private bool $indexed = false;
+    private bool $librariesIndexed = false;
+    private int $libraryTicks = 0;
 
     /** the Claude Code of this computer (desktop only) */
     public ?ClaudeCode $claude = null;
@@ -180,6 +182,18 @@ final class Ide
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);
             $this->indexed = $done;
+        } elseif (!$this->librariesIndexed) {
+            // then the whole libraries, a slice per frame (the project's completion works meanwhile)
+            $this->guard('indexing', function () use ($budget): void {
+                $done = $this->index->indexLibraries($budget);
+                $this->libraryTicks = ($this->libraryTicks + 1) % 30;
+                if ($done || $this->libraryTicks === 0) {
+                    $this->emit('index.progress', $this->index->libraryProgress() + ['complete' => $done, 'libraries' => true]);
+                }
+                $this->librariesIndexed = $done;
+            }, function (): void {
+                $this->librariesIndexed = true;
+            });
         }
     }
 
@@ -201,6 +215,10 @@ final class Ide
     {
         $this->index->invalidate();
         $this->indexed = false;
+        if ($this->librariesIndexed) {      // a composer install may have changed vendor/
+            $this->index->invalidateLibraries();
+            $this->librariesIndexed = false;
+        }
     }
 
     /** The visual editor of forms (graphic PHP apps, JumPHP\Gui): form files <-> arrays, the code behind them. */

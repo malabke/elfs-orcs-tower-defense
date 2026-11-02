@@ -148,4 +148,33 @@ final class LibraryCompletionTest extends TestCase
     {
         self::assertContains('play', $this->labels(self::HEAD . "use Lib\\Tween;\nfunction f() { \$t = new Tween(); \$t->| }"));
     }
+
+    public function testTheLibrariesAreIndexedInTheBackgroundAndCached(): void
+    {
+        $files = [
+            'composer.json' => '{"autoload": {"psr-4": {"App\\\\": "src/"}}}',
+            'vendor/composer/autoload_psr4.php' => "<?php\n\$vendorDir = dirname(__DIR__);\nreturn array(\n    'Lib\\\\' => array(\$vendorDir . '/acme/lib/src'),\n);\n",
+            'vendor/acme/lib/src/Shape.php' => "<?php\nnamespace Lib;\n\ninterface Shape {}\n",
+            'vendor/acme/lib/src/Geo/Circle.php' => "<?php\nnamespace Lib\\Geo;\n\nclass Circle implements \\Lib\\Shape\n{\n    public function radius(): float { return 1.0; }\n}\n",
+            'vendor/acme/lib/tests/CircleTest.php' => "<?php\nclass CircleTest {}\n",
+        ];
+        $cache = sys_get_temp_dir() . '/jumphp-index-test-' . bin2hex(random_bytes(4)) . '.json';
+        $index = new Index(new MemoryWorkspace($files), $cache);
+        $index->refresh();
+        self::assertSame([], $index->subclasses('Lib\\Shape'), 'nothing of the library is known before');
+        while (!$index->indexLibraries(0.0)) {
+            // a file per call with no budget: the IDE gives it a slice per frame
+        }
+        self::assertSame(['done' => 2, 'total' => 2], $index->libraryProgress(), 'its classes only, not its tests');
+        self::assertContains('Lib\\Geo\\Circle', array_map(fn (array $s) => $s[1]['name'], $index->subclasses('Lib\\Shape')));
+        self::assertFileExists("$cache.libraries");
+
+        // the next start: from the cache
+        $again = new Index(new MemoryWorkspace($files), $cache);
+        $again->refresh();
+        self::assertTrue($again->indexLibraries(1.0));
+        self::assertContains('Lib\\Geo\\Circle', array_map(fn (array $s) => $s[1]['name'], $again->subclasses('Lib\\Shape')));
+        @unlink($cache);
+        @unlink("$cache.libraries");
+    }
 }

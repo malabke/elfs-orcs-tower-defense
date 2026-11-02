@@ -117,8 +117,8 @@ Done (IDE 0.1.18): the game's texts in `t('…')` (config/lang.yaml) and its act
 Done (IDE 0.1.19): `config/services.yaml` (_defaults, a service's keys, the project's classes).
 Done (IDE 0.1.20): Run Anything (Ctrl twice): bin/jumphp's commands, then the project's games, completed.
 Done (IDE 0.1.21): `config/lang.yaml` (languages, the texts not translated yet) and the form files (settings, values, events).
-Left: a background
-index of a whole vendor/ (names come from file names today, members when a class is first used).
+Done (IDE 0.1.23): the whole libraries indexed in the background after the project (a slice per frame, cached for
+the next start): implementations / subclasses of their classes, classmap classes.
 
 ## CLI apps: what is left
 

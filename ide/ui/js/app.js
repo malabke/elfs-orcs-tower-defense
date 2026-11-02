@@ -442,6 +442,13 @@ class App {
   }
 
   indexProgress(p) {
+    if (p.libraries) {      // the libraries (vendor/...), in the background after the project
+      if (p.complete) { this.libraryTask?.(); this.libraryTask = null; return; }
+      const text = `Indexing libraries (${p.done}/${p.total} files)…`;
+      if (!this.libraryTask) this.libraryTask = this.task(text, { ratio: p.total ? p.done / p.total : null });
+      else this.libraryTask.update(text, p.total ? p.done / p.total : null);
+      return;
+    }
     if (p.complete) { this.indexTask?.(); this.indexTask = null; return; }
     const ratio = p.total ? p.done / p.total : null;
     const text = `Indexing PHP${p.total ? ` (${p.done}/${p.total} files)` : ''}…`;
