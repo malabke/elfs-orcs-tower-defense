@@ -121,7 +121,7 @@ index of a whole vendor/ (names come from file names today, members when a class
 
 Done: `bin/jumphp cli:new` (skeleton-cli/, docs/cli.md, games/hello-cli), run / test / shot (the screen as text) /
 export:standalone (Linux, Windows with its console, macOS executables), the IDE's New Project and Run configurations.
-Left: a page on jumphp.net's docs (14 languages), full-screen screens on Windows without `stty` (symfony/tui reads
+Done: the page on jumphp.net's docs (/docs/application-cli, 14 languages). Left: full-screen screens on Windows without `stty` (symfony/tui reads
 the terminal with it), a macOS installer for CLI apps (executables given as they are today).
 
 ## Windows: Docker through WSL, and a composer install that seemed to loop
