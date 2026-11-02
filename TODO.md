@@ -108,18 +108,6 @@ later iOS).
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
   computer, never in the project)
 
-## JumPHP IDE: autocompletion, what is left
-
-Done (IDE 0.1.9): generics (`@template`, `@extends`, `class-string<T>`), array shapes and their keys, foreach over
-collections, the libraries' functions and classmaps, the stubs' functions, `config/game.yaml` and `config/input.yaml`.
-Done (IDE 0.1.18): the game's texts in `t('…')` (config/lang.yaml) and its actions in `isPressed('…')` / `isHeld` /
-`isReleased` / `press` / `hold` / `label` (config/input.yaml + the engine's).
-Done (IDE 0.1.19): `config/services.yaml` (_defaults, a service's keys, the project's classes).
-Done (IDE 0.1.20): Run Anything (Ctrl twice): bin/jumphp's commands, then the project's games, completed.
-Done (IDE 0.1.21): `config/lang.yaml` (languages, the texts not translated yet) and the form files (settings, values, events).
-Done (IDE 0.1.23): the whole libraries indexed in the background after the project (a slice per frame, cached for
-the next start): implementations / subclasses of their classes, classmap classes.
-
 ## Windows: Docker through WSL, and a composer install that seemed to loop
 
 - Docker inside WSL without Docker Desktop (Docker Engine installed in a WSL distribution: no Docker Desktop licence, often
