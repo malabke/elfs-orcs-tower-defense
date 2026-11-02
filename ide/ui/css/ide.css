@@ -436,3 +436,29 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .pub .field { align-items: stretch; text-align: left; }
 .pub-inline.field { flex-direction: row; align-items: center; justify-content: flex-start; }
 .pub-body > .btn { align-self: flex-start; }
+
+/* Claude seen working (agent.js): marks on the lines it reads / changes / points at, its plan, its questions */
+.tw-actions button.on { color: var(--accent-2); }
+.claude-mark.read { background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.claude-mark.edit { background: color-mix(in srgb, var(--orange) 18%, transparent); }
+.claude-mark.done { background: color-mix(in srgb, var(--green) 16%, transparent); animation: claude-fade 6s ease-out forwards; }
+.claude-mark.note { background: color-mix(in srgb, var(--purple) 15%, transparent); }
+.claude-mark-gutter { margin-left: 3px; width: 3px !important; background: #d97757; }
+.claude-mark-gutter.read { background: var(--blue); }
+.claude-mark-gutter.edit { background: var(--orange); }
+.claude-mark-gutter.done { background: var(--green); }
+.claude-mark-gutter.note { background: var(--purple); }
+.claude-mark-label { font-family: var(--font); font-size: 11px; font-style: italic; color: #d97757; opacity: 0.95; }
+.claude-mark-label.note { color: var(--purple); font-style: normal; font-weight: 600; }
+@keyframes claude-fade { 0%, 60% { opacity: 1; } 100% { background: transparent; } }
+.claude-plan { border-bottom: 1px solid var(--border-2); padding: 6px 10px; font-size: 12px; max-height: 35%; overflow: auto; background: var(--panel); }
+.claude-plan-head { display: flex; gap: 6px; align-items: center; font-weight: 600; margin-bottom: 4px; color: var(--text-2); }
+.claude-plan-item { display: flex; gap: 6px; padding: 1px 0; color: var(--text-2); }
+.claude-plan-item .mark { width: 12px; flex: none; text-align: center; }
+.claude-plan-item.in_progress { color: var(--text); font-weight: 600; }
+.claude-plan-item.in_progress .mark { color: #d97757; }
+.claude-plan-item.completed { color: var(--text-3); text-decoration: line-through; }
+.claude-plan-item.completed .mark { color: var(--green); }
+.claude-tool.ide b { color: #d97757; }
+.claude-ask p { margin: 0 0 10px; white-space: pre-wrap; line-height: 1.5; }
+.claude-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }

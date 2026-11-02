@@ -24,7 +24,7 @@ export class Runner {
   actions() {
     const run = this.current();
     return [
-      el('button', { title: 'Rerun (Ctrl+F5)', disabled: !run, onclick: () => run && this.start(run.config) }, icon('refresh')),
+      el('button', { title: 'Rerun (Ctrl+F5)', disabled: !run || run.external, onclick: () => run && this.start(run.config) }, icon('refresh')),
       el('button', { title: 'Stop (Ctrl+F2)', disabled: !run || run.code !== undefined, onclick: () => run && this.stop(run) }, icon('stop')),
       el('button', { title: 'Clear', disabled: !run, onclick: () => { if (run) { run.output = ''; this.render(); } } }, icon('close')),
     ];
@@ -78,7 +78,26 @@ export class Runner {
   }
 
   stop(run = this.runs.find((r) => r.code === undefined)) {
+    if (run?.external) return;
     if (run) backend.invoke('run.stop', { id: run.id }).catch(() => null);
+  }
+
+  /** A command run by someone else (Claude's Bash): shown as a run tab, its output given when it ends. */
+  addExternal(id, label, command, { show = true } = {}) {
+    const run = { id, label, external: true, config: { id: 'external', kind: 'external', label, command: [command] }, output: `$ ${command}\n`, started: Date.now() };
+    this.runs = [run, ...this.runs].slice(0, 8);
+    this.active = id;
+    if (show) this.app.showTool('run', true);
+    this.render();
+    return run;
+  }
+
+  finishExternal(id, output, failed = false) {
+    const run = this.runs.find((r) => r.id === id);
+    if (!run) return;
+    run.code = failed ? 1 : 0;
+    run.output += (output || '') + `\n${failed ? 'Failed' : 'Done'} in ${Math.round((Date.now() - run.started) / 1000)}s\n`;
+    this.render();
   }
 
   isRunning() { return this.runs.some((r) => r.code === undefined); }

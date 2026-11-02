@@ -158,10 +158,12 @@ export class Editors {
   // opening --------------------------------------------------------------------------------------------------
 
   /**
-   * Opens a file in the focused group (or reveals it). options: {line, col, endLine, endCol, group, preview, kind}
+   * Opens a file in the focused group (or reveals it). options: {line, col, endLine, endCol, group, preview, kind,
+   * focus (false: the keyboard stays where it is, e.g. in the Claude window while Claude opens files)}
    */
   async open(path, options = {}) {
     const group = options.group || this.focused;
+    this.noFocus = options.focus === false;
     this.pushNavigation();
     let tab = group.tabs.find((t) => t.path === path && (t.kind === (options.kind || t.kind)) && t.kind !== 'diff');
     if (!tab) {
@@ -178,6 +180,7 @@ export class Editors {
     }
     this.activate(group, tab);
     if (options.line && tab.kind === 'text') this.reveal(group, options);
+    this.noFocus = false;
     this.addRecent(path);
     return tab;
   }
@@ -249,7 +252,8 @@ export class Editors {
     }
     editor.updateOptions({ readOnly: file.readOnly });
     group.modelTab = tab;
-    requestAnimationFrame(() => { editor.layout(); editor.focus(); });
+    const focus = !this.noFocus;
+    requestAnimationFrame(() => { editor.layout(); if (focus) editor.focus(); });
     this.updateCrumbs(group);
   }
 
@@ -369,13 +373,13 @@ export class Editors {
     group.diff.dispose = () => { dispose(); original.dispose(); if (tab.modified !== null) modified.dispose(); };
   }
 
-  reveal(group, { line, col = 1, endLine, endCol }) {
+  reveal(group, { line, col = 1, endLine, endCol, select = true, focus = !this.noFocus }) {
     const editor = group.editor;
     const range = new monaco.Range(line, col, endLine || line, endCol || col);
     setTimeout(() => {
-      editor.setSelection(range);
+      if (select) editor.setSelection(range);
       editor.revealRangeInCenterIfOutsideViewport(range, 0);
-      editor.focus();
+      if (focus) editor.focus();
     }, 0);
   }
 

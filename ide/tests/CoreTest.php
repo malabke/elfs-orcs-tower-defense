@@ -196,7 +196,13 @@ final class CoreTest extends TestCase
             self::assertSame(['system', 'assistant', 'result'], $types);
             self::assertSame('Hello', array_values(array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'assistant'))[0][1]['event']['message']['content'][0]['text']);
             self::assertSame(['claude.exit', ['id' => $run['id'], 'code' => 0, 'error' => null]], end($events));
-            self::assertSame("-p Say hello --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh\n", file_get_contents("$this->dir/args.txt"));
+            $args = (string)file_get_contents("$this->dir/args.txt");
+            self::assertStringStartsWith('-p Say hello --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh ', $args);
+            // the IDE's own tools: its MCP server (a config file with the token), allowed, and told to Claude
+            self::assertMatchesRegularExpression('#--mcp-config (\S+jumphp-ide-mcp-\d+\.json) --allowedTools mcp__jumphp-ide --append-system-prompt You are running inside the JumPHP IDE#', $args);
+            preg_match('#--mcp-config (\S+)#', $args, $m);
+            self::assertSame($ide->agent?->server()->url(), json_decode((string)file_get_contents($m[1]), true)['mcpServers']['jumphp-ide']['url']);
+            $ide->agent?->close();
         } finally {
             putenv("PATH=$saved");
         }

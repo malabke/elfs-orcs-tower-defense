@@ -30,3 +30,24 @@ foreach (['JumPHP', 'IDE'] as $i => $word) {
 imagepng($banner, "$dir/installer/jumphp-ide-banner.png");
 copy("$dir/assets/icon.png", "$dir/installer/jumphp-ide-icon.png");
 echo "installer/jumphp-ide-banner.png\n";
+
+// Windows' shortcuts take an .ico: the icon at 16, 24, 32, 48, 64 and 256 px, each one a PNG inside (Vista and later)
+$sizes = [16, 24, 32, 48, 64, 256];
+$images = [];
+foreach ($sizes as $s) {
+    $img = imagecreatetruecolor($s, $s);
+    imagealphablending($img, false);
+    imagesavealpha($img, true);
+    imagefill($img, 0, 0, imagecolorallocatealpha($img, 0, 0, 0, 127));
+    imagecopyresampled($img, $icon, 0, 0, 0, 0, $s, $s, imagesx($icon), imagesy($icon));
+    ob_start();
+    imagepng($img);
+    $images[$s] = (string)ob_get_clean();
+}
+$ico = pack('vvv', 0, 1, count($images));
+$offset = 6 + 16 * count($images);
+foreach ($images as $s => $png) {
+    $ico .= pack('CCCCvvVV', $s >= 256 ? 0 : $s, $s >= 256 ? 0 : $s, 0, 0, 1, 32, strlen($png), $offset);
+    $offset += strlen($png);
+}
+file_put_contents("$dir/installer/jumphp-ide.ico", $ico . implode('', $images));

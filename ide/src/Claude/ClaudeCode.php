@@ -3,6 +3,8 @@
 namespace JumPHP\Ide\Claude;
 
 use JumPHP\Ide\Async\Environment;
+use JumPHP\Ide\Agent\AgentTools;
+use JumPHP\Ide\Agent\IdeAgent;
 use JumPHP\Ide\Async\Processes;
 
 /**
@@ -10,6 +12,9 @@ use JumPHP\Ide\Async\Processes;
  * runs `claude -p` in the project's folder, its stream-json lines go to the interface as they come (claude.event
  * {id, event}), the end as claude.exit {id, code, error}. The conversation goes on with --resume <session_id> (the
  * id the first answer gave). Nothing is sent anywhere by the IDE itself: claude does it, with the user's own login.
+ *
+ * With an IdeAgent, claude also gets the IDE's own tools (an MCP server on 127.0.0.1, AgentTools): it opens files,
+ * points at lines, runs the configurations in the Run window, asks the user... where the user watches.
  */
 final class ClaudeCode
 {
@@ -26,7 +31,7 @@ final class ClaudeCode
     private array $buffers = [];
 
     /** @param callable(string $event, array $payload): void $emit */
-    public function __construct(private Processes $processes, private string $root, private $emit)
+    public function __construct(private Processes $processes, private string $root, private $emit, private ?IdeAgent $agent = null)
     {
     }
 
@@ -65,6 +70,14 @@ final class ClaudeCode
         }
         if ($effort !== null && in_array($effort, self::EFFORTS, true)) {
             array_push($command, '--effort', $effort);
+        }
+        if ($this->agent !== null) {
+            try {
+                array_push($command, '--mcp-config', $this->agent->mcpConfigFile(), '--allowedTools', 'mcp__' . AgentTools::SERVER,
+                    '--append-system-prompt', AgentTools::INSTRUCTIONS);
+            } catch (\Throwable) {
+                // no loopback: claude works without the IDE's tools
+            }
         }
         $id = 0;
         $started = $this->processes->start($command, $this->root, ['JUMPHP_IDE' => '1'], function (string $chunk, string $stream) use (&$id): void {

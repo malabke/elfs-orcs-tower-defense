@@ -1,9 +1,11 @@
 // The Claude tool window (desktop): a conversation with the Claude Code of this computer, in the project's folder.
 // Each message runs `claude -p` (JumPHP\Ide\Claude\ClaudeCode): its answer, the files it reads and changes, the
 // commands it runs, appear as they come (claude.event); the conversation goes on (--resume). What it changes on disk
-// comes back into the editors by themselves (the IDE watches the files).
+// comes back into the editors by themselves (the IDE watches the files). Follow (the eye): the IDE shows what Claude does
+// as it does it (ClaudeWatch); Claude also drives the IDE with its own tools (AgentTools, MCP server jumphp-ide).
 import { backend } from './backend.js';
 import { el, clear, icon, menu, notify, prefs, prompt } from './ui.js';
+import { AgentTools, ClaudeWatch, IDE_TOOL, ideToolLabel } from './agent.js';
 
 const MODES = {
   acceptEdits: ['Edit files', 'Claude changes files without asking; commands it may not run are refused'],
@@ -35,6 +37,9 @@ export class ClaudePanel {
     this.run = null;                   // {id, started, node}
     this.status = el('span.game-status');
     this.log = el('div.claude-log');
+    this.plan = el('div.claude-plan', { hidden: true });
+    this.watch = new ClaudeWatch(app, this);
+    if (backend.kind === 'native') this.tools = new AgentTools(app, this.watch);
     this.input = el('textarea.input.claude-input', { rows: 3, placeholder: 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)',
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); } } });
     this.sendBtn = el('button.btn.primary.small', { onclick: () => (this.run ? this.stop() : this.send()) }, 'Send');
@@ -45,7 +50,7 @@ export class ClaudePanel {
       onchange: () => { this.effort = this.effortSelect.value; prefs.set('claudeEffort', this.effort); } },
       ...EFFORTS.map(([v, label]) => el('option', { value: v, selected: v === this.effort }, label)));
     this.fillModels();
-    this.node = el('div.claude-panel', {}, this.log, el('div.claude-compose', {}, this.input,
+    this.node = el('div.claude-panel', {}, this.plan, this.log, el('div.claude-compose', {}, this.input,
       el('div.claude-bar', {},
         el('button.btn.small', { title: 'Mention the file open in the editor', onclick: () => this.mentionFile() }, icon('file'), 'File'),
         el('button.btn.small', { title: 'Paste the selected code with its place', onclick: () => this.addSelection() }, icon('code'), 'Selection'),
@@ -102,6 +107,8 @@ export class ClaudePanel {
 
   actions() {
     return [
+      el(`button${this.watch.on ? '.on' : ''}`, { title: this.watch.on ? 'Following Claude: the IDE shows what it reads, edits and runs (click to stop)' : 'Follow Claude: show in the IDE what it reads, edits and runs',
+        onclick: () => { this.watch.toggle(); this.app.refreshToolHeader('claude'); } }, icon('eye')),
       el('button', { title: 'New conversation', onclick: () => this.reset() }, icon('plus')),
       el('button', { title: 'What Claude may do: ' + MODES[this.mode][0], onclick: (e) => menu([
         { head: 'What Claude may do' },
@@ -143,6 +150,8 @@ export class ClaudePanel {
     if (this.run) this.stop();
     this.session = null;
     this.history = [];
+    this.showPlan([]);
+    this.watch.marks.clearAll();
     this.save();
     clear(this.log);
     this.placeholder();
@@ -219,11 +228,12 @@ export class ClaudePanel {
     } else if (event.type === 'assistant') {
       for (const part of event.message?.content || []) {
         if (part.type === 'text' && part.text?.trim()) this.add({ role: 'assistant', text: part.text });
-        else if (part.type === 'tool_use') { this.run.tools++; this.add({ role: 'tool', name: part.name, input: part.input || {} }); }
+        else if (part.type === 'tool_use') { this.run.tools++; this.add({ role: 'tool', name: part.name, input: part.input || {} }); this.watch.use(part); }
       }
     } else if (event.type === 'user') {
       for (const part of event.message?.content || []) {
         if (part.type === 'tool_result' && part.is_error) this.add({ role: 'tool-error', text: toText(part.content).slice(0, 600) });
+        if (part.type === 'tool_result') this.watch.result(part);
       }
     } else if (event.type === 'result') {
       const seconds = Math.round((event.duration_ms || (Date.now() - this.run.started)) / 1000);
@@ -242,6 +252,7 @@ export class ClaudePanel {
     if (code !== 0 && error) this.add({ role: 'error', text: error });
     if (changed?.length) this.add({ role: 'note', text: `Saved as drafts here: ${changed.join(', ')}` });
     this.run = null;
+    this.watch.done();
     this.thinking?.remove();
     this.sendBtn.textContent = 'Send';
     this.say('ready');
@@ -269,7 +280,24 @@ export class ClaudePanel {
     else this.log.append(node);
   }
 
+  /** Claude's plan (TodoWrite), kept above the conversation while it works through it. */
+  showPlan(todos) {
+    clear(this.plan);
+    this.plan.hidden = !todos.length || todos.every((t) => t.status === 'completed');
+    if (this.plan.hidden) return;
+    const done = todos.filter((t) => t.status === 'completed').length;
+    this.plan.append(el('div.claude-plan-head', {}, icon('check'), `Plan · ${done}/${todos.length}`),
+      ...todos.map((t) => el(`div.claude-plan-item.${t.status || 'pending'}`, {}, el('span.mark', {}, t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'),
+        t.status === 'in_progress' && t.activeForm ? t.activeForm : t.content)));
+  }
+
   toolRow({ name, input }) {
+    if (name.startsWith(IDE_TOOL)) {
+      const { tool, what, label } = ideToolLabel(name, input);
+      const path = input.path && !String(input.path).startsWith('/') ? String(input.path) : null;
+      return el(`div.claude-tool.ide${path ? '.link' : ''}`, { title: `IDE tool: ${tool}`, onclick: () => path && this.app.editors.open(path, input.start_line || input.line ? { line: input.start_line || input.line } : {}) },
+        icon('claude'), el('b', {}, label), el('span', {}, what.slice(0, 300)));
+    }
     const root = this.app.project?.root || '';
     const rel = (p) => (p && root && p.startsWith(root + '/') ? p.slice(root.length + 1) : p);
     const file = rel(input.file_path || input.notebook_path || input.path);

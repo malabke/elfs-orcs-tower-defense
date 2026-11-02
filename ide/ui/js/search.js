@@ -136,8 +136,9 @@ export class FindPanel {
   title() { return 'Find'; }
 
   /** Find / Replace in Files. */
-  show({ query = '', replace = false, include = '' } = {}) {
+  show({ query = '', replace = false, include = '', regex, quiet = false } = {}) {
     if (include) this.options.include = include;
+    if (regex !== undefined) this.options.regex = !!regex;
     clear(this.node);
     const queryInput = el('input.input', { value: query, placeholder: 'Text to find', spellcheck: false });
     const replaceInput = el('input.input', { placeholder: 'Replace with', spellcheck: false });
@@ -174,7 +175,7 @@ export class FindPanel {
       replace ? el('div.line', {}, icon('refresh'), replaceInput, replaceAll) : null,
       el('div.line', {}, summary)), list);
     this.app.showTool('find');
-    setTimeout(() => { queryInput.focus(); queryInput.select(); }, 0);
+    if (!quiet) setTimeout(() => { queryInput.focus(); queryInput.select(); }, 0);
     if (query) run();
   }
 

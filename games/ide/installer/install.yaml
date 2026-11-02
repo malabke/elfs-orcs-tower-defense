@@ -34,9 +34,26 @@ steps:
     os: [windows, linux]
   - executable: "{folder}/jumphp-ide"
     os: linux
-  - shortcut: {target: "{folder}/jumphp-ide{exe}", where: both}
+  # the shortcuts' icon: an .ico for Windows, the PNG for Linux (files of this folder; tools/installer-banner.php makes them)
+  - download: jumphp-ide.ico
+    os: windows
+  - copy: {from: "{download}", to: "{folder}/jumphp-ide.ico"}
+    os: windows
+  - download: jumphp-ide-icon.png
+    os: linux
+  - copy: {from: "{download}", to: "{folder}/jumphp-ide.png"}
+    os: linux
+  # in the start menu / applications always, on the desktop when asked
+  - shortcut: {target: "{folder}/jumphp-ide.exe", where: menu, icon: "{folder}/jumphp-ide.ico"}
+    os: windows
+  - shortcut: {target: "{folder}/jumphp-ide.exe", where: desktop, icon: "{folder}/jumphp-ide.ico"}
     if: desktop
-    os: [windows, linux]
+    os: windows
+  - shortcut: {target: "{folder}/jumphp-ide", where: menu, icon: "{folder}/jumphp-ide.png"}
+    os: linux
+  - shortcut: {target: "{folder}/jumphp-ide", where: desktop, icon: "{folder}/jumphp-ide.png"}
+    if: desktop
+    os: linux
   # macOS: the .app (JumPHP IDE.app in the zip)
   - download: https://github.com/davidnurdin/jumPhp/releases/download/ide-v{version}/ide-macos.zip
     os: macos

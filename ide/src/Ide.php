@@ -2,6 +2,7 @@
 
 namespace JumPHP\Ide;
 
+use JumPHP\Ide\Agent\IdeAgent;
 use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Claude\ClaudeCode;
@@ -47,6 +48,9 @@ final class Ide
     /** the Claude Code of this computer (desktop only) */
     public ?ClaudeCode $claude = null;
 
+    /** the IDE's tools for that Claude (an MCP server; the interface carries them out) */
+    public ?IdeAgent $agent = null;
+
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
 
@@ -86,7 +90,10 @@ final class Ide
             $this->registerRun();
         }
         if ($root !== null) {
-            $this->claude = new ClaudeCode($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+            $this->agent = new IdeAgent(fn (string $event, array $payload) => ($this->emit)($event, $payload));
+            $this->register('agent.reply', fn (array $p) => $this->agent->reply((int)($p['call'] ?? 0), $p['result'] ?? null,
+                isset($p['error']) && $p['error'] !== '' ? (string)$p['error'] : null));
+            $this->claude = new ClaudeCode($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload), $this->agent);
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
@@ -141,6 +148,7 @@ final class Ide
     public function tick(float $budget = 0.008): void
     {
         $this->processes->poll();
+        $this->agent?->tick();
         if (!$this->indexed) {
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);
