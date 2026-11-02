@@ -136,13 +136,12 @@ the terminal with it), a macOS installer for CLI apps (executables given as they
   Run window's output with files on Windows (ide/src/Async/Processes.php) and at a `docker build` of the desktop image
   that prints nothing for minutes (the first time: say it in the Run window).
 
-## jumphp.net: big downloads are slow and sometimes cut
+## jumphp.net: big downloads, to watch
 
-Seen 2026-11-02: the installers handed out by jumphp.net (/installers/download/<id>/<platform>, 20-32 MB) come at
-~0.4-3 MB/s through Cloudflare, and two downloads out of six stopped half way (curl: partial file). Decided
-(2026-11-02): the executables stay behind Cloudflare (no download host around it). Within that: Cloudflare caching
-them (a cache rule on /installers/download/, the download counted another way), X-Sendfile / FrankenPHP's file
-server instead of PHP streaming them, Range requests through Cloudflare so a cut download resumes.
+Seen 2026-11-02: two downloads of the installers out of six stopped half way through Cloudflare, ~0.4-3 MB/s.
+Tried again the same evening: three downloads whole (Linux 5.4 MB/s, macOS 1 MB/s, Windows 0.4 MB/s). Likely
+transient (David). The executables stay behind Cloudflare. If it comes back: a cache rule on /installers/download/
+(the download counted another way), FrankenPHP's file server instead of PHP streaming them, Range requests.
 
 ## Cleaning
 
