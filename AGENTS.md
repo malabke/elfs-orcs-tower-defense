@@ -927,7 +927,7 @@ SDL, OpenGL, OpenAL built in) + the game as a PHAR, unpacked into the player's c
 to the player's data folder (docs/standalone.md). The micro is downloaded from JumPHP's releases or built once
 in Docker (Linux, ~15 min: run it in the background); Windows' only comes from the releases (the GitHub workflow
 `standalone`): if it is missing, say so, do not try to build it. Check the Linux one runs: `SDL_VIDEODRIVER=dummy
-SDL_AUDIODRIVER=dummy timeout 5 <file>` exits by the timeout, not with an error. dist/ is not in git.
+SDL_RENDER_DRIVER=software SDL_AUDIODRIVER=dummy timeout 5 <file>` exits by the timeout, not with an error. dist/ is not in git.
 
 ### Android app (Google Play)
 
