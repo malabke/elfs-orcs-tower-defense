@@ -816,7 +816,8 @@ cmd_installer() {
   [ -n "$target" ] || die "where: --github (a release of the project's repository), --url https://site/folder/ (a folder to put there) or --standalone (the game inside each installer, no site)"
   if [ ${#platforms[@]} -eq 0 ]; then
     platforms=(windows linux)
-    compgen -G "$ROOT/$dir/dist/apple/*-macos.zip" >/dev/null || compgen -G "$ROOT/$dir/dist/standalone/*-macos.zip" >/dev/null && platforms+=(macos)
+    compgen -G "$ROOT/$dir/dist/apple/*-macos.zip" >/dev/null || compgen -G "$ROOT/$dir/dist/standalone/*-macos.zip" >/dev/null \
+      || { is_cli "$game" && compgen -G "$ROOT/$dir/dist/standalone/*-macos-arm64" >/dev/null; } && platforms+=(macos)
   fi
   [ -n "$version" ] || version="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*["'"'"']?([^"'"'"' #]+).*/\1/p' "$ROOT/$dir/config/game.yaml" | head -1)"
   [ -n "$version" ] || version=1.0
@@ -828,9 +829,11 @@ cmd_installer() {
       || warn "$repo is not public: the players' installers cannot download its releases"
   fi
   ensure_vendor "$dir"
+  ensure_engine_tools     # symfony/yaml for tools/game-installer.php when the app has none (CLI apps)
   if [ "$build" = 1 ]; then
     local exports=() p
-    for p in "${platforms[@]}"; do [ "$p" != macos ] && exports+=("--$p"); done
+    # macOS is built here only for CLI apps (two executables); games and apps: GitHub's Macs / app:export --macos
+    for p in "${platforms[@]}"; do { [ "$p" != macos ] || is_cli "$game"; } && exports+=("--$p"); done
     if [ ${#exports[@]} -gt 0 ]; then
       if is_app "$game"; then cmd_app_export "$game" "${exports[@]}"; else cmd_export_standalone "$game" "${exports[@]}"; fi
     fi

@@ -35,10 +35,17 @@ for ($i = 3; $i < count($argv); $i++) {
 }
 is_file("$dir/vendor/autoload.php") || $fail("$dir has no vendor/ (bin/jumphp install)");
 require "$dir/vendor/autoload.php";
+// a CLI app has no symfony/yaml of its own: the engine's (bin/jumphp installer installs engine/vendor)
+if (!class_exists(Yaml::class) && is_file(__DIR__ . '/../engine/vendor/autoload.php')) {
+    require __DIR__ . '/../engine/vendor/autoload.php';
+}
+class_exists(Yaml::class) || $fail('symfony/yaml is missing (bin/jumphp php engine composer install)');
 
 $config = Yaml::parseFile("$dir/config/game.yaml")['game'] ?? [];
 $id = (string)($config['id'] ?? basename($dir));
 $title = trim((string)($config['title'] ?? $id)) ?: $id;
+// a CLI app (kind: cli): a console program, no shortcut; macOS: its two executables (no .app), the one of the Mac installed
+$cli = ($config['kind'] ?? '') === 'cli';
 $version = $opts['version'] !== '' ? $opts['version'] : (string)($config['version'] ?? '1.0');
 $publisher = $opts['publisher'] !== '' ? $opts['publisher'] : $title;
 
@@ -67,6 +74,13 @@ foreach (['windows' => ['standalone/*-windows-x86_64.exe'], 'linux' => ['standal
     if (!in_array($platform, $wanted, true)) {
         continue;
     }
+    if ($platform === 'macos' && $cli) {
+        $arm = glob("$dir/dist/standalone/*-macos-arm64") ?: [];
+        $intel = glob("$dir/dist/standalone/*-macos-x86_64") ?: [];
+        ($arm === [] || $intel === []) && $fail("no macOS build in $dir/dist/standalone/ (bin/jumphp export:standalone $id --macos)");
+        $found['macos'] = ['arm64' => $arm[0], 'x86_64' => $intel[0]];
+        continue;
+    }
     $files = array_merge(...array_map(static fn (string $g) => glob("$dir/dist/$g") ?: [], $patterns));
     usort($files, static fn (string $a, string $b) => filemtime($b) <=> filemtime($a));
     $files === [] && $fail("no $platform build in $dir/dist/ (bin/jumphp installer builds Windows and Linux itself; macOS: bin/jumphp macos $id, or app:export --macos for an app)");
@@ -88,11 +102,13 @@ $package = $standalone ? sys_get_temp_dir() . "/jumphp-installer-$id-" . getmypi
 $copy = static fn (string $from, string $name) => copy($from, "$package/$name") || $fail("cannot write $package/$name");
 
 // the package: the executables under fixed names (installed games take the newest one each time)
-$names = ['windows' => "$id-windows-x86_64.exe", 'linux' => "$id-linux-x86_64", 'macos' => "$id-macos.zip"];
+$names = ['windows' => "$id-windows-x86_64.exe", 'linux' => "$id-linux-x86_64", 'macos' => $cli ? ["$id-macos-arm64", "$id-macos-x86_64"] : "$id-macos.zip"];
 $files = [];
 foreach ($found as $platform => $file) {
-    $copy($file, $names[$platform]);
-    $files[] = $names[$platform];
+    foreach ((array)$names[$platform] as $i => $name) {
+        $copy(is_array($file) ? array_values($file)[$i] : $file, $name);
+        $files[] = $name;
+    }
 }
 $icon = null;
 foreach (['assets/icon.png', 'assets/thumbnail.png'] as $candidate) {
@@ -104,7 +120,7 @@ foreach (['assets/icon.png', 'assets/thumbnail.png'] as $candidate) {
 }
 
 // the script: what the playground writes for a game, with the package's own files
-$scriptOf = static function (array $found, ?array $versionRule) use ($id, $title, $publisher, $names, $version, &$icon): array {
+$scriptOf = static function (array $found, ?array $versionRule) use ($id, $title, $publisher, $names, $version, $cli, &$icon): array {
     $desktop = array_values(array_intersect(['windows', 'linux'], array_keys($found)));
     $steps = [];
     $run = [];
@@ -117,9 +133,16 @@ $scriptOf = static function (array $found, ?array $versionRule) use ($id, $title
         if (in_array('linux', $desktop, true)) {
             $steps[] = ['executable' => "{folder}/$id", 'os' => 'linux'];
         }
-        $steps[] = ['shortcut' => ['target' => "{folder}/$id{exe}", 'where' => 'both'], 'if' => 'desktop', 'os' => $desktop];
+        if (!$cli) {
+            $steps[] = ['shortcut' => ['target' => "{folder}/$id{exe}", 'where' => 'both'], 'if' => 'desktop', 'os' => $desktop];
+        }
     }
-    if (isset($found['macos'])) {
+    if (isset($found['macos']) && $cli) {
+        // the executable of this Mac's processor ({arch}: arm64 or x86_64)
+        $steps[] = ['download' => "$id-macos-{arch}", 'os' => 'macos'];
+        $steps[] = ['copy' => ['from' => '{download}', 'to' => "{folder}/$id"], 'os' => 'macos'];
+        $steps[] = ['executable' => "{folder}/$id", 'os' => 'macos'];
+    } elseif (isset($found['macos'])) {
         $steps[] = ['download' => $names['macos'], 'os' => 'macos'];
         $steps[] = ['extract' => '{folder}', 'os' => 'macos'];
     }
@@ -128,8 +151,9 @@ $scriptOf = static function (array $found, ?array $versionRule) use ($id, $title
         'installer' => 1,
         'app' => ['name' => $title, 'publisher' => $publisher] + ($icon !== null ? ['icon' => $icon] : []),
         'version' => $versionRule ?? $version,
-        'pages' => ['welcome', ['folder' => '{programs}/{app}'], ['options' => ['desktop' => 'A shortcut on the desktop']], 'install',
-            $run !== [] ? ['finish' => ['run' => $run]] : 'finish'],
+        'pages' => $cli ? ['welcome', ['folder' => '{programs}/{app}'], 'install', 'finish']
+            : ['welcome', ['folder' => '{programs}/{app}'], ['options' => ['desktop' => 'A shortcut on the desktop']], 'install',
+                $run !== [] ? ['finish' => ['run' => $run]] : 'finish'],
         'steps' => $steps,
     ];
 };
@@ -158,7 +182,9 @@ foreach (['windows' => ['jumphp2installer-windows-x86_64.exe', "$name-setup.exe"
             // this system's package alone: its executable, the icon, a script of this version
             $one = "$package/$platform";
             @mkdir($one, 0777, true);
-            rename("$package/{$names[$platform]}", "$one/{$names[$platform]}");
+            foreach ((array)$names[$platform] as $file) {
+                rename("$package/$file", "$one/$file");
+            }
             $icon !== null && copy("$package/$icon", "$one/$icon");
             file_put_contents("$one/install.yaml", "# The standalone installer of $id $version (bin/jumphp installer --standalone).\n"
                 . Yaml::dump($scriptOf([$platform => $found[$platform]], null), 4, 2));

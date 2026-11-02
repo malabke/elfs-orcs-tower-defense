@@ -61,7 +61,7 @@ experimental by Symfony: pin its version in composer.json when the app is done.
 `bin/jumphp export:standalone <app>` (`--linux`, `--windows`, `--macos`): StaticPHP's micro of the desktop apps
 (no SDL: `tools/app-extensions.txt`) + the app as a PHAR, booted by `App\Main` (`dist/standalone/<app>-linux-x86_64`,
 `<app>-windows-x86_64.exe`, `<app>-macos-arm64` / `-x86_64`). On Windows it stays a **console** program (games are
-GUI programs: no console window). `bin/jumphp installer <app>` makes installers of it as for a game.
+GUI programs: no console window). `bin/jumphp installer <app>` makes installers of it as for a game (no shortcut: a console program; macOS: the installer carries both executables' address and installs the one of the Mac, `{arch}`).
 
 Windows: the commands work in any console. symfony/tui's full-screen screens read the terminal with `stty`: they
 need a terminal that has it (WSL, Git Bash); keep everything reachable as commands.

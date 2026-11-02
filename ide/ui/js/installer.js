@@ -10,7 +10,7 @@ import { el, dialog, notify, confirm, prefs } from './ui.js';
 const SYSTEMS = [['windows', 'Windows'], ['linux', 'Linux'], ['macos', 'macOS']];
 // the run configurations that build each system (games, apps)
 const BUILDS = { game: { windows: 'standalone-windows', linux: 'standalone', macos: 'macos' }, app: { windows: 'export-windows', linux: 'export', macos: 'export-macos' },
-  cli: { windows: 'standalone-windows', linux: 'standalone' } };
+  cli: { windows: 'standalone-windows', linux: 'standalone', macos: 'standalone-macos' } };
 
 /** Opens the wizard; resolves when it is closed. */
 export async function createInstaller(app, { where: initial } = {}) {
@@ -32,12 +32,10 @@ export async function createInstaller(app, { where: initial } = {}) {
     Object.assign(local, { files: native ? await backend.invoke('playground.localFiles', { dir: m?.dir || '' }).catch(() => ({})) : {} });
     for (const s of systems) {
       const f = local.files[s.id];
-      s.note.textContent = f ? ` built: ${f.path.split('/').pop()}` : s.id === 'macos' ? ' not built yet: built on GitHub first (~10-40 min)' : ' built first';
+      // a CLI app's Mac executables are built here (two of them: the installer takes the Mac's own); games: on GitHub
+      const github = s.id === 'macos' && m?.kind !== 'cli';
+      s.note.textContent = f ? ` built: ${f.path.split('/').pop()}` : github ? ' not built yet: built on GitHub first (~10-40 min)' : ' built first';
       if (s.id === 'macos') s.box.checked = !!f;
-      // a CLI app's Mac executables are given as they are (no .app to install): Windows and Linux installers
-      const cli = m?.kind === 'cli' && s.id === 'macos';
-      s.box.disabled = cli;
-      if (cli) { s.box.checked = false; s.note.textContent = ' CLI apps: give the two Mac executables as they are'; }
     }
   };
   module.addEventListener('change', refreshLocal);
@@ -96,7 +94,7 @@ async function make(app, { module, systems, where, url, version, local }) {
     // macOS is never built by bin/jumphp installer (GitHub's Macs, or app:export --macos): first, when missing
     if (systems.includes('macos') && !local.macos) {
       if (kind === 'game' && !(await confirm('Build the Mac app first?', 'The Mac app is built on GitHub\'s Macs: this commits the build settings, pushes the current branch and builds there (the first time ~40 min, then ~10). The installer is made after.', { ok: 'Push and build' }))) return;
-      step('the Mac app (GitHub)…', 0.1);
+      step(kind === 'cli' ? 'the Mac executables…' : 'the Mac app (GitHub)…', 0.1);
       await build('macos');
     }
     if (where === 'jumphp') {

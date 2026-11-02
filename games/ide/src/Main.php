@@ -240,6 +240,9 @@ final class Main implements AppMain
             foreach (['windows' => ['standalone/*-windows-x86_64.exe'], 'linux' => ['standalone/*-linux-x86_64'],
                 'macos' => ['apple/*-macos.zip', 'standalone/*-macos.zip'], 'android' => ['android-native/*.apk', 'android/*.apk']] as $platform => $patterns) {
                 $files = array_merge(...array_map(fn (string $g) => glob("$base/$g") ?: [], $patterns));
+                if ($platform === 'macos' && $files === []) {
+                    $files = glob("$base/standalone/*-macos-arm64") ?: [];     // a CLI app's executables (no .app)
+                }
                 usort($files, fn (string $a, string $b) => filemtime($b) <=> filemtime($a));
                 if ($files !== []) {
                     $out[$platform] = ['path' => substr($files[0], strlen($root) + 1), 'size' => filesize($files[0]), 'time' => filemtime($files[0])];
