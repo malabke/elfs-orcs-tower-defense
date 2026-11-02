@@ -2,7 +2,7 @@
 // the page), lays out the tool windows (Project, Commit, Structure / Run, Find, Problems, Git), and binds PhpStorm's
 // keyboard shortcuts to the IDE's actions.
 import { backend } from './backend.js';
-import { el, clear, icon, hydrateIcons, menu, chooser, dialog, notify, notificationHistory, splitter, prefs, debounce, kbd, basename, timeAgo } from './ui.js';
+import { el, clear, icon, hydrateIcons, progressBar, menu, chooser, dialog, notify, notificationHistory, splitter, prefs, debounce, kbd, basename, timeAgo } from './ui.js';
 import { Editors, loadMonaco, monaco } from './editor.js';
 import { ProjectTree } from './tree.js';
 import { searchEverywhere, recentFiles, fileStructure, FindPanel } from './search.js';
@@ -240,6 +240,7 @@ class App {
 
   bindHeader() {
     $('mainMenu').addEventListener('click', (e) => this.mainMenu(e.currentTarget));
+    $('sbTask').addEventListener('click', (e) => this.showTasks(e.currentTarget));
     $('projectWidget').addEventListener('click', (e) => this.projectMenu(e.currentTarget));
     $('branchWidget').addEventListener('click', (e) => this.git?.branchPopup(e.currentTarget));
     $('sbBranch').addEventListener('click', (e) => this.git?.branchPopup(e.currentTarget));
@@ -303,29 +304,58 @@ class App {
   }
 
   status(text) {
-    const node = $('sbTask');
+    const node = $('sbStatus');
     node.textContent = text;
     clearTimeout(this.statusTimer);
-    this.statusTimer = setTimeout(() => { if (!this.tasks.size) node.textContent = ''; }, 4000);
+    this.statusTimer = setTimeout(() => { node.textContent = ''; }, 4000);
   }
 
-  /** A background task in the status bar; returns done(). */
-  task(text) {
-    const entry = { text };
+  /**
+   * A background task in the status bar (spinner, what it does, its progress): every action that runs in the
+   * background shows one while it runs. Returns done(); done.update(text, ratio) changes its text and / or progress
+   * (ratio 0..1; null: unknown, a moving bar). open: what a click on it in the tasks' list shows.
+   */
+  task(text, { ratio = null, open = null } = {}) {
+    const entry = { text, ratio, open, started: Date.now() };
     this.tasks.add(entry);
-    const draw = () => {
-      const node = clear($('sbTask'));
-      const last = [...this.tasks].pop();
-      if (last) node.append(el('span.spinner'), last.text);
+    this.drawTasks();
+    const done = () => { if (this.tasks.delete(entry)) this.drawTasks(); };
+    done.update = (newText = null, newRatio) => {
+      if (newText !== null) entry.text = newText;
+      if (newRatio !== undefined) entry.ratio = newRatio;
+      if (this.tasks.has(entry)) this.drawTasks();
     };
-    draw();
-    return () => { this.tasks.delete(entry); draw(); };
+    return done;
+  }
+
+  drawTasks() {
+    const node = clear($('sbTask'));
+    const list = [...this.tasks];
+    node.classList.toggle('clickable', list.length > 0);
+    node.title = list.length ? list.map((t) => t.text).join('\n') + '\n(click: the background tasks)' : '';
+    if (!list.length) return;
+    const last = list[list.length - 1];
+    node.append(el('span.spinner'), el('span.sb-task-text', {}, last.text), progressBar(last.ratio),
+      list.length > 1 ? el('span.sb-more', {}, `+${list.length - 1}`) : null);
+  }
+
+  /** The tasks running in the background, each with its progress (a click on one: where it shows). */
+  showTasks(at) {
+    const list = [...this.tasks];
+    if (!list.length) return;
+    const ago = (t) => { const s = Math.round((Date.now() - t.started) / 1000); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`; };
+    menu([{ head: `Background tasks (${list.length})` }, ...list.map((t) => ({
+      label: t.text + (t.ratio !== null && t.ratio !== undefined ? ` — ${Math.round(100 * t.ratio)} %` : ''), hint: ago(t),
+      action: () => t.open?.(),
+    }))], at);
   }
 
   indexProgress(p) {
-    const node = clear($('sbIndex'));
-    if (p.complete) return;
-    node.append(el('span', {}, 'Indexing…'), el('span.progress', {}, el('i', { style: { width: (p.total ? (100 * p.done) / p.total : 0) + '%' } })));
+    if (p.complete) { this.indexTask?.(); this.indexTask = null; return; }
+    const ratio = p.total ? p.done / p.total : null;
+    const text = `Indexing PHP${p.total ? ` (${p.done}/${p.total} files)` : ''}…`;
+    if (!this.indexTask) this.indexTask = this.task(text, { ratio });
+    else this.indexTask.update(text, ratio);
   }
 
   // PHP problems ------------------------------------------------------------------------------------------------
@@ -520,7 +550,10 @@ class App {
       notify(`JumPHP IDE ${st.current} is the newest version.`, 'info', { title: 'Update' });
     } else if (st.manual && st.state === 'error') {
       notify(st.error || 'Cannot check for updates.', 'error', { title: 'Update' });
-    } else if ((st.manual || force) && st.state === 'installing') {
+    }
+    if (st.state === 'installing' && !this.updateTask) this.updateTask = this.task(`Downloading JumPHP IDE ${st.version || ''}…`);
+    if (st.state !== 'installing' && this.updateTask) { this.updateTask(); this.updateTask = null; }
+    if ((st.manual || force) && st.state === 'installing') {
       notify(`Downloading JumPHP IDE ${st.version}…`, 'info', { title: 'Update' });
     }
   }

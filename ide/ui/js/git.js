@@ -120,7 +120,7 @@ export class Git {
     const paths = this.caps.gitMode === 'drafts' ? undefined : [...this.checked];
     const message = this.message.trim();
     if (!message) return;
-    const task = this.app.task?.(push ? 'Committing and pushing…' : 'Committing…');
+    const task = this.app.task?.(push ? 'Committing and pushing (git)…' : 'Committing (git)…', { open: () => this.app.showTool('commit') });
     try {
       const result = await backend.invoke('git.commit', { message, paths, push, amend: !!this.amend?.checked });
       this.message = '';
@@ -198,7 +198,11 @@ export class Git {
   }
 
   async run(command, payload, success, reload = false) {
-    const task = this.app.task?.('Git…');
+    const what = {
+      'git.pull': 'Updating the project (git pull)…', 'git.merge': `Merging ${payload?.branch} (git merge)…`,
+      'git.checkout': payload?.create ? `Creating the branch ${payload?.branch}…` : `Checking out ${payload?.branch}…`,
+    }[command] || `Git: ${command.replace(/^git\./, '')}…`;
+    const task = this.app.task?.(what, { open: () => this.app.showTool('git') });
     try {
       await backend.invoke(command, payload);
       if (success) notify(success, 'success', { title: 'Git' });
@@ -215,7 +219,7 @@ export class Git {
 
   async push() {
     if (this.caps.gitMode === 'drafts') return this.app.showTool('commit');
-    const task = this.app.task?.('Pushing…');
+    const task = this.app.task?.('Pushing to GitHub (git push)…', { open: () => this.app.showTool('git') });
     try {
       await backend.invoke('git.push');
       notify('Pushed', 'success', { title: 'Git' });

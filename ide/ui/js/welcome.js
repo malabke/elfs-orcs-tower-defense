@@ -1,7 +1,7 @@
 // The desktop app's welcome screen (no project open): sign in with jumphp.net, your playground projects (clone and
 // open), recent projects, open a folder, and New Project (game, desktop app, hybrid, Amstrad CPC remake, port).
 import { backend } from './backend.js';
-import { el, clear, icon, notify, dialog, timeAgo, confirm, basename } from './ui.js';
+import { el, clear, icon, notify, dialog, timeAgo, confirm, basename, progressBar } from './ui.js';
 
 const KINDS = [
   { id: 'original', icon: 'game', title: 'Game', text: 'An original retro game in PHP: desktop, browser, phones. Published on jumphp.net.', playground: true },
@@ -21,7 +21,13 @@ export class Welcome {
     this.state = null;
     this.remote = null;
     this.filter = '';
-    backend.on('clone.output', (p) => { if (this.progress) this.progress.textContent = String(p.chunk).trim().split(/\r|\n/).pop(); });
+    // what the creation / the clone does now, with git's percentage as a bar ("Receiving objects:  45% (…)")
+    backend.on('clone.output', (p) => {
+      if (!this.progress) return;
+      const line = String(p.chunk).trim().split(/\r|\n/).pop();
+      const percent = [...line.matchAll(/(\d{1,3})%/g)].pop();
+      clear(this.progress).append(el('span.spinner'), el('span', {}, line), progressBar(percent ? Math.min(100, +percent[1]) / 100 : null));
+    });
   }
 
   async show() {
@@ -177,7 +183,7 @@ export class Welcome {
         if (extra.dsk && !extra.dsk.value.trim() && !(await extra.pick())) { notify('Choose the .dsk disc of the game to remake.', 'warning', { title: 'Amstrad CPC remake' }); return; }
         if (!title.value.trim()) { title.focus(); return; }
         button.disabled = true;
-        this.progress = el('span', { style: { color: 'var(--text-2)', fontSize: '12px' } }, 'Creating…');
+        this.progress = el('span.welcome-progress', {}, el('span.spinner'), el('span', {}, 'Creating…'), progressBar(null));
         button.after(this.progress);
         try {
           const result = await backend.invoke('projects.create', { kind: kind.id, title: title.value.trim(), description: description.value.trim(), brief: brief.value.trim(),
@@ -233,7 +239,7 @@ export class Welcome {
   }
 
   async clone(project) {
-    const progress = el('div', { style: { color: 'var(--text-2)', fontFamily: 'var(--mono)', fontSize: '12px', minHeight: '18px' } }, 'git clone…');
+    const progress = el('div.welcome-progress', {}, el('span.spinner'), el('span', {}, 'git clone…'), progressBar(null));
     this.progress = progress;
     const d = dialog({ title: 'Cloning ' + (project.title || project.slug), body: el('div', {}, el('p', {}, project.cloneUrl || ''), progress), buttons: [] });
     try {

@@ -56,6 +56,7 @@ export class Runner {
       const { id, label } = await backend.invoke('run.start', { id: config.id, command: config.id === 'adhoc' ? config.command : undefined, kind: config.kind, env });
       const shown = Object.entries(env).map(([k, v]) => `${k}=${v} `).join('');
       const run = { id, label: config.label || label, config, output: `$ ${shown}${config.command.join(' ')}\n`, started: Date.now() };
+      run.task = this.app.task(taskText(run), { open: () => this.show(run) });
       this.runs = [run, ...this.runs.filter((r) => r.code === undefined || r.config.id !== config.id)].slice(0, 8);
       this.active = id;
       this.app.showTool('run');
@@ -107,12 +108,27 @@ export class Runner {
     if (!run) return;
     run.output += chunk;
     if (run.output.length > 2_000_000) run.output = run.output.slice(-1_500_000);
+    // its progress when the output tells it: PHPUnit's "12 / 44 ( 27%)", StaticPHP's / Docker's "[3/20]"
+    const steps = [...chunk.matchAll(/(\d+) \/ (\d+) \(\s*\d+%\)|\[(\d+)\/(\d+)\]/g)].pop();
+    if (steps && run.task) {
+      const [done, total] = steps[1] ? [+steps[1], +steps[2]] : [+steps[3], +steps[4]];
+      if (total > 0 && done <= total) run.task.update(null, done / total);
+    }
     if (this.active === id) this.appendConsole(chunk);
+  }
+
+  /** The Run window on this run (a click on its task in the status bar). */
+  show(run) {
+    this.active = run.id;
+    this.app.showTool('run');
+    this.render();
   }
 
   exited(p) {
     const run = this.runs.find((r) => r.id === p.id);
     if (!run) return;
+    run.task?.();
+    run.task = null;
     run.code = p.code;
     run.seconds = p.seconds;
     run.tests = p.tests;
@@ -245,6 +261,8 @@ export class Runner {
     const run = { id: 'remote-' + Date.now(), label: only ? `${basename(only)} on jumphp.net` : 'Tests on jumphp.net', config: { id: 'remote', kind: 'test', command: ['tests'] },
       output: `Running ${only || 'the tests'} in the playground sandbox, with your drafts…\n` };
     this.runs.unshift(run);
+    run.started = Date.now();
+    run.task = this.app.task(only ? `Testing ${basename(only)} on jumphp.net…` : 'Running the tests on jumphp.net…', { open: () => this.show(run) });
     this.active = run.id;
     this.app.showTool('run');
     this.render();
@@ -376,4 +394,13 @@ export class Hierarchy {
       this.node.append(r);
     }
   }
+}
+
+/** What a run does, for its task in the status bar. */
+function taskText(run) {
+  const label = run.label || run.config.label || run.config.command.join(' ');
+  return {
+    run: `Running ${label.replace(/^Run /, '')}`, test: `Testing: ${label.replace(/^Test /, '')}`, shot: `Taking a screenshot: ${label.replace(/^Screenshot /, '')}`,
+    serve: `Serving: ${label.replace(/^Serve /, '')}`, build: `Building: ${label}`, webshot: `Checking in a browser: ${label.replace(/^Browser check /, '')}`,
+  }[run.config.kind] || label;
 }

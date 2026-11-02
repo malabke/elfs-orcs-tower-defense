@@ -224,10 +224,11 @@ export class PublishPanel {
   }
 
   async upload(platform, path, version) {
+    const task = this.app.task(`Sending ${path.split('/').pop()} to jumphp.net…`, { open: () => this.app.showTool('publish') });
     try {
       this.data.downloads = await backend.invoke('playground.upload', { platform, path, version });
       notify(`${path.split('/').pop()} is on jumphp.net.`, 'success', { title: 'Downloads', actions: this.data.downloads.installer ? [{ label: 'Update the installer', action: () => this.makeInstaller() }] : [] });
-    } catch (e) { notify(e.message, 'error', { title: 'Downloads' }); }
+    } catch (e) { notify(e.message, 'error', { title: 'Downloads' }); } finally { task(); }
     this.render();
   }
 
@@ -238,11 +239,12 @@ export class PublishPanel {
   }
 
   async makeInstaller() {
+    const task = this.app.task('Making the installer on jumphp.net…', { open: () => this.app.showTool('publish') });
     try {
       this.data.downloads = await backend.invoke('playground.installer');
       notify('The installer is ready: its download page lists it for Windows, macOS and Linux.', 'success', { title: 'Installer',
         actions: [{ label: 'Open it', action: () => this.app.openUrl(this.data.downloads.installer.page) }] });
-    } catch (e) { notify(e.message, 'error', { title: 'Installer' }); }
+    } catch (e) { notify(e.message, 'error', { title: 'Installer' }); } finally { task(); }
     this.render();
   }
 

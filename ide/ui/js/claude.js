@@ -222,10 +222,14 @@ export class ClaudePanel {
     this.log.append(this.thinking);
     this.scroll();
     this.say('working…');
+    this.task?.();
+    this.task = this.app.task('Claude is working…', { open: () => this.app.showTool('claude') });
   }
 
   /** The turn is over (its result, or the process ended): what it changed comes in. */
   endTurn() {
+    this.task?.();
+    this.task = null;
     if (!this.run) return;
     this.run = null;
     this.watch.done();
@@ -262,7 +266,12 @@ export class ClaudePanel {
     } else if (event.type === 'assistant') {
       for (const part of event.message?.content || []) {
         if (part.type === 'text' && part.text?.trim()) this.add({ role: 'assistant', text: part.text });
-        else if (part.type === 'tool_use') { this.run.tools++; this.add({ role: 'tool', name: part.name, input: part.input || {} }); this.watch.use(part); }
+        else if (part.type === 'tool_use') {
+          this.run.tools++;
+          this.add({ role: 'tool', name: part.name, input: part.input || {} });
+          this.watch.use(part);
+          this.task?.update(`Claude: ${toolText(part.name, part.input || {}, this.app.project?.root || '')}`);
+        }
       }
     } else if (event.type === 'user') {
       for (const part of event.message?.content || []) {
@@ -367,3 +376,14 @@ function markdown(text) {
   return out;
 }
 
+
+/** One line for the status bar: what Claude is doing now. */
+function toolText(name, input, root) {
+  const rel = (p) => String(p || '').replace(root + '/', '');
+  return ({
+    Read: () => `reading ${rel(input.file_path)}`, Write: () => `writing ${rel(input.file_path)}`, Edit: () => `editing ${rel(input.file_path)}`,
+    MultiEdit: () => `editing ${rel(input.file_path)}`, Bash: () => `$ ${String(input.description || input.command || '').slice(0, 80)}`,
+    Grep: () => `searching ${input.pattern}`, Glob: () => `looking for ${input.pattern}`, WebFetch: () => `fetching ${input.url}`,
+    WebSearch: () => `searching the web: ${input.query}`, TodoWrite: () => 'planning',
+  }[name] || (() => name.replace(/^mcp__[^_]+__/, '')))();
+}

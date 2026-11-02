@@ -83,25 +83,35 @@ async function make(app, { module, systems, where, url, version, local }) {
     const end = await app.runner.startAndWait(c);
     if (!end || end.code !== 0) throw new Error(`the ${system} build failed (Run window)`);
   };
+  const task = app.task(`Creating the installer of ${module.title || module.id}…`, { ratio: 0 });
+  const step = (text, ratio) => task.update(`Installer of ${module.title || module.id}: ${text}`, ratio);
   try {
     // macOS is never built by bin/jumphp installer (GitHub's Macs, or app:export --macos): first, when missing
     if (systems.includes('macos') && !local.macos) {
       if (kind === 'game' && !(await confirm('Build the Mac app first?', 'The Mac app is built on GitHub\'s Macs: this commits the build settings, pushes the current branch and builds there (the first time ~40 min, then ~10). The installer is made after.', { ok: 'Push and build' }))) return;
+      step('the Mac app (GitHub)…', 0.1);
       await build('macos');
     }
     if (where === 'jumphp') {
-      for (const system of systems.filter((s) => s !== 'macos')) await build(system);
+      const desktop = systems.filter((s) => s !== 'macos');
+      for (const [i, system] of desktop.entries()) {
+        step(`building ${system}…`, 0.2 + 0.4 * (i / desktop.length));
+        await build(system);
+      }
       const files = await backend.invoke('playground.localFiles', { dir: module.dir || '' });
-      for (const system of systems) {
+      for (const [i, system] of systems.entries()) {
         if (!files[system]) throw new Error(`no ${system} build in dist/`);
+        step(`sending ${system} to jumphp.net…`, 0.6 + 0.3 * (i / systems.length));
         await backend.invoke('playground.upload', { platform: system, path: files[system].path, version });
       }
+      step('making the installer…', 0.95);
       const d = await backend.invoke('playground.installer');
       app.publishPanel?.load();
       result(app, 'jumphp.net', Object.entries(d.installer?.files || {}).map(([p, link]) => [p.replace('-x86_64', ''), link]), d.installer?.page);
       return;
     }
     const command = ['bin/jumphp', 'installer', module.id, ...(where === 'github' ? ['--github'] : ['--url', url]), '--version', version, ...systems.map((s) => `--${s}`)];
+    step(where === 'github' ? 'building, then the GitHub release…' : 'building the folder…', 0.3);
     const end = await app.runner.startAndWait({ id: 'adhoc', kind: 'build', label: `Installer of ${module.id}`, command });
     if (!end || end.code !== 0) { notify('The installer could not be made: see the Run window.', 'error', { title: 'Installer' }); return; }
     const made = JSON.parse((await backend.invoke('file.read', { path: `${module.dir ? module.dir + '/' : ''}dist/installer/installer.json` })).content || '{}');
@@ -110,6 +120,8 @@ async function make(app, { module, systems, where, url, version, local }) {
     else result(app, 'your web site', links, null, `Put every file of ${made.folder}/ at ${url} (nothing renamed), then give these links. A new version: make the installer again and replace the files.`);
   } catch (e) {
     notify(e.message || String(e), 'error', { title: 'Installer' });
+  } finally {
+    task();
   }
 }
 

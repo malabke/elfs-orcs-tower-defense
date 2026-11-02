@@ -94,6 +94,12 @@ export function el(spec, attrs = {}, ...children) {
   return node;
 }
 
+/** A progress bar: ratio 0..1, or null for a moving one (unknown progress). */
+export function progressBar(ratio) {
+  const known = ratio !== null && ratio !== undefined;
+  return el(`span.progress${known ? '' : '.indeterminate'}`, {}, el('i', { style: known ? { width: `${Math.round(100 * Math.max(0, Math.min(1, ratio)))}%` } : {} }));
+}
+
 export function clear(node) {
   while (node.firstChild) node.firstChild.remove();
   return node;
