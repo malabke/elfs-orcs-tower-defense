@@ -7,7 +7,9 @@ use JumPHP\Ide\Php\Index;
 /**
  * Completion in a game's YAML files: config/game.yaml (its keys, with what each one does, and their values: scenes,
  * languages, booleans, key names...), config/input.yaml (actions, then key / pad / touch / mouse names) and
- * config/services.yaml (Symfony's dependency injection: _defaults, a service's keys, the project's classes).
+ * config/services.yaml (Symfony's dependency injection: _defaults, a service's keys, the project's classes),
+ * config/lang.yaml (the languages, then the texts another language has and this one not yet) and the forms of a
+ * graphic app (forms/*.form.yaml: a widget's settings and their values, JumPHP\Gui\FormLoader).
  * The YAML is read by its indentation: the keys above the cursor give where it is.
  */
 final class ConfigCompletion
@@ -22,7 +24,7 @@ final class ConfigCompletion
     /** Whether a file is one this completes. */
     public static function handles(string $path): bool
     {
-        return (bool)preg_match('#(^|/)config/(game|input|services)\.ya?ml$#', $path);
+        return (bool)preg_match('#(^|/)config/(game|input|services|lang)\.ya?ml$|\.form\.ya?ml$#', $path);
     }
 
     /** @return array{items: list<array<string, mixed>>, incomplete: bool} */
@@ -30,6 +32,12 @@ final class ConfigCompletion
     {
         if (!self::handles($path)) {
             return ['items' => [], 'incomplete' => false];
+        }
+        if (preg_match('/\.form\.ya?ml$/', $path)) {
+            return $this->form($text, $line, $column);
+        }
+        if (str_contains(basename($path), 'lang')) {
+            return $this->lang($text, $line, $column);
         }
         $schema = match (true) {
             str_contains(basename($path), 'input') => self::input(),
@@ -87,6 +95,103 @@ final class ConfigCompletion
         return ['items' => [], 'incomplete' => false];
     }
 
+    /** Widget settings (JumPHP\Gui\Widget::BASE, each widget's DEFAULTS, the form's own) => their values. */
+    private const FORM = [
+        'type' => ['label', 'button', 'textbox', 'checkbox', 'radio', 'combobox', 'listbox', 'slider', 'progressbar', 'image', 'video',
+            'spacer', 'separator', 'column', 'row', 'grid', 'stack', 'panel', 'container'],
+        'id' => null, 'class' => null, 'children' => null, 'events' => null, 'text' => null, 'title' => null,
+        'theme' => ['light', 'dark'], 'layout' => ['column', 'row', 'grid', 'stack'],
+        'justify' => ['start', 'center', 'end', 'between', 'around'], 'items' => ['stretch', 'start', 'center', 'end'],
+        'align' => ['start', 'center', 'end', 'stretch'], 'textAlign' => ['left', 'center', 'right'],
+        'style' => ['default', 'primary', 'title', 'muted'], 'fit' => ['contain', 'cover', 'fill'],
+        'width' => ['auto', 'fill'], 'height' => ['auto', 'fill'], 'hide' => ['xs', 'sm', 'md', 'lg'], 'span' => null,
+        'gap' => null, 'padding' => null, 'columns' => null, 'grow' => null, 'minWidth' => null, 'minHeight' => null,
+        'background' => null, 'color' => null, 'tooltip' => null, 'placeholder' => null, 'value' => null, 'min' => null,
+        'max' => null, 'step' => null, 'maxLength' => null, 'rows' => null, 'size' => null, 'src' => null, 'group' => null,
+        'selected' => null, 'fps' => null, 'image' => null,
+        'visible' => self::BOOL, 'enabled' => self::BOOL, 'wrap' => self::BOOL, 'border' => self::BOOL, 'scroll' => self::BOOL,
+        'checked' => self::BOOL, 'bold' => self::BOOL, 'multiline' => self::BOOL, 'password' => self::BOOL,
+        'readonly' => self::BOOL, 'showText' => self::BOOL, 'autoplay' => self::BOOL, 'loop' => self::BOOL,
+        'controls' => self::BOOL, 'audio' => self::BOOL, 'default' => self::BOOL,
+    ];
+    private const FORM_EVENTS = ['click', 'change', 'submit', 'focus', 'blur', 'end'];
+
+    /** @return array{items: list<array<string, mixed>>, incomplete: bool} a form file: by the key under the cursor */
+    private function form(string $text, int $line, int $column): array
+    {
+        $lines = preg_split('/\R/', $text) ?: [];
+        $current = $lines[$line - 1] ?? '';
+        $before = substr($current, 0, max(0, $column - 1));
+        $indent = strlen($current) - strlen(ltrim($current, ' '));
+        $path = $this->pathAbove($lines, $line - 1, $before !== '' && trim($before) === '' ? strlen($before) : $indent);
+        $item = static fn (string $label, string $kind, string $insert): array => ['label' => $label, 'kind' => $kind, 'insertText' => $insert, 'sortText' => '0' . $label];
+        // "key: |" or "key: [a, |": its values
+        if (preg_match('/^\s*(?:-\s+)?([\w]+)\s*:\s*\[?[\w ,]*$/', $before, $m) && str_contains($before, ':')) {
+            return ['items' => array_map(static fn (string $v) => $item($v, 'value', $v), (array)(self::FORM[$m[1]] ?? [])), 'incomplete' => false];
+        }
+        // a key: under events, an event; else a setting not written yet
+        if (preg_match('/^\s*(?:-\s+)?\w*$/', $before)) {
+            if (end($path) === 'events') {
+                return ['items' => array_map(static fn (string $e) => $item($e, 'property', "$e: on"), self::FORM_EVENTS), 'incomplete' => false];
+            }
+            $present = $this->siblings($lines, $line - 1, str_starts_with(ltrim($before), '-') ? $indent + 2 : $indent);
+            $items = [];
+            foreach (array_keys(self::FORM) as $key) {
+                if (!isset($present[$key])) {
+                    $items[] = $item($key, 'property', $key . ': ');
+                }
+            }
+            return ['items' => $items, 'incomplete' => false];
+        }
+        return ['items' => [], 'incomplete' => false];
+    }
+
+    /** @return array{items: list<array<string, mixed>>, incomplete: bool} config/lang.yaml: languages, then texts */
+    private function lang(string $text, int $line, int $column): array
+    {
+        $lines = preg_split('/\R/', $text) ?: [];
+        $before = substr($lines[$line - 1] ?? '', 0, max(0, $column - 1));
+        if (!preg_match('/^(\s*)[^:#]*$/', $before, $m)) {
+            return ['items' => [], 'incomplete' => false];
+        }
+        try {
+            $data = \Symfony\Component\Yaml\Yaml::parse($text);
+        } catch (\Throwable) {
+            $data = null;
+        }
+        $data = is_array($data) ? $data : [];
+        if ($m[1] === '') {
+            $items = [];
+            foreach (self::LANGS as $lang) {
+                if (!isset($data[$lang])) {
+                    $items[] = ['label' => $lang, 'kind' => 'property', 'insertText' => "$lang:", 'sortText' => '0' . $lang];
+                }
+            }
+            return ['items' => $items, 'incomplete' => false];
+        }
+        // the language this line is in: the nearest key above without indentation
+        $lang = null;
+        for ($i = $line - 2; $i >= 0; $i--) {
+            if (preg_match('/^([\w-]+)\s*:/', $lines[$i], $k)) {
+                $lang = $k[1];
+                break;
+            }
+        }
+        $mine = is_array($data[$lang] ?? null) ? $data[$lang] : [];
+        $items = [];
+        foreach ($data as $other => $texts) {
+            foreach ($other !== $lang && is_array($texts) ? $texts : [] as $key => $translation) {
+                $key = (string)$key;
+                if (!array_key_exists($key, $mine) && !isset($items[$key])) {
+                    $quoted = preg_match('/^[\w ]+$/u', $key) && !preg_match('/^(true|false|null|yes|no|on|off|\d+)$/i', $key) ? $key : "'" . str_replace("'", "''", $key) . "'";
+                    $items[$key] = ['label' => $key, 'kind' => 'text', 'detail' => "$other: " . (is_scalar($translation) ? (string)$translation : ''),
+                        'insertText' => "$quoted: ", 'filterText' => $key, 'sortText' => '0' . $key];
+                }
+            }
+        }
+        return ['items' => array_values($items), 'incomplete' => false, 'typed' => ltrim($before)];
+    }
+
     /**
      * The keys above a line, outermost first ("game", "smoke"...).
      *
@@ -123,7 +228,11 @@ final class ConfigCompletion
                     continue;
                 }
                 $own = strlen($text) - strlen(ltrim($text, ' '));
-                if ($own < $indent) {
+                // "- key: x" two columns left: the first key of this list item
+                if ($step === -1 && $own + 2 === $indent && preg_match('/^\s*-\s+([\w\\\\-]+)\s*:/', $text, $m)) {
+                    $out[$m[1]] = true;
+                }
+                if ($own < $indent || str_starts_with(ltrim($text), '- ')) {
                     break;
                 }
                 if ($own === $indent && preg_match('/^\s*([\w\\\\-]+)\s*:/', $text, $m)) {

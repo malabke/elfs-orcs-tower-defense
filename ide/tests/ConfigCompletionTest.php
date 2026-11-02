@@ -51,6 +51,28 @@ final class ConfigCompletionTest extends TestCase
         self::assertContains('App\\Scene\\TitleScene', $this->labels($file, "services:\n  title:\n    alias: |\n"));
     }
 
+    public function testLangYamlLanguagesThenTheTextsNotTranslatedYet(): void
+    {
+        $file = 'games/x/config/lang.yaml';
+        $text = "fr:\n  PLAY: JOUER\n  HIGH SCORE: RECORD\nde:\n  PLAY: SPIELEN\n  |\n";
+        self::assertSame(['HIGH SCORE'], $this->labels($file, $text));
+        $langs = $this->labels($file, "fr:\n  PLAY: JOUER\n|\n");
+        self::assertContains('de', $langs);
+        self::assertNotContains('fr', $langs);
+    }
+
+    public function testFormWidgetSettingsAndTheirValues(): void
+    {
+        $file = 'games/x/forms/MainForm.form.yaml';
+        $keys = $this->labels($file, "form:\n  children:\n    - type: button\n      |\n    - type: label\n      text: x\n");
+        self::assertContains('text', $keys);
+        self::assertContains('events', $keys);
+        self::assertNotContains('type', $keys, 'already written');
+        self::assertContains('panel', $this->labels($file, "form:\n  children:\n    - type: |\n"));
+        self::assertSame(['start', 'center', 'end', 'between', 'around'], $this->labels($file, "form:\n  justify: |\n"));
+        self::assertContains('click', $this->labels($file, "form:\n  children:\n    - type: button\n      events:\n        |\n"));
+    }
+
     public function testTheScenesOfTheProjectForStartScene(): void
     {
         self::assertSame(['App\\Scene\\PlayScene', 'App\\Scene\\TitleScene'], $this->labels('games/x/config/game.yaml', "game:\n  start_scene: |\n"));

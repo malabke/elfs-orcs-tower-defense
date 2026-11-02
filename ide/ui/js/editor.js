@@ -659,21 +659,21 @@ export class Editors {
       },
     });
 
-    // config/game.yaml, input.yaml, services.yaml: their keys, values, scenes, key names, classes (JumPHP\Ide\Config\ConfigCompletion)
+    // config/game.yaml, input.yaml, services.yaml, lang.yaml, forms/*.form.yaml (JumPHP\Ide\Config\ConfigCompletion)
     monaco.languages.registerCompletionItemProvider('yaml', {
       triggerCharacters: [' ', '[', ','],
       provideCompletionItems: async (model, position) => {
-        if (!/(^|\/)config\/(game|input|services)\.ya?ml$/.test(pathOf(model.uri))) return { suggestions: [] };
+        if (!/(^|\/)config\/(game|input|services|lang)\.ya?ml$|\.form\.ya?ml$/.test(pathOf(model.uri))) return { suggestions: [] };
         const result = await backend.invoke('config.complete', args(model, position)).catch(() => null);
         if (!result) return { suggestions: [] };
         const line = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-        const typed = /[\w\\:. -]*$/.exec(line)[0].replace(/^.*[\[,:]\s*|^\s+|^-\s+/, '');
+        const typed = typeof result.typed === 'string' ? result.typed : /[\w\\:. -]*$/.exec(line)[0].replace(/^.*[\[,:]\s*|^\s+|^-\s+/, '');
         const replace = new monaco.Range(position.lineNumber, position.column - typed.length, position.lineNumber, position.column);
         return {
           suggestions: result.items.map((item) => ({
             label: item.label, kind: kinds[item.kind] ?? monaco.languages.CompletionItemKind.Value, insertText: item.insertText,
             detail: item.detail || undefined, documentation: item.documentation ? { value: item.documentation } : undefined,
-            sortText: item.sortText, range: replace,
+            sortText: item.sortText, filterText: item.filterText, range: replace,
           })),
         };
       },
