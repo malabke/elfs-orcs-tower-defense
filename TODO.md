@@ -12,6 +12,14 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
   `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
 - signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
 - a .dmg for macOS (the zip of the .app works; `hdiutil` only exists on a Mac: the workflow could make it)
+- native apps that start with the computer: `app: {autostart: true}` (or `$app->autostart(true)`, a setting the user
+  turns on): Windows (Run registry key / Startup folder), macOS (a LaunchAgent / SMAppService login item), Linux
+  (~/.config/autostart/*.desktop); often with the tray and no window at start (`--hidden`); the installers
+  (jumphp2installer) offering the box
+- services / daemons in PHP: an app (or a CLI app) that runs in the background without a user session: Windows
+  service (SCM: start / stop / status, a service wrapper around the executable), macOS LaunchDaemon, Linux systemd
+  unit (user or system); `bin/jumphp service:install / uninstall / status <id>`, the installers' step `service`,
+  logs, restart on failure; the async runtime (threads) and JumPHP\Http for servers, tested on the three systems in CI
 
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
