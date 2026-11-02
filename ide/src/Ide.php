@@ -69,7 +69,8 @@ final class Ide
         if ($root !== null) {
             // the extensions' functions (SDL, OpenGL, OpenAL...) from the engine's stubs, of the project or of a game's vendor/
             $stubs = [];
-            foreach ([...(glob("$root/engine/stubs/*.php") ?: []), ...(glob("$root/games/*/vendor/jumphp/engine/stubs/*.php") ?: [])] as $file) {
+            foreach ([...(glob("$root/engine/stubs/*.php") ?: []), ...(glob("$root/games/*/vendor/jumphp/engine/stubs/*.php") ?: []),
+                ...(glob("$root/vendor/jumphp/engine/stubs/*.php") ?: [])] as $file) {
                 $stubs[(string)realpath($file)] = true;
             }
             $this->index->addStubs(...array_keys($stubs));
@@ -397,6 +398,12 @@ final class Ide
         $this->register('git.remotes', fn () => $git->remotes());
         $this->register('git.stash', fn (array $p) => $after($git->stash($p['message'] ?? null)));
         $this->register('git.stashPop', fn () => $after($git->stashPop()));
+    }
+
+    /** Where the IDE keeps its copy of JumPHP, for the games kept in their own repository (Runner::linkedCommand()). */
+    public function setToolkit(string $dir, ?string $repo = null): void
+    {
+        $this->runner?->setToolkit($dir, $repo);
     }
 
     private function registerRun(): void

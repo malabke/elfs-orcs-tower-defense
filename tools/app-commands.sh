@@ -22,7 +22,7 @@ tauri_run() {
   ensure_tauri_image
   mkdir -p "$TAURI_HOME/cargo" "$TAURI_HOME/target"
   docker run --rm $TTY_FLAGS --user "$(id -u):$(id -g)" \
-    -v "$ROOT:/workspace" -w "/workspace/$wd" \
+    "${WS[@]}" -w "/workspace/$wd" \
     -v "$TAURI_HOME/cargo:/opt/jumphp-cargo" -v "$TAURI_HOME/target:/opt/jumphp-target" \
     -e HOME=/tmp -e XDG_RUNTIME_DIR=/tmp -e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/workspace/.cache/composer \
     -e CARGO_HOME=/opt/jumphp-cargo -e CARGO_TARGET_DIR=/opt/jumphp-target \
@@ -229,7 +229,7 @@ app_export_macos() {
       cmd_export_standalone "$app" "--macos-$arch"
   done
   local out="games/$app/dist/standalone"
-  docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -w /workspace "$DESKTOP_IMAGE" \
+  docker run --rm --user "$(id -u):$(id -g)" "${WS[@]}" -w /workspace "$DESKTOP_IMAGE" \
     php tools/macos-app.php "games/$app" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
     || die "the .app was not made (see above)"
   # the two executables stay beside it: app:release offers them as updates of the .app (each Mac replaces its own)
@@ -260,7 +260,7 @@ cmd_app_release() {
   # of executables), then the executables, then the signed list of them
   if [ ! -f "$ROOT/$dir/config/update.pub" ]; then
     mkdir -p "$ROOT/$dir/dist/standalone"
-    docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
+    docker run --rm --user "$(id -u):$(id -g)" "${WS[@]}" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
       php tools/app-release.php "$dir" "/keys/$id-update.pem" "$base" "$notes" >/dev/null 2>&1 || true
     [ -f "$ROOT/$dir/config/update.pub" ] || die "no key made (see tools/app-release.php)"
   fi
@@ -275,7 +275,7 @@ cmd_app_release() {
       --macos) platforms+=",macos-arm64,macos-x86_64" ;;
     esac
   done
-  docker run --rm --user "$(id -u):$(id -g)" -v "$ROOT:/workspace" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
+  docker run --rm --user "$(id -u):$(id -g)" "${WS[@]}" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
     php tools/app-release.php "$dir" "/keys/$id-update.pem" "$base" "$notes" "${platforms#,}" || die "update.json not written"
   say "done: $dir/dist/standalone/update.json: upload dist/standalone/ to $base"
   echo "  The app checks it when game.yaml has  app: {update: {url: $base/update.json}}  (\$app->updater()->check())." >&2

@@ -273,6 +273,8 @@ final class Main implements AppMain
         $this->ide = new Ide($workspace, $this->app->storage->path('cache'), function (string $event, array $payload): void {
             $this->app->send($event, $payload);
         }, $this->processes);
+        // games kept in their own repository (a jumphp.net project made of the game alone) run through this copy
+        $this->ide->setToolkit($this->app->storage->path('jumphp'), Creator::TEMPLATE);
         $this->filesSignature = '';
         $this->authorizeGit();
         $this->app->options->set('reopen', true);

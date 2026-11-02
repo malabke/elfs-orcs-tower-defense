@@ -36,8 +36,12 @@ final class ProjectInfo
                 $modules[] = $this->module($m[1], "games/{$m[1]}");
             }
         }
-        if (!$jumphp && $this->workspace->exists('config/game.yaml')) {
-            $modules[] = $this->module($this->workspace->name(), '');
+        $linked = !$jumphp && $this->workspace->exists('config/game.yaml');
+        if ($linked) {
+            // a game in its own repository (composer.json -> ../../engine): run through the IDE's copy of JumPHP
+            $id = preg_match('/^\s*id:\s*["\']?([a-z0-9][a-z0-9-]*)/m', $this->workspace->read('config/game.yaml'), $m) ? $m[1]
+                : (trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($this->workspace->name())), '-') ?: 'game');
+            $modules[] = $this->module($id, '');
         }
         $version = $this->workspace->exists('VERSION') ? trim($this->workspace->read('VERSION')) : null;
         return [
@@ -47,7 +51,8 @@ final class ProjectInfo
             'modules' => $modules,
             'kind' => $modules[0]['kind'] ?? ($this->workspace->exists('composer.json') ? 'php' : 'php'),
             'composer' => $this->workspace->exists('composer.json'),
-            'run' => $this->runConfigurations($jumphp, $modules),
+            'linked' => $linked,
+            'run' => $linked ? self::linkedConfigurations($this->runConfigurations(true, $modules)) : $this->runConfigurations($jumphp, $modules),
         ];
     }
 
@@ -124,6 +129,28 @@ final class ProjectInfo
             $configs[] = $custom + ['id' => "custom:$i", 'group' => 'Custom', 'icon' => 'play', 'kind' => 'tool'];
         }
         return $configs;
+    }
+
+    /**
+     * A game in its own repository: the commands of a JumPHP project, run by the IDE's copy of JumPHP (Runner: `@jumphp`
+     * = its bin/jumphp, the game linked into its games/). What only a whole JumPHP project has is left out.
+     *
+     * @param list<array<string, mixed>> $configs
+     * @return list<array<string, mixed>>
+     */
+    public static function linkedConfigurations(array $configs): array
+    {
+        $out = [];
+        foreach ($configs as $c) {
+            if (in_array($c['id'], ['lint', 'test:engine', 'update'], true) || str_starts_with((string)$c['id'], 'custom:')) {
+                continue;
+            }
+            $c['command'] = array_map(fn (string $arg) => str_replace('bin/jumphp', '@jumphp', $arg), $c['command']);
+            $c['game'] = $c['group'];
+            $out[] = $c;
+        }
+        $out[] = ['id' => 'update', 'label' => 'Update JumPHP (the IDE\'s copy)', 'group' => 'Project', 'icon' => 'download', 'command' => ['@jumphp-update'], 'kind' => 'tool'];
+        return $out;
     }
 
     /** Run configurations the user added (.jumphp/run.json: [{label, command: [...]}]). @return list<array<string, mixed>> */

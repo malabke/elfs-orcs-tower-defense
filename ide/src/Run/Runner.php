@@ -15,9 +15,42 @@ final class Runner
     /** @var array<int, array<string, mixed>> */
     private array $runs = [];
 
+    /** where the IDE keeps its copy of JumPHP (games kept in their own repository run through it), and its repository */
+    private string $toolkit;
+    private string $toolkitRepo = 'https://github.com/davidnurdin/jumPhp.git';
+
     /** @param callable(string $event, array $payload): void $emit */
     public function __construct(private Processes $processes, private string $root, private $emit)
     {
+        $this->toolkit = (getenv('HOME') ?: sys_get_temp_dir()) . '/.jumphp/toolkit';
+    }
+
+    public function setToolkit(string $dir, ?string $repo = null): void
+    {
+        $this->toolkit = rtrim($dir, '/');
+        $this->toolkitRepo = $repo ?? $this->toolkitRepo;
+    }
+
+    /**
+     * A command of a game kept in its own repository (`@jumphp` = bin/jumphp): through the IDE's copy of JumPHP, fetched
+     * the first time, the game linked as its games/<id> (bin/jumphp mounts it in the containers).
+     *
+     * @param list<string> $command
+     * @return list<string>
+     */
+    public function linkedCommand(array $command, string $game): array
+    {
+        $tk = escapeshellarg($this->toolkit);
+        $fetch = 'if [ ! -x "$tk/bin/jumphp" ]; then echo "Getting JumPHP for this game (once): ' . $this->toolkitRepo . '"; mkdir -p "$(dirname "$tk")"; '
+            . 'git clone --depth 1 ' . escapeshellarg($this->toolkitRepo) . ' "$tk"; fi';
+        if ($command === ['@jumphp-update']) {
+            return ['sh', '-c', "set -e; tk=$tk; $fetch; git -C \"\$tk\" pull --ff-only"];
+        }
+        $args = ($command[0] ?? '') === 'sh' && ($command[1] ?? '') === '-c'
+            ? str_replace('@jumphp', '"$tk/bin/jumphp"', (string)($command[2] ?? ''))      // a script of several commands
+            : 'exec ' . implode(' ', array_map(fn (string $a) => $a === '@jumphp' ? '"$tk/bin/jumphp"' : escapeshellarg($a), $command));
+        $link = 'mkdir -p "$tk/games"; ln -sfn ' . escapeshellarg($this->root) . ' "$tk/games/' . $game . '"';
+        return ['sh', '-c', "set -e; tk=$tk; $fetch; $link; $args"];
     }
 
     /**
@@ -28,7 +61,12 @@ final class Runner
     public function start(array $config, array $env = []): array
     {
         $command = $config['command'];
-        if (in_array('bin/jumphp', $command, true) || str_contains(implode(' ', $command), 'bin/jumphp ')) {
+        if (isset($config['game']) || in_array('@jumphp-update', $command, true)) {
+            $command = $this->linkedCommand($command, preg_replace('/[^a-z0-9-]/', '', (string)($config['game'] ?? 'game')) ?: 'game');
+            if (Environment::which('docker') === null) {
+                throw new \RuntimeException('Docker was not found: bin/jumphp runs everything in Docker. Install Docker (https://docs.docker.com/engine/install/).');
+            }
+        } elseif (in_array('bin/jumphp', $command, true) || str_contains(implode(' ', $command), 'bin/jumphp ')) {
             if (Environment::which('docker') === null) {
                 throw new \RuntimeException("Docker was not found: bin/jumphp runs everything in Docker. Install Docker (https://docs.docker.com/engine/install/), "
                     . "or if it is installed somewhere unusual, start the IDE from a terminal where `docker` works. Searched: " . Environment::path());
