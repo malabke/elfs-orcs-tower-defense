@@ -394,6 +394,45 @@ export class AgentTools {
     });
   }
 
+  /**
+   * claude --permission-prompt-tool: a tool that needs a yes (a command, a web page...). The user answers in a dialog:
+   * once, always for this session (the same command, or the same tool), or no. Claude Code reads the answer as JSON.
+   */
+  tool_permission(args) {
+    const name = String(args.tool_name || '');
+    const input = args.input && typeof args.input === 'object' ? args.input : {};
+    const command = name === 'Bash' ? String(input.command || '') : '';
+    const what = command || input.url || input.file_path || input.path || input.pattern || JSON.stringify(input).slice(0, 400);
+    // "always": the first word of a command (curl, docker, npm...), else the whole tool
+    const key = command ? `Bash:${command.trim().split(/\s+/)[0]}` : name;
+    this.allowed ??= new Set();
+    const allow = () => JSON.stringify({ behavior: 'allow', updatedInput: input });
+    if (this.allowed.has(key)) return Promise.resolve(allow());
+    return new Promise((resolve) => {
+      let answered = false;
+      const answer = (yes, always) => {
+        answered = true;
+        if (yes && always) this.allowed.add(key);
+        resolve(yes ? allow() : JSON.stringify({ behavior: 'deny', message: 'The user said no in the IDE. Do something else, or ask them (ask_user) why.' }));
+      };
+      const body = el('div.claude-ask', {},
+        el('p', {}, command ? 'Claude wants to run this command:' : `Claude wants to use ${name}:`),
+        el('pre.claude-permission', { style: { whiteSpace: 'pre-wrap', maxHeight: '240px', overflow: 'auto' } }, String(what)),
+        input.description ? el('p.pub-faint', {}, String(input.description)) : null);
+      dialog({
+        title: 'Claude asks for permission', body,
+        onClose: () => { if (!answered) answer(false, false); },
+        buttons: [
+          { label: 'No', action: () => answer(false, false) },
+          { label: command ? `Always “${key.slice(5)}” (this session)` : `Always ${name} (this session)`, action: () => answer(true, true) },
+          { label: 'Yes, once', primary: true, action: () => answer(true, false) },
+        ],
+      });
+      this.app.showTool('claude', true);
+      notify(String(what).slice(0, 140), 'info', { title: 'Claude asks for permission' });
+    });
+  }
+
   tool_notify(args) {
     notify(String(args.message || ''), ['info', 'success', 'error'].includes(args.kind) ? args.kind : 'info', { title: 'Claude' });
     return 'shown';
@@ -405,5 +444,5 @@ export function ideToolLabel(name, input) {
   const what = input.path ? `${input.path}${input.start_line || input.line ? ':' + (input.start_line || input.line) : ''}` : input.config || input.question || input.message || input.query || input.tool || '';
   return { tool, what: String(what), label: { get_state: 'Looked at the IDE', open_file: 'Opened', highlight: 'Pointed at', clear_highlights: 'Cleared the marks',
     show_diff: 'Showed the changes', show_tool: 'Showed', find_in_files: 'Showed a search', run: 'Ran', play: 'Played', diagnostics: 'Checked',
-    ask_user: 'Asked you', notify: 'Told you' }[tool] || tool };
+    ask_user: 'Asked you', notify: 'Told you', permission: 'Asked your permission' }[tool] || tool };
 }

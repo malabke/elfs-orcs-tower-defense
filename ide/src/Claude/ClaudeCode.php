@@ -100,8 +100,12 @@ final class ClaudeCode
         }
         if ($this->agent !== null) {
             try {
-                array_push($command, '--mcp-config', $this->agent->mcpConfigFile(), '--allowedTools', 'mcp__' . AgentTools::SERVER,
-                    '--append-system-prompt', AgentTools::INSTRUCTIONS);
+                // the IDE's tools, JumPHP's own command without asking, and what needs a yes asked in the IDE (a dialog):
+                // claude -p cannot ask in a terminal, so it refused silently before
+                $command = [...$command, '--mcp-config', $this->agent->mcpConfigFile(),
+                    '--allowedTools', 'mcp__' . AgentTools::SERVER, ...AgentTools::ALLOWED,   // one rule per argument (they hold spaces)
+                    ...['--permission-prompt-tool', 'mcp__' . AgentTools::SERVER . '__' . AgentTools::PERMISSION,
+                        '--append-system-prompt', AgentTools::INSTRUCTIONS]];
             } catch (\Throwable) {
                 // no loopback: claude works without the IDE's tools
             }

@@ -12,6 +12,15 @@ final class AgentTools
     /** the MCP server's name: Claude Code calls the tools mcp__jumphp-ide__<name> */
     public const SERVER = 'jumphp-ide';
 
+    /** the tool Claude Code asks permissions through (claude --permission-prompt-tool mcp__jumphp-ide__permission) */
+    public const PERMISSION = 'permission';
+
+    /**
+     * What Claude may always do in a JumPHP project without asking (claude --allowedTools): the project's own command
+     * (everything runs in Docker through it) and git's reading commands.
+     */
+    public const ALLOWED = ['Bash(bin/jumphp:*)', 'Bash(./bin/jumphp:*)', 'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)'];
+
     /** told to the AI with the tools (MCP instructions, and claude --append-system-prompt) */
     public const INSTRUCTIONS = <<<'TXT'
         You are running inside the JumPHP IDE, and the user watches the IDE while you work: the files you read and edit
@@ -50,6 +59,9 @@ final class AgentTools
                 ['path' => $path], [], 30),
             self::tool('ask_user', 'Asks the user a question in the IDE and waits for the answer (up to 10 minutes). With `options`, the user picks one of them (or types another answer).',
                 ['question' => ['type' => 'string'], 'options' => ['type' => 'array', 'items' => ['type' => 'string']]], ['question'], 600),
+            // claude -p --permission-prompt-tool: what needs a yes (a command, a web page...) is asked in the IDE
+            self::tool(self::PERMISSION, 'Asks the user in the IDE whether Claude may use a tool (Claude Code calls it by itself when a tool needs a permission: do not call it).',
+                ['tool_name' => ['type' => 'string'], 'input' => ['type' => 'object'], 'tool_use_id' => ['type' => 'string']], ['tool_name'], 600),
             self::tool('notify', 'Shows the user a short notification in the IDE.',
                 ['message' => ['type' => 'string'], 'kind' => ['type' => 'string', 'enum' => ['info', 'success', 'error']]], ['message'], 10),
         ];

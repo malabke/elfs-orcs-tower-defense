@@ -244,7 +244,8 @@ final class CoreTest extends TestCase
             $args = (string)file("$this->dir/args.txt")[0];
             self::assertStringStartsWith('-p --input-format stream-json --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh ', $args);
             // the IDE's own tools: its MCP server (a config file with the token), allowed, and told to Claude
-            self::assertMatchesRegularExpression('#--mcp-config (\S+jumphp-ide-mcp-\d+\.json) --allowedTools mcp__jumphp-ide --append-system-prompt You are running inside the JumPHP IDE#', $args);
+            // bin/jumphp without asking, and what needs a yes asked in the IDE (the permission tool)
+            self::assertMatchesRegularExpression('#--mcp-config (\S+jumphp-ide-mcp-\d+\.json) --allowedTools mcp__jumphp-ide Bash\(bin/jumphp:\*\) .+? --permission-prompt-tool mcp__jumphp-ide__permission --append-system-prompt You are running inside the JumPHP IDE#', $args);
             preg_match('#--mcp-config (\S+)#', $args, $m);
             self::assertSame($ide->agent?->server()->url(), json_decode((string)file_get_contents($m[1]), true)['mcpServers']['jumphp-ide']['url']);
             $ide->agent?->close();

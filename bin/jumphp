@@ -1283,12 +1283,52 @@ cmd_doctor() {
 # shellcheck source=../tools/cli-commands.sh
 . "$ROOT/tools/cli-commands.sh"
 
+# Docker must answer before anything runs in it: else every command hangs or fails with Docker's own words (the IDE
+# showed a composer install that never ended). Docker Desktop (Windows, macOS) is started when it is installed but
+# not running, and waited for; Linux says how to start the service. Once per run.
+ensure_docker_running() {
+  [ -n "${JUMPHP_DOCKER_OK:-}" ] && return 0
+  command -v docker >/dev/null 2>&1 || die "Docker is needed and was not found: https://docs.docker.com/get-docker/ (then bin/jumphp init)"
+  # a Docker Desktop that is starting (or stuck) can keep `docker info` waiting forever: 20 s at most each time
+  docker_answers() { if command -v timeout >/dev/null 2>&1; then timeout 20 docker info >/dev/null 2>&1; else docker info >/dev/null 2>&1; fi; }
+  if ! docker_answers; then
+    local started=""
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        local exe
+        for exe in "${ProgramW6432:-/c/Program Files}/Docker/Docker/Docker Desktop.exe" "/c/Program Files/Docker/Docker/Docker Desktop.exe"; do
+          exe="$(cygpath -u "$exe" 2>/dev/null || echo "$exe")"
+          if [ -f "$exe" ]; then say "Docker is not running: starting Docker Desktop (it takes up to a minute)"; "$exe" >/dev/null 2>&1 & started=1; break; fi
+        done ;;
+      Darwin)
+        open -a Docker >/dev/null 2>&1 && { say "Docker is not running: starting Docker Desktop (it takes up to a minute)"; started=1; } ;;
+    esac
+    if [ -n "$started" ]; then
+      local i
+      for i in $(seq 1 45); do docker_answers && break; sleep 2; done
+    fi
+    if ! docker_answers; then
+      case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*|Darwin) die "Docker does not answer: start Docker Desktop (and wait until it says it is running), then try again" ;;
+        *) docker info 2>&1 | grep -qi 'permission denied' \
+             && die "Docker refuses this user: add it to the docker group (sudo usermod -aG docker \$USER), log in again, then try again" \
+             || die "Docker does not answer: start it (sudo systemctl start docker), then try again" ;;
+      esac
+    fi
+  fi
+  export JUMPHP_DOCKER_OK=1
+}
+
 main() {
   # `bin/jumphp` alone in a project without a game yet (composer create-project, fresh clone): the wizard
   if [ $# -eq 0 ] && [ -t 0 ] && [ -t 1 ] && [ -z "${JUMPHP_GAME:-}" ]; then
     exec bash "$ROOT/tools/init.sh"
   fi
   local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    help|-h|--help|init|deploy:setup|github|update|cli:install|cli:uninstall|server:*) ;;
+    *) ensure_docker_running ;;
+  esac
   case "$cmd" in
     init) exec bash "$ROOT/tools/init.sh" "$@" ;;
     deploy:setup) exec bash "$ROOT/tools/init.sh" --deploy ;;
