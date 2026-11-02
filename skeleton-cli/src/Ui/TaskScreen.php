@@ -8,7 +8,6 @@ use Symfony\Component\Tui\Event\CancelEvent;
 use Symfony\Component\Tui\Event\SelectEvent;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Terminal\TerminalInterface;
-use Symfony\Component\Tui\Terminal\Terminal;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\InputWidget;
 use Symfony\Component\Tui\Widget\SelectListWidget;
@@ -25,9 +24,10 @@ final class TaskScreen
     private InputWidget $input;
     private TextWidget $help;
 
-    public function __construct(private Tasks $tasks, TerminalInterface $terminal = new Terminal())
+    /** @param TerminalInterface|null $terminal null: this console's (WindowsTerminal::create()) */
+    public function __construct(private Tasks $tasks, ?TerminalInterface $terminal = null)
     {
-        $this->tui = new Tui(terminal: $terminal);
+        $this->tui = new Tui(terminal: $terminal ?? WindowsTerminal::create());
         $this->list = new SelectListWidget([], 12);
         $this->input = new InputWidget();
         $this->input->setPrompt('New task: ');

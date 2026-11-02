@@ -83,7 +83,7 @@ cmd_cli_export() {
   [ ${#flags[@]} -gt 0 ] || [ -n "$macos" ] || flags=(--linux)
   [ -n "$macos" ] && flags+=(--macos-arm64 --macos-x86_64)
   JUMPHP_STANDALONE_EXTENSIONS=tools/app-extensions.txt JUMPHP_STANDALONE_SPC=spc-app \
-  JUMPHP_STANDALONE_BOOT='App\Main' JUMPHP_STANDALONE_CONSOLE=1 JUMPHP_STANDALONE_INI=$'memory_limit=512M' \
+  JUMPHP_STANDALONE_BOOT='App\Main' JUMPHP_STANDALONE_CONSOLE=1 JUMPHP_STANDALONE_INI=$'ffi.enable=1\nmemory_limit=512M' \
     cmd_export_standalone "$app" "${flags[@]}"
   echo "  A CLI app: run it in a terminal (<file> --help). macOS: <app>-macos-arm64 (Apple silicon) / -x86_64 (Intel)." >&2
 }

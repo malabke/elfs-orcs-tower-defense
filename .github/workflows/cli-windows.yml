@@ -1,0 +1,48 @@
+# A CLI app's full-screen screen on a real Windows console (skeleton-cli's WindowsTerminal: raw keys without stty):
+# hello-cli exported for Windows, started in a console of its own, typed into (tools/ci/cli-keys.ps1).
+# Runs when the CLI apps' terminal changes, or by hand (Actions > cli-windows).
+name: cli-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['skeleton-cli/src/Ui/**', 'games/hello-cli/src/**', 'tools/ci/cli-keys.ps1', 'tools/cli-commands.sh', '.github/workflows/cli-windows.yml']
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bin/jumphp export:standalone hello-cli --windows
+        env:
+          JUMPHP_GAME: hello-cli
+        run: |
+          bin/jumphp install hello-cli
+          bin/jumphp export:standalone hello-cli --windows
+          ls -la games/hello-cli/dist/standalone
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hello-cli
+          path: games/hello-cli/dist/standalone/hello-cli-windows-x86_64.exe
+
+  windows:
+    needs: export
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: hello-cli
+      - name: Its commands
+        shell: pwsh
+        run: |
+          $env:JUMPHP_VAR = "$env:RUNNER_TEMP\hello-cli-cmd"
+          .\hello-cli-windows-x86_64.exe add "Buy bread"
+          .\hello-cli-windows-x86_64.exe list-tasks | Tee-Object out.txt
+          if (-not (Select-String -Path out.txt -Pattern 'Buy bread' -Quiet)) { throw 'the command did not add the task' }
+      - name: Its full-screen screen, typed into
+        shell: pwsh
+        run: tools/ci/cli-keys.ps1 -Exe "$PWD\hello-cli-windows-x86_64.exe" -Data "$env:RUNNER_TEMP\hello-cli-ui"

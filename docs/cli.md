@@ -63,5 +63,8 @@ experimental by Symfony: pin its version in composer.json when the app is done.
 `<app>-windows-x86_64.exe`, `<app>-macos-arm64` / `-x86_64`). On Windows it stays a **console** program (games are
 GUI programs: no console window). `bin/jumphp installer <app>` makes installers of it as for a game (no shortcut: a console program, put on the PATH instead: typed by its name in a new terminal; macOS: the installer installs the executable of the Mac, `{arch}`).
 
-Windows: the commands work in any console. symfony/tui's full-screen screens read the terminal with `stty`: they
-need a terminal that has it (WSL, Git Bash); keep everything reachable as commands.
+Windows: the commands work in any console, and so do the full-screen screens: symfony/tui's own terminal needs `stty`
+(raw keys, the size), so the skeleton's `src/Ui/WindowsTerminal.php` (`WindowsTerminal::create()`) talks to the console
+through FFI instead (raw mode with VT input, its key and resize events, the window's size, UTF-8). Tried for real on
+GitHub's Windows (`.github/workflows/cli-windows.yml`: keys typed into hello-cli's screen). Apps made before: copy that
+file and give `WindowsTerminal::create()` to `new Tui(terminal: ...)`.
