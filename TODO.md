@@ -29,9 +29,19 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
 - first extensions to make (each one a package, its example game, its editor if it has data): a collision engine
   (shapes, polygons, broad phase), a gravity / physics engine (bodies, joints, forces), a particle engine (emitters,
   an editor with a live preview), a 3D engine (meshes, cameras, lights on OpenGL / WebGL), an SDL effects engine
-  (transitions, screen shakes, palettes, scanlines, distortions), a video maker for TikTok / Shorts (a game's
-  replay or a scripted scene rendered to a vertical MP4 with its sound, captions, a template), a tile engine with
-  its level editor
+  (transitions, screen shakes, palettes, scanlines, distortions), a video maker for TikTok / Shorts, a tile engine
+  with its level editor
+- the TikTok / Shorts video maker, above all for viral "satisfying" videos: simulations that make their own
+  music (coloured balls bouncing inside circles that grow, shrink, open or rotate, each bounce plays the next
+  note of a melody; balls that multiply, rings that break, races, marbles on a track, a timer and a question at
+  the top: "will it escape?"). Made of: the physics (the collision / gravity extensions), a melody read from a
+  MIDI file or notes (each collision = a note, Synth or samples), trails, glow and particles (the effects
+  extensions), a vertical 1080×1920 view at 60 FPS, a seed so a video can be made again, many variations from
+  one scene (colours, speeds, seeds) to post several. Rendered headless frame by frame (never in real time), the
+  sound mixed from the collision log, out as an MP4 ready to post (H.264 + AAC, ffmpeg in Docker) with a title,
+  captions and a cover; `bin/jumphp video:make <id> [--seed N] [--count 10]`. Also: a game's replay or a scripted
+  scene to the same vertical MP4. Templates to start from (bouncing ball in a circle, escape the rings, ball
+  race, colour fight); the IDE previews them live
 - the contract: `"type": "jumphp-extension"` + `extra.jumphp` (services to register in the game's container, scenes,
   asset loaders for their formats, `config/*.yaml` keys with their schema, stubs), discovered by the engine at boot
   (no manual wiring), pure PHP so they run in the browser too (WebAssembly: no extensions of their own)
