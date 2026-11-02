@@ -170,13 +170,17 @@ final class CoreTest extends TestCase
     {
         $saved = (string)getenv('PATH');
         mkdir("$this->dir/fake");
-        // a stand-in claude: its arguments, then stream-json lines (one split across two writes)
+        // a stand-in claude --input-format stream-json: its arguments, the messages it reads (the second one arrives
+        // in the middle of the first turn), stream-json lines (one split across two writes); it ends with its stdin
         file_put_contents("$this->dir/fake/claude", "#!/bin/sh\n[ \"\$1\" = --version ] && { echo '9.9 (Claude Code)'; exit 0; }\n"
-            . "echo \"\$@\" > args.txt\n"
+            . "echo \"\$@\" >> args.txt\n"
+            . "read -r first; echo \"\$first\" >> received.txt\n"
             . "printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"sess-12345678\"}'\n"
             . "printf '%s' '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",'\n"
             . "printf '%s\\n' '\"text\":\"Hello\"}]}}'\n"
-            . "printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"sess-12345678\"}'\n");
+            . "read -r more; echo \"\$more\" >> received.txt\n"
+            . "printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"sess-12345678\"}'\n"
+            . "while read -r line; do echo \"\$line\" >> received.txt; printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"sess-12345678\"}'; done\n");
         chmod("$this->dir/fake/claude", 0755);
         putenv("PATH=$this->dir/fake:$saved");
         try {
@@ -185,19 +189,39 @@ final class CoreTest extends TestCase
             $ide = new Ide(new LocalWorkspace($this->dir), null, function (string $event, array $payload) use (&$events) {
                 $events[] = [$event, $payload];
             }, $processes);
+            $until = function (callable $done) use ($processes, &$events): void {
+                for ($i = 0; $i < 500 && !$done($events); $i++) {
+                    $processes->poll();
+                    usleep(5000);
+                }
+            };
+            $results = fn (array $events) => count(array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'result'));
             self::assertTrue($ide->handle('project.info', [])['capabilities']['claude']);
             self::assertSame('9.9 (Claude Code)', $ide->handle('claude.status', [])['version']);
-            $run = $ide->handle('claude.send', ['prompt' => 'Say hello', 'session' => 'sess-00000000', 'mode' => 'plan', 'model' => 'claude-opus-5-5', 'effort' => 'xhigh']);
-            for ($i = 0; $i < 500 && !array_filter($events, fn ($e) => $e[0] === 'claude.exit'); $i++) {
-                $processes->poll();
-                usleep(5000);
-            }
+            $send = fn (string $prompt, ?string $session) => $ide->handle('claude.send', ['prompt' => $prompt, 'session' => $session, 'mode' => 'plan', 'model' => 'claude-opus-5-5', 'effort' => 'xhigh']);
+            $run = $send('Say hello', 'sess-00000000');
+            $until(fn (array $events) => array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'assistant'));
+            // while it works: the same process reads it at once
+            $more = $send('Also say goodbye', 'sess-12345678');
+            self::assertSame(['id' => $run['id'], 'joined' => true], $more);
+            $until(fn (array $events) => $results($events) === 1);
             $types = array_map(fn ($e) => $e[1]['event']['type'], array_values(array_filter($events, fn ($e) => $e[0] === 'claude.event')));
             self::assertSame(['system', 'assistant', 'result'], $types);
             self::assertSame('Hello', array_values(array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'assistant'))[0][1]['event']['message']['content'][0]['text']);
-            self::assertSame(['claude.exit', ['id' => $run['id'], 'code' => 0, 'error' => null]], end($events));
-            $args = (string)file_get_contents("$this->dir/args.txt");
-            self::assertStringStartsWith('-p Say hello --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh ', $args);
+            // the turn is over, the conversation is not: the next message goes to the same process
+            self::assertSame(['id' => $run['id'], 'joined' => false], $send('And now?', 'sess-12345678'));
+            $until(fn (array $events) => $results($events) === 2);
+            self::assertSame([], array_filter($events, fn ($e) => $e[0] === 'claude.exit'));
+            $received = array_map(fn ($l) => json_decode($l, true)['message']['content'][0]['text'], file("$this->dir/received.txt", FILE_IGNORE_NEW_LINES));
+            self::assertSame(['Say hello', 'Also say goodbye', 'And now?'], $received);
+            // a new conversation: the old process ends (claude.exit), another one starts
+            $other = $send('Hi', null);
+            self::assertNotSame($run['id'], $other['id']);
+            $until(fn (array $events) => array_filter($events, fn ($e) => $e[0] === 'claude.exit'));
+            self::assertSame(['claude.exit', ['id' => $run['id'], 'code' => 0, 'error' => null]], array_values(array_filter($events, fn ($e) => $e[0] === 'claude.exit'))[0]);
+            $ide->handle('claude.stop', ['id' => $other['id']]);
+            $args = (string)file("$this->dir/args.txt")[0];
+            self::assertStringStartsWith('-p --input-format stream-json --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh ', $args);
             // the IDE's own tools: its MCP server (a config file with the token), allowed, and told to Claude
             self::assertMatchesRegularExpression('#--mcp-config (\S+jumphp-ide-mcp-\d+\.json) --allowedTools mcp__jumphp-ide --append-system-prompt You are running inside the JumPHP IDE#', $args);
             preg_match('#--mcp-config (\S+)#', $args, $m);

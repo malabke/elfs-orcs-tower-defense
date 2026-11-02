@@ -1,0 +1,157 @@
+<?php
+// The installer of a game or a desktop app (bin/jumphp installer): a jumphp2installer package (install.yaml, the
+// executables, the icon) and its installers (Name-setup.exe, Name-setup-linux-x86_64, Name-setup-macos.zip), made
+// from the base installers with the package's address written in. Into games/<id>/dist/installer/:
+//   --target github  the files of a GitHub release: the installers read the repository's newest release, so they
+//                    always install the newest version (bin/jumphp uploads them with gh)
+//   --target dir     a folder to put at --url on any web host (the installers read install.yaml there)
+// Plus installer.json: what was made and the links to give. Run from the repository's root, in Docker.
+//
+//   php tools/game-installer.php <games/id> <bases folder> --target github --repo owner/repo [--version 1.0]
+//       [--platforms windows,linux,macos] [--publisher Name]
+//   php tools/game-installer.php <games/id> <bases folder> --target dir --url https://example.com/game/ ...
+require __DIR__ . '/installer/Binary.php';
+require __DIR__ . '/installer/Zip.php';
+
+use JumPHP2Installer\Binary;
+use Symfony\Component\Yaml\Yaml;
+
+$fail = static function (string $message): never {
+    fwrite(STDERR, "error: $message\n");
+    exit(1);
+};
+$dir = rtrim((string)($argv[1] ?? ''), '/');
+$bases = rtrim((string)($argv[2] ?? ''), '/');
+if ($dir === '' || $bases === '' || !is_dir($dir)) {
+    $fail('usage: php tools/game-installer.php <games/id> <bases folder> --target github|dir [--repo owner/repo] [--url https://...] [--version X] [--platforms windows,linux,macos] [--publisher Name]');
+}
+$opts = ['target' => 'dir', 'repo' => '', 'url' => '', 'version' => '', 'platforms' => 'windows,linux,macos', 'publisher' => ''];
+for ($i = 3; $i < count($argv); $i++) {
+    $key = ltrim($argv[$i], '-');
+    array_key_exists($key, $opts) || $fail("unknown option {$argv[$i]}");
+    $opts[$key] = (string)($argv[++$i] ?? '');
+}
+is_file("$dir/vendor/autoload.php") || $fail("$dir has no vendor/ (bin/jumphp install)");
+require "$dir/vendor/autoload.php";
+
+$config = Yaml::parseFile("$dir/config/game.yaml")['game'] ?? [];
+$id = (string)($config['id'] ?? basename($dir));
+$title = trim((string)($config['title'] ?? $id)) ?: $id;
+$version = $opts['version'] !== '' ? $opts['version'] : (string)($config['version'] ?? '1.0');
+$publisher = $opts['publisher'] !== '' ? $opts['publisher'] : $title;
+
+if ($opts['target'] === 'github') {
+    preg_match('#^[\w.-]+/[\w.-]+$#', $opts['repo']) || $fail('--repo owner/repo');
+    $source = 'github:' . $opts['repo'];
+    $base = 'https://github.com/' . $opts['repo'] . '/releases/latest/download/';
+    $versionRule = ['github' => $opts['repo']];
+} elseif ($opts['target'] === 'dir') {
+    preg_match('#^https?://[^\s]+$#', $opts['url']) || $fail('--url: the https:// address where the folder will be put');
+    $base = $source = rtrim($opts['url'], '/') . '/';
+    $versionRule = ['latest' => $base . 'version.json'];
+} else {
+    $fail('--target github or dir');
+}
+
+// the newest build of each system the game has (the same places as the IDE's jumphp.net window)
+$wanted = array_filter(array_map('trim', explode(',', $opts['platforms'])));
+$found = [];
+foreach (['windows' => ['standalone/*-windows-x86_64.exe'], 'linux' => ['standalone/*-linux-x86_64'],
+    'macos' => ['apple/*-macos.zip', 'standalone/*-macos.zip']] as $platform => $patterns) {
+    if (!in_array($platform, $wanted, true)) {
+        continue;
+    }
+    $files = array_merge(...array_map(static fn (string $g) => glob("$dir/dist/$g") ?: [], $patterns));
+    usort($files, static fn (string $a, string $b) => filemtime($b) <=> filemtime($a));
+    $files === [] && $fail("no $platform build in $dir/dist/ (bin/jumphp installer builds Windows and Linux itself; macOS: bin/jumphp macos $id, or app:export --macos for an app)");
+    $found[$platform] = $files[0];
+}
+$found !== [] || $fail('no system chosen (--platforms windows,linux,macos)');
+
+$out = "$dir/dist/installer";
+if (is_dir($out)) {
+    foreach (glob("$out/*") ?: [] as $old) {
+        is_file($old) && unlink($old);
+    }
+}
+@mkdir($out, 0777, true);
+$copy = static fn (string $from, string $name) => copy($from, "$out/$name") || $fail("cannot write $out/$name");
+
+// the package: the executables under fixed names (installed games take the newest one each time)
+$names = ['windows' => "$id-windows-x86_64.exe", 'linux' => "$id-linux-x86_64", 'macos' => "$id-macos.zip"];
+$files = [];
+foreach ($found as $platform => $file) {
+    $copy($file, $names[$platform]);
+    $files[] = $names[$platform];
+}
+$icon = null;
+foreach (['assets/icon.png', 'assets/thumbnail.png'] as $candidate) {
+    if (is_file("$dir/$candidate")) {
+        $copy("$dir/$candidate", $icon = 'icon.png');
+        $files[] = 'icon.png';
+        break;
+    }
+}
+
+// the script: what the playground writes for a game, with the package's own files
+$desktop = array_values(array_intersect(['windows', 'linux'], array_keys($found)));
+$steps = [];
+$run = [];
+foreach ($desktop as $os) {
+    $steps[] = ['download' => $names[$os], 'os' => $os];
+    $run[$os] = "{folder}/$id" . ($os === 'windows' ? '.exe' : '');
+}
+if ($desktop !== []) {
+    $steps[] = ['copy' => ['from' => '{download}', 'to' => "{folder}/$id{exe}"], 'os' => $desktop];
+    if (in_array('linux', $desktop, true)) {
+        $steps[] = ['executable' => "{folder}/$id", 'os' => 'linux'];
+    }
+    $steps[] = ['shortcut' => ['target' => "{folder}/$id{exe}", 'where' => 'both'], 'if' => 'desktop', 'os' => $desktop];
+}
+if (isset($found['macos'])) {
+    $steps[] = ['download' => $names['macos'], 'os' => 'macos'];
+    $steps[] = ['extract' => '{folder}', 'os' => 'macos'];
+}
+$steps[] = 'uninstaller';
+$script = [
+    'installer' => 1,
+    'app' => ['name' => $title, 'publisher' => $publisher] + ($icon !== null ? ['icon' => $icon] : []),
+    'version' => $versionRule,
+    'pages' => ['welcome', ['folder' => '{programs}/{app}'], ['options' => ['desktop' => 'A shortcut on the desktop']], 'install',
+        $run !== [] ? ['finish' => ['run' => $run]] : 'finish'],
+    'steps' => $steps,
+];
+file_put_contents("$out/install.yaml", "# The installer of $id (bin/jumphp installer): it installs the newest version put at its address.\n" . Yaml::dump($script, 4, 2));
+$files[] = 'install.yaml';
+if ($opts['target'] === 'dir') {
+    file_put_contents("$out/version.json", json_encode(['version' => $version]) . "\n");
+    $files[] = 'version.json';
+}
+
+// the installers: the base ones with the package's address written in
+$name = trim((string)preg_replace('/[^\w.-]+/', '-', $title), '-') ?: 'Setup';
+$setups = [];
+foreach (['windows' => ['jumphp2installer-windows-x86_64.exe', "$name-setup.exe"],
+    'linux' => ['jumphp2installer-linux-x86_64', "$name-setup-linux-x86_64"],
+    'macos' => ['jumphp2installer-macos.zip', "$name-setup-macos.zip"]] as $platform => [$from, $to]) {
+    if (!isset($found[$platform])) {
+        continue;
+    }
+    is_file("$bases/$from") || $fail("no base installer $bases/$from");
+    try {
+        Binary::patchFile("$bases/$from", "$out/$to", $source, 'static');
+    } catch (Throwable $e) {
+        $fail("$from: " . $e->getMessage());
+    }
+    $setups[$platform] = $to;
+}
+
+$result = [
+    'target' => $opts['target'], 'source' => $source, 'version' => $version, 'folder' => $out,
+    'files' => [...$files, ...array_values($setups)],
+    'installers' => array_map(static fn (string $f) => ['file' => $f, 'url' => $base . $f], $setups),
+];
+file_put_contents("$out/installer.json", json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+foreach ($result['installers'] as $platform => $i) {
+    echo "$platform: {$i['file']}\n";
+}

@@ -17,9 +17,10 @@ final class Processes
      * @param list<string> $command
      * @param array<string, string> $env added to the IDE's own environment
      * @param callable(string $chunk, string $stream): void|null $onOutput
+     * @param bool $keepInput leave its stdin open after $input: write() sends more, closeInput() ends it
      * @return array{id: int, done: Deferred} done: {code, stdout, stderr, output}
      */
-    public function start(array $command, string $cwd, array $env = [], ?callable $onOutput = null, ?string $input = null): array
+    public function start(array $command, string $cwd, array $env = [], ?callable $onOutput = null, ?string $input = null, bool $keepInput = false): array
     {
         $id = $this->next++;
         $done = new Deferred();
@@ -38,10 +39,12 @@ final class Processes
         if ($input !== null) {
             fwrite($pipes[0], $input);
         }
-        fclose($pipes[0]);
+        if (!$keepInput) {
+            fclose($pipes[0]);
+        }
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
-        $this->running[$id] = ['process' => $process, 'pipes' => [1 => $pipes[1], 2 => $pipes[2]], 'stdout' => '', 'stderr' => '',
+        $this->running[$id] = ['process' => $process, 'pipes' => [1 => $pipes[1], 2 => $pipes[2]], 'stdin' => $keepInput ? $pipes[0] : null, 'stdout' => '', 'stderr' => '',
             'output' => '', 'done' => $done, 'onOutput' => $onOutput, 'command' => $command, 'started' => microtime(true)];
         return ['id' => $id, 'done' => $done];
     }
@@ -61,6 +64,9 @@ final class Processes
             }
             $status = proc_get_status($p['process']);
             if (!$status['running']) {
+                if (is_resource($p['stdin'])) {
+                    @fclose($p['stdin']);
+                }
                 foreach ($p['pipes'] as $n => $pipe) {
                     $rest = (string)stream_get_contents($pipe);
                     if ($rest !== '') {
@@ -96,6 +102,36 @@ final class Processes
             @posix_kill(-$status['pid'], $force ? 9 : 15);
         }
         return proc_terminate($this->running[$id]['process'], $force ? 9 : 15);
+    }
+
+    /** More input for a program started with $keepInput (small writes: a line of JSON). False when its stdin is closed. */
+    public function write(int $id, string $data): bool
+    {
+        $stdin = $this->running[$id]['stdin'] ?? null;
+        if (!is_resource($stdin)) {
+            return false;
+        }
+        while ($data !== '') {
+            $written = @fwrite($stdin, $data);
+            if ($written === false || $written === 0) {
+                return false;
+            }
+            $data = substr($data, $written);
+        }
+        @fflush($stdin);
+        return true;
+    }
+
+    /** Ends a program's input (it finishes what it does, then usually exits). */
+    public function closeInput(int $id): void
+    {
+        $stdin = $this->running[$id]['stdin'] ?? null;
+        if (is_resource($stdin)) {
+            @fclose($stdin);
+        }
+        if (isset($this->running[$id])) {
+            $this->running[$id]['stdin'] = null;
+        }
     }
 
     public function isRunning(int $id): bool

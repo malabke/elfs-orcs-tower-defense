@@ -143,6 +143,7 @@ games/<id>/
 | `bin/jumphp relay up\|down\|logs` | multiplayer relay server on `ws://localhost:8090/ws` |
 | `bin/jumphp export:desktop <id>` | a Docker image that runs the game |
 | `bin/jumphp export:standalone <id> [--linux] [--windows]` | the game as one executable for players (dist/standalone/; docs/standalone.md) |
+| `bin/jumphp installer <id> --github \| --url https://site/folder/ [--windows] [--linux] [--macos] [--version X]` | an **installer** per system (jumphp2installer: shortcuts, uninstaller, always installs the newest version): `--github` = a release `v<version>` of the project's repository (gh, public repo), `--url` = `dist/installer/` to upload at that address. Builds Windows / Linux first (`--no-build`: the existing ones); macOS: an existing build. jumphp.net: the IDE (Run > Create an Installer…). Publishing: only when asked |
 | `bin/jumphp gui:new <id> ["Title"] [--mobile]` | a **graphic app** (forms made in the IDE's visual editor, `JumPHP\Gui`, no HTML; §17); then run / test / shot / build / export as a game |
 | `bin/jumphp video <id> <film.mp4> [name] [fps]` | a film as frames + sound for the `video` widget (`assets/videos/<name>/`) |
 | `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them; `app:export --windows --macos`; `app:release` (updates); `build` = the app in the browser |

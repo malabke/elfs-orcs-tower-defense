@@ -87,6 +87,15 @@ later iOS).
 - in the long run: an IDE (a software, itself a JumPHP app) to develop every kind of app: the project, the code,
   run / test / package for each system, Claude inside
 
+## JumPHP IDE: the next features
+
+- a real-time debugger based on Xdebug: breakpoints in the editor's gutter, step over / into / out, the call stack,
+  variables and watches, evaluating expressions, while the game runs (Xdebug in the desktop image, its DBGp
+  connection to the IDE; the browser version and remote games later)
+- plugins to extend the IDE: a plugin API (tool windows, actions and menus, run configurations, editor features,
+  PHP side and interface side), plugins developed and tested like any JumPHP project, and a plugin marketplace on
+  jumphp.net (publish, versions, install / update / remove from the IDE)
+
 ## Cleaning
 
 - the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's

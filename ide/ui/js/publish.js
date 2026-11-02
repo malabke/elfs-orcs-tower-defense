@@ -4,6 +4,7 @@
 // files go to the game's downloads (playground.upload); the rest is the IDE's API on jumphp.net (games/ide Main).
 import { backend } from './backend.js';
 import { el, clear, icon, notify, confirm, prefs } from './ui.js';
+import { createInstaller } from './installer.js';
 
 const PLATFORMS = [
   ['windows', 'Windows', 'standalone-windows', 'export-windows'],
@@ -196,7 +197,8 @@ export class PublishPanel {
     b.append(el('h4.pub-sub', {}, 'Installer'),
       el('p.pub-note', {}, 'One small installer per system, hosted on jumphp.net: it installs the newest version you sent, with a shortcut and an uninstaller; installed games update with it.'),
       el('div.pub-row', {}, el('button.btn', { onclick: () => this.makeInstaller() }, installer ? 'Make the installer again' : 'Make the installer'),
-        installer ? this.link('Its download page', installer.page) : null));
+        installer ? this.link('Its download page', installer.page) : null,
+        el('button.btn', { title: 'Choose the systems, and jumphp.net, GitHub or another web site', onclick: () => createInstaller(this.app) }, 'Other systems or hosts…')));
     if (installer) {
       b.append(el('div.pub-links', {}, ...Object.entries(installer.files).map(([p, url]) => this.link(p.replace('-x86_64', ''), url))));
     }

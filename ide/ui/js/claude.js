@@ -1,5 +1,6 @@
 // The Claude tool window (desktop): a conversation with the Claude Code of this computer, in the project's folder.
-// Each message runs `claude -p` (JumPHP\Ide\Claude\ClaudeCode): its answer, the files it reads and changes, the
+// One `claude -p` per conversation (JumPHP\Ide\Claude\ClaudeCode), kept open: a message typed while Claude works goes
+// into the turn in progress (more information, "not that way"), as in Claude Code's own terminal. Its answer, the files it reads and changes, the
 // commands it runs, appear as they come (claude.event); the conversation goes on (--resume). What it changes on disk
 // comes back into the editors by themselves (the IDE watches the files). Follow (the eye): the IDE shows what Claude does
 // as it does it (ClaudeWatch); Claude also drives the IDE with its own tools (AgentTools, MCP server jumphp-ide).
@@ -34,7 +35,8 @@ export class ClaudePanel {
     this.session = saved.session || null;
     this.history = Array.isArray(saved.history) ? saved.history.slice(-200) : [];
     this.mode = prefs.get('claudeMode', 'acceptEdits');
-    this.run = null;                   // {id, started, node}
+    this.run = null;                   // the turn in progress: {id, started, tools}
+    this.live = null;                  // the open conversation's process (its id), between turns too
     this.status = el('span.game-status');
     this.log = el('div.claude-log');
     this.plan = el('div.claude-plan', { hidden: true });
@@ -42,7 +44,8 @@ export class ClaudePanel {
     if (backend.kind === 'native') this.tools = new AgentTools(app, this.watch);
     this.input = el('textarea.input.claude-input', { rows: 3, placeholder: 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)',
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); } } });
-    this.sendBtn = el('button.btn.primary.small', { onclick: () => (this.run ? this.stop() : this.send()) }, 'Send');
+    this.sendBtn = el('button.btn.primary.small', { title: 'Send (Enter): while Claude works, it reads it at once', onclick: () => this.send() }, 'Send');
+    this.stopBtn = el('button.btn.small', { title: 'Stop Claude', hidden: true, onclick: () => this.stop() }, icon('stop'), 'Stop');
     this.model = prefs.get('claudeModel', '');
     this.effort = prefs.get('claudeEffort', '');
     this.modelSelect = el('select.input.small.claude-select', { title: 'The model Claude uses (claude --model)', onchange: () => this.pickModel() });
@@ -54,7 +57,7 @@ export class ClaudePanel {
       el('div.claude-bar', {},
         el('button.btn.small', { title: 'Mention the file open in the editor', onclick: () => this.mentionFile() }, icon('file'), 'File'),
         el('button.btn.small', { title: 'Paste the selected code with its place', onclick: () => this.addSelection() }, icon('code'), 'Selection'),
-        el('span.tw-spacer'), this.sendBtn),
+        el('span.tw-spacer'), this.stopBtn, this.sendBtn),
       el('div.claude-bar', {}, this.modelSelect, this.effortSelect)));
     for (const item of this.history) this.renderItem(item);
     if (!this.history.length) this.placeholder();
@@ -147,7 +150,9 @@ export class ClaudePanel {
   save() { prefs.set(this.key, { session: this.session, history: this.history.slice(-200) }); }
 
   reset() {
-    if (this.run) this.stop();
+    if (this.run || this.live) backend.invoke('claude.stop', { id: this.run?.id ?? this.live }).catch(() => null);
+    this.live = null;
+    this.endTurn();
     this.session = null;
     this.history = [];
     this.showPlan([]);
@@ -188,24 +193,51 @@ export class ClaudePanel {
 
   async send() {
     const prompt = this.input.value.trim();
-    if (!prompt || this.run) return;
+    // the web IDE's Claude (through jumphp.net) takes one message per run
+    if (!prompt || (this.run && this.remote)) return;
     if (this.available === false) { this.notInstalled(); return; }
     await this.app.editors.saveAll(true);
     this.log.querySelector('.claude-empty')?.remove();
-    this.add({ role: 'user', text: prompt });
+    const during = !!this.run;
+    this.add({ role: 'user', text: prompt, during });
     this.input.value = '';
     try {
       const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: this.mode, model: this.model, effort: this.effort });
-      this.run = { id, started: Date.now(), tools: 0 };
+      if (!this.remote) this.live = id;
+      if (this.run && this.run.id === id) return;       // read by Claude in the turn in progress
+      this.startTurn(id);
       if (this.remote) this.pollRemote(id, 0);
-      this.sendBtn.textContent = 'Stop';
-      this.thinking = el('div.claude-thinking', {}, el('span.spinner'), 'Claude is working…');
-      this.log.append(this.thinking);
-      this.scroll();
-      this.say('working…');
     } catch (e) {
       this.add({ role: 'error', text: e.message });
     }
+  }
+
+  /** Claude works: the spinner, Stop, the box for more. */
+  startTurn(id) {
+    this.run = { id, started: Date.now(), tools: 0 };
+    this.stopBtn.hidden = false;
+    this.input.placeholder = this.remote ? 'Claude is working…' : 'Tell Claude more while it works: it reads it at once (Enter)';
+    this.thinking?.remove();
+    this.thinking = el('div.claude-thinking', {}, el('span.spinner'), 'Claude is working…');
+    this.log.append(this.thinking);
+    this.scroll();
+    this.say('working…');
+  }
+
+  /** The turn is over (its result, or the process ended): what it changed comes in. */
+  endTurn() {
+    if (!this.run) return;
+    this.run = null;
+    this.watch.done();
+    this.thinking?.remove();
+    this.stopBtn.hidden = true;
+    this.input.placeholder = 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)';
+    this.say('ready');
+    this.save();
+    // what it changed: the tree, Git, the open files
+    this.app.tree?.refresh();
+    this.app.git?.refresh();
+    this.app.editors?.reloadFromDisk();
   }
 
   /** The web IDE: the events of the computer's Claude, through jumphp.net (they arrive as claude.event / claude.exit). */
@@ -221,6 +253,8 @@ export class ClaudePanel {
   }
 
   event({ id, event }) {
+    // the open conversation goes on by itself (a message that came just as a turn ended): a turn again
+    if (!this.run && id === this.live && event.type !== 'result' && event.type !== 'system') this.startTurn(id);
     if (!this.run || id !== this.run.id) return;
     if (event.session_id) this.session = event.session_id;
     if (event.type === 'system' && event.subtype === 'init') {
@@ -243,24 +277,17 @@ export class ClaudePanel {
         this.add({ role: 'note', text: `Refused (mode “${MODES[this.mode][0]}”): ${event.permission_denials.map((d) => d.tool_name).join(', ')}. Change what Claude may do (⚙) and ask again.` });
       }
       this.add({ role: 'done', text: `${event.is_error ? 'Stopped' : 'Done'} · ${seconds} s · ${this.run.tools} action(s)${cost}` });
+      if (!this.remote) { this.endTurn(); return; }
     }
     this.save();
   }
 
   exit({ id, code, error, changed }) {
+    if (id === this.live) this.live = null;
     if (!this.run || id !== this.run.id) return;
     if (code !== 0 && error) this.add({ role: 'error', text: error });
     if (changed?.length) this.add({ role: 'note', text: `Saved as drafts here: ${changed.join(', ')}` });
-    this.run = null;
-    this.watch.done();
-    this.thinking?.remove();
-    this.sendBtn.textContent = 'Send';
-    this.say('ready');
-    this.save();
-    // what it changed: the tree, Git, the open files
-    this.app.tree?.refresh();
-    this.app.git?.refresh();
-    this.app.editors?.reloadFromDisk();
+    this.endTurn();
   }
 
   add(item) {
@@ -271,7 +298,7 @@ export class ClaudePanel {
 
   renderItem(item) {
     let node;
-    if (item.role === 'user') node = el('div.claude-msg.user', {}, item.text);
+    if (item.role === 'user') node = el(`div.claude-msg.user${item.during ? '.during' : ''}`, { title: item.during ? 'Sent while Claude was working' : '' }, item.text);
     else if (item.role === 'assistant') node = el('div.claude-msg.assistant', {}, ...markdown(item.text));
     else if (item.role === 'tool') node = this.toolRow(item);
     else if (item.role === 'done') node = el('div.claude-done', {}, item.text);

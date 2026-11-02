@@ -90,6 +90,11 @@ Games (<game> = a folder of games/, e.g. pong)
   export:standalone <game> [--linux] [--windows]
                             the game as one executable, nothing to install (PHP, SDL, OpenGL, OpenAL inside):
                             dist/standalone/<game>-linux-x86_64 and/or <game>-windows-x86_64.exe (docs/standalone.md)
+  installer <game> --github | --url https://site/folder/ [--windows] [--linux] [--macos] [--version X] [--no-build]
+                            an installer per system (jumphp2installer: shortcuts, uninstaller, always the newest version):
+                            --github: a release v<version> of the project's repository (gh); --url: a folder to put at
+                            that address, dist/installer/. Builds Windows / Linux first (apps too); macOS: an existing
+                            build (bin/jumphp macos <game>, app:export --macos). On jumphp.net: the IDE's jumphp.net window
   twa <game> [--url URL] [--package ID] [--name NAME] [--same-version]
                             the game as an Android app for Google Play (Trusted Web Activity, Bubblewrap):
                             dist/android/<game>-<v>.aab (Play) + .apk (a phone) + assetlinks.json (docs/android.md).
@@ -200,6 +205,14 @@ ensure_vendor() {
     php_run "$dir" -- composer install --no-interaction --no-progress
   fi
   ensure_videos "$dir"
+}
+
+# PHPUnit (and PHPStan) of a game's tests come from engine/vendor: a copied project (the IDE's new projects,
+# composer create-project) has none until something installs it, and the tests would be skipped or fail
+ensure_engine_tools() {
+  [ -x "$ROOT/engine/vendor/bin/phpunit" ] && return
+  say "composer install (engine: PHPUnit for the game tests)"
+  php_run engine -- composer install --no-interaction --no-progress
 }
 
 cmd_setup() {
@@ -718,6 +731,82 @@ cmd_export_standalone() {
   echo "  the game in the player's cache; saves and options go to their data folder (docs/standalone.md)." >&2
 }
 
+# jumphp2installer's base installers (its newest release), in .cache/installer-bases (seen from Docker); once a day
+ensure_installer_bases() {
+  local dir="$ROOT/.cache/installer-bases" repo="${JUMPHP2INSTALLER_REPO:-davidnurdin/jumphp2installer}" f
+  mkdir -p "$dir"
+  for f in jumphp2installer-linux-x86_64 jumphp2installer-windows-x86_64.exe jumphp2installer-macos.zip; do
+    [ -n "$(find "$dir/$f" -mtime -1 2>/dev/null)" ] && continue
+    say "base installer $f ($repo)"
+    curl -fsSL -o "$dir/$f.part" "https://github.com/$repo/releases/latest/download/$f" && mv "$dir/$f.part" "$dir/$f" \
+      || { rm -f "$dir/$f.part"; [ -f "$dir/$f" ] && warn "could not refresh $f: the one from before is used" || die "could not download $f from $repo"; }
+  done
+}
+
+# the installer of a game / app (tools/game-installer.php): GitHub release or a folder for any web host
+cmd_installer() {
+  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
+  local target="" url="" version="" build=1 platforms=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --github) target=github ;;
+      --url) target=dir; url="${2:-}"; shift ;;
+      --windows|--linux|--macos) platforms+=("${1#--}") ;;
+      --version) version="${2:-}"; shift ;;
+      --no-build) build=0 ;;
+      --jumphp) die "on jumphp.net: the JumPHP IDE (jumphp.net window, or Create an Installer…) sends the files and makes it" ;;
+      *) die "unknown option $1 (--github, --url https://..., --windows --linux --macos, --version X, --no-build)" ;;
+    esac
+    shift
+  done
+  [ -n "$target" ] || die "where: --github (a release of the project's repository) or --url https://site/folder/ (a folder to put there)"
+  if [ ${#platforms[@]} -eq 0 ]; then
+    platforms=(windows linux)
+    compgen -G "$ROOT/$dir/dist/apple/*-macos.zip" >/dev/null || compgen -G "$ROOT/$dir/dist/standalone/*-macos.zip" >/dev/null && platforms+=(macos)
+  fi
+  [ -n "$version" ] || version="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*["'"'"']?([^"'"'"' #]+).*/\1/p' "$ROOT/$dir/config/game.yaml" | head -1)"
+  [ -n "$version" ] || version=1.0
+  local repo=""
+  if [ "$target" = github ]; then
+    command -v gh >/dev/null 2>&1 || die "gh (GitHub's command) is needed: https://cli.github.com, then gh auth login"
+    repo="$(cd "$ROOT" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" || die "no GitHub repository here (bin/jumphp github)"
+    [ "$(cd "$ROOT" && gh repo view --json visibility -q .visibility 2>/dev/null)" = PUBLIC ] \
+      || warn "$repo is not public: the players' installers cannot download its releases"
+  fi
+  ensure_vendor "$dir"
+  if [ "$build" = 1 ]; then
+    local exports=() p
+    for p in "${platforms[@]}"; do [ "$p" != macos ] && exports+=("--$p"); done
+    if [ ${#exports[@]} -gt 0 ]; then
+      if is_app "$game"; then cmd_app_export "$game" "${exports[@]}"; else cmd_export_standalone "$game" "${exports[@]}"; fi
+    fi
+  fi
+  ensure_installer_bases
+  local list; list="$(IFS=,; echo "${platforms[*]}")"
+  say "$dir: the installer ($list, v$version, $([ "$target" = github ] && echo "GitHub release of $repo" || echo "$url"))"
+  local args=(--target "$target" --version "$version" --platforms "$list" --publisher "$(git -C "$ROOT" config user.name 2>/dev/null || true)")
+  [ "$target" = github ] && args+=(--repo "$repo") || args+=(--url "$url")
+  php_run . -- php tools/game-installer.php "$dir" .cache/installer-bases "${args[@]}"
+  local out="$ROOT/$dir/dist/installer"
+  if [ "$target" = github ]; then
+    local tag="v$version" files=()
+    mapfile -t files < <(find "$out" -maxdepth 1 -type f ! -name installer.json | sort)
+    if (cd "$ROOT" && gh release view "$tag" >/dev/null 2>&1); then
+      (cd "$ROOT" && gh release edit "$tag" --latest >/dev/null)
+    else
+      (cd "$ROOT" && gh release create "$tag" --latest --title "$tag" --notes "Installers: Windows, Linux, macOS (bin/jumphp installer).") >/dev/null
+    fi
+    say "uploading ${#files[@]} files to the release $tag of $repo"
+    (cd "$ROOT" && gh release upload "$tag" "${files[@]}" --clobber)
+    say "done: https://github.com/$repo/releases/latest — the installers to give:"
+  else
+    printf '%s\n' "Put every file of this folder at $url (the same address, nothing renamed): the installers read" \
+      "install.yaml and version.json there. A new version: bin/jumphp installer again, then replace the files." > "$out/README.txt"
+    say "done: ${out#"$ROOT"/}/ — put its files at $url; the installers to give:"
+  fi
+  sed -nE 's/^ *"url": "([^"]+)".*/  \1/p' "$out/installer.json" >&2
+}
+
 # the `jumphp` command for the whole system (tools/jumphp-cli): `jumphp test pong` from any folder of a project,
 # `jumphp new <folder>`, and a question when a newer JumPHP is on Packagist. In ~/.local/bin (no sudo).
 cmd_cli_install() {
@@ -805,10 +894,12 @@ cmd_test() {
   if [ -n "${2:-}" ]; then
     local only="${2#"$dir"/}"
     [ -f "$ROOT/$dir/$only" ] || die "no test file $dir/$only"
+    ensure_engine_tools
     say "$dir: phpunit $only"
     php_run "$dir" -e SDL_VIDEODRIVER=dummy -e SDL_AUDIODRIVER=dummy -- /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox "$only"
     return
   fi
+  [ -d "$ROOT/$dir/tests" ] && ensure_engine_tools
   say "$dir: php -l"
   php_run "$dir" -- sh -c 'find src app.php -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null'
   if [ -f "$ROOT/$dir/phpstan.neon" ] && [ -x "$ROOT/engine/vendor/bin/phpstan" ]; then
@@ -1211,6 +1302,7 @@ main() {
     relay) cmd_relay "$@" ;;
     export:desktop) cmd_export_desktop "$@" ;;
     export:standalone) cmd_export_standalone "$@" ;;
+    installer) cmd_installer "$@" ;;
     twa) cmd_twa "$@" ;;
     android) cmd_android "$@" ;;
     apple) cmd_apple "$@" ;;

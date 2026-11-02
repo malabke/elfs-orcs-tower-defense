@@ -150,6 +150,7 @@ cmd_app_run() {
 cmd_app_test() {
   local dir; dir="$(app_dir "${1:-}")"
   ensure_vendor "$dir"
+  [ -d "$ROOT/$dir/tests" ] && ensure_engine_tools
   live_announce
   say "$dir: php -l"
   php_run "$dir" -- sh -c 'find src app.php -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null'

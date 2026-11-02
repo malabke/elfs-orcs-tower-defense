@@ -97,7 +97,7 @@ final class Ide
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
-                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null));
+                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true));
             $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
         }
     }
@@ -149,6 +149,7 @@ final class Ide
     {
         $this->processes->poll();
         $this->agent?->tick();
+        $this->claude?->tick();
         if (!$this->indexed) {
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);

@@ -11,6 +11,7 @@ import { Runner, Problems, Structure, Hierarchy } from './run.js';
 import { Welcome } from './welcome.js';
 import { GamePanel } from './game.js';
 import { PublishPanel } from './publish.js';
+import { createInstaller } from './installer.js';
 import { ClaudePanel } from './claude.js';
 
 const $ = (id) => document.getElementById(id);
@@ -406,6 +407,7 @@ class App {
       a.add('stop', 'Stop', () => this.runner.stop(), { kbd: 'Ctrl+F2', icon: 'stop' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
       a.add('runConfigs', 'Run Configurations…', () => this.runner.choose($('runConfig')), { kbd: 'Alt+Shift+F10' });
+      if (backend.kind === 'native') a.add('createInstaller', 'Create an Installer…', () => createInstaller(this), { icon: 'package' });
     } else if (caps.tests) {
       a.add('test', 'Run Tests on jumphp.net', () => this.runner.remoteTests(), { kbd: 'Ctrl+Shift+F10', icon: 'test' });
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
@@ -465,7 +467,7 @@ class App {
       const a = this.actions.items.get(id);
       return a ? { label: a.label, kbd: a.kbd ? kbd(a.kbd) : '', icon: a.icon, action: () => this.actions.run(id), ...extra } : null;
     };
-    const section = (label, ids) => ({ label, items: ids.map((id) => (id === '-' ? '-' : item(id))).filter(Boolean) });
+    const section = (label, ids) => ({ label, items: ids.map((id) => (id === '-' ? '-' : item(id))).filter(Boolean).filter((x, i, all) => x !== '-' || (i > 0 && i < all.length - 1 && all[i - 1] !== '-')) });
     menu([
       section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'closeProject']),
       section('Edit', ['find', 'replace', 'findInFiles', 'replaceInFiles', 'comment']),
@@ -473,7 +475,7 @@ class App {
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
-      section('Run', ['run', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'preview', 'previewTab']),
+      section('Run', ['run', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'preview', 'previewTab', '-', 'createInstaller']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },
