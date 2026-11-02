@@ -200,6 +200,102 @@ final class Binary
         }
     }
 
+    /**
+     * $binary (an installer made by embed()) without its package: the uninstaller a standalone installer writes need
+     * not carry the app. Null when it holds none. The PHAR is rewritten in plain PHP (no Phar, no phar.readonly): its
+     * manifest without game/payload/, the other files' bytes as they are, a stub of another build, a new signature.
+     */
+    public static function withoutPayload(string $binary): ?string
+    {
+        [$offset, $length] = self::section($binary);
+        $start = $offset + 8 + $length;
+        $phar = substr($binary, $start);
+        $halt = strpos($phar, '__HALT_COMPILER();');
+        if ($halt === false) {
+            return null;
+        }
+        $at = $halt + strlen('__HALT_COMPILER();');
+        if (substr($phar, $at, 3) === ' ?>') {
+            $at += 3;
+        }
+        if (substr($phar, $at, 2) === "\r\n") {
+            $at += 2;
+        } elseif (($phar[$at] ?? '') === "\n") {
+            $at++;
+        }
+        $stub = substr($phar, 0, $at);
+        $u32 = static fn (int $p): int => unpack('V', substr($phar, $p, 4))[1];
+        $manifestLength = $u32($at);
+        $count = $u32($at + 4);
+        $api = substr($phar, $at + 8, 2);
+        $flags = $u32($at + 10);
+        $aliasLength = $u32($at + 14);
+        $alias = substr($phar, $at + 18, $aliasLength);
+        $p = $at + 18 + $aliasLength;
+        $metaLength = $u32($p);
+        $meta = substr($phar, $p + 4, $metaLength);
+        $p += 4 + $metaLength;
+        $data = $at + 4 + $manifestLength;
+        $entries = '';
+        $kept = 0;
+        $contents = '';
+        $removed = false;
+        for ($i = 0; $i < $count; $i++) {
+            $entryStart = $p;
+            $nameLength = $u32($p);
+            $name = substr($phar, $p + 4, $nameLength);
+            $p += 4 + $nameLength;
+            $compressed = $u32($p + 8);
+            $p += 20;
+            $p += 4 + $u32($p);
+            $bytes = substr($phar, $data, $compressed);
+            $data += $compressed;
+            if (str_starts_with($name, 'game/' . self::PAYLOAD . '/') || $name === 'game/' . self::PAYLOAD) {
+                $removed = true;
+                continue;
+            }
+            $entries .= substr($phar, $entryStart, $p - $entryStart);
+            $contents .= $bytes;
+            $kept++;
+        }
+        if (!$removed) {
+            return null;
+        }
+        // its own build: the stub unpacks into <cache>/<id>-<build>, where the installer has its package
+        $stub = (string)preg_replace("/(JUMPHP_GAME_BUILD = ')([^']*)(')/", '${1}${2}u${3}', $stub, 1);
+        $manifest = pack('V', $kept) . $api . pack('V', $flags) . pack('V', strlen($alias)) . $alias . pack('V', strlen($meta)) . $meta . $entries;
+        $out = $stub . pack('V', strlen($manifest)) . $manifest . $contents;
+        if ($flags & 0x10000) {         // signed: the same algorithm over the new bytes
+            $type = unpack('V', substr($phar, -8, 4))[1];
+            $algo = [1 => 'md5', 2 => 'sha1', 3 => 'sha256', 4 => 'sha512'][$type] ?? throw new \RuntimeException('a PHAR signed with OpenSSL cannot be rewritten');
+            $out .= hash($algo, $out, true) . pack('V', $type) . 'GBMB';
+        }
+        return substr($binary, 0, $start) . $out;
+    }
+
+    /** withoutPayload() on a file, in place (the uninstaller just copied); false when it held no package. */
+    public static function stripFile(string $file): bool
+    {
+        $data = @file_get_contents(self::readable($file));
+        if ($data === false) {
+            return false;
+        }
+        try {
+            $lean = self::withoutPayload($data);
+        } catch (\RuntimeException) {
+            return false;   // not an installer executable (another program of the app)
+        }
+        if ($lean === null) {
+            return false;
+        }
+        $mode = @fileperms($file);
+        if (@file_put_contents($file, $lean) === false) {
+            throw new \RuntimeException("cannot write $file");
+        }
+        $mode !== false && @chmod($file, $mode & 0777);
+        return true;
+    }
+
     /** A download's id (Binary::fileName($name, $package, $platform, $download)): 12 letters and digits. */
     public const DOWNLOAD = '[a-z0-9]{12}';
 

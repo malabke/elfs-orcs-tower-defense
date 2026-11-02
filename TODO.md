@@ -136,13 +136,6 @@ the terminal with it), a macOS installer for CLI apps (executables given as they
   Run window's output with files on Windows (ide/src/Async/Processes.php) and at a `docker build` of the desktop image
   that prints nothing for minutes (the first time: say it in the Run window).
 
-## Installers: the standalone one's uninstaller
-
-`bin/jumphp installer --standalone` (done 2026-11-02, jumphp2installer 0.2.6) writes, as every installer does, a copy
-of itself as the uninstaller: the game is inside it too (hello-world: a 31 MB game, a 63 MB uninstaller). Make the
-uninstaller without the package (the base installer kept beside the payload, or the PHAR rewritten without
-game/payload/ at install time: Phar needs phar.readonly=0 in the installer's php.ini).
-
 ## jumphp.net: big downloads are slow and sometimes cut
 
 Seen 2026-11-02: the installers handed out by jumphp.net (/installers/download/<id>/<platform>, 20-32 MB) come at
