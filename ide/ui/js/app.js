@@ -671,7 +671,7 @@ class App {
     const done = this.task('Publishing on jumphp.net…');
     try {
       const result = await backend.invoke('playground.publish');
-      notify(result.message || 'Published', result.ok === false ? 'error' : 'success', { title: 'jumphp.net', actions: result.url ? [{ label: 'Open the game', action: () => this.openUrl(result.url) }] : [] });
+      notify(result.message || 'Published', result.ok === false ? 'error' : 'success', { title: 'jumphp.net', actions: result.url ? [{ label: 'Open its page', action: () => this.openUrl(result.url) }] : [] });
     } catch (e) { notify(e.message, 'error', { title: 'Publish' }); } finally { done(); }
   }
 

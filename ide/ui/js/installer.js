@@ -52,7 +52,7 @@ export async function createInstaller(app, { where: initial } = {}) {
   const version = el('input.input.pub-version', { value: prefs.get('pubVersion:' + app.projectKey, '1.0') });
 
   const body = el('div.inst', {},
-    modules.length > 1 ? el('label.field', {}, el('span', {}, 'Game'), module) : null,
+    modules.length > 1 ? el('label.field', {}, el('span', {}, 'Game or app'), module) : null,
     el('h4.pub-sub', {}, 'For which systems?'), ...systems.map((s) => s.row),
     el('h4.pub-sub', {}, 'Published where?'), ...radios, urlRow,
     el('label.field.pub-inline', {}, el('span', {}, 'Version'), version));

@@ -43,6 +43,9 @@ export class PublishPanel {
 
   link(label, url) { return el('a', { href: url, onclick: (e) => { e.preventDefault(); this.app.openUrl(url); } }, label); }
 
+  /** 'app' for an application (desktop app, graphic app), else 'game': the words of this window (as jumphp.net) */
+  get noun() { return ['app', 'gui'].includes(this.module?.kind) ? 'app' : 'game'; }
+
   section(id, title, build) {
     const box = el('details.pub-section', { open: this.open.has(id) || undefined, ontoggle: () => {
       box.open ? this.open.add(id) : this.open.delete(id);
@@ -126,10 +129,10 @@ export class PublishPanel {
     const max = Math.max(1, ...(stats.days || []).map((d) => d.plays));
     b.append(
       el('div.pub-numbers', {},
-        ...[['Games played', t.plays], ['Visits', t.visits], ['Installed launches', t.launches], ['Rating', stats.rating ? `${stats.rating} ★` : '–'], ['Forks', stats.forks]]
+        ...[[this.noun === 'app' ? 'Launches' : 'Games played', t.plays], ['Visits', t.visits], ['Installed launches', t.launches], ['Rating', stats.rating ? `${stats.rating} ★` : '–'], ['Forks', stats.forks]]
           .map(([label, n]) => el('div', {}, el('b', {}, String(n ?? 0)), el('span', {}, label)))),
-      el('p.pub-note', {}, `Last 30 days: ${month.plays} games played, ${month.visits} visits.`),
-      el('div.pub-chart', { title: 'Games played, day by day' }, ...(stats.days || []).map((d) =>
+      el('p.pub-note', {}, `Last 30 days: ${month.plays} ${this.noun === 'app' ? 'launches' : 'games played'}, ${month.visits} visits.`),
+      el('div.pub-chart', { title: this.noun === 'app' ? 'Launches, day by day' : 'Games played, day by day' }, ...(stats.days || []).map((d) =>
         el('i', { style: { height: `${Math.round((d.plays / max) * 100)}%` }, title: `${d.day}: ${d.plays} played, ${d.visits} visits` }))),
       el('div.pub-row', {}, this.link('Statistics in Studio', stats.studio)),
     );
@@ -152,7 +155,7 @@ export class PublishPanel {
     const check = this.configs.find((c) => c.id === `siteshot:${m.id}`);
     if (m.site) {
       b.append(
-        el('p.pub-note', {}, `The game's home page: ${m.site}/index.html. jumphp.net shows it as the game's page (published with the game: commit, push, publish).`),
+        el('p.pub-note', {}, `The ${this.noun}'s home page: ${m.site}/index.html. jumphp.net shows it as the ${this.noun}'s page (published with the ${this.noun}: commit, push, publish).`),
         el('div.pub-row', {},
           el('button.btn', { onclick: () => this.app.editors.open(`${m.site}/index.html`) }, icon('code'), 'Edit index.html'),
           check ? el('button.btn', { onclick: () => this.app.runner.start(check) }, icon('camera'), 'Check it (desktop + phone)') : null),
@@ -174,7 +177,7 @@ export class PublishPanel {
     const app = this.module?.kind === 'app';
     const version = el('input.input.pub-version', { value: prefs.get('pubVersion:' + this.app.projectKey, '1.0'), title: 'The version shown on jumphp.net and installed by the installer',
       onchange: (e) => prefs.set('pubVersion:' + this.app.projectKey, e.target.value) });
-    b.append(el('p.pub-note', {}, 'The game as a program, beside the browser version: build it, then put it on jumphp.net. Its page then offers it (Download), and the installer installs it with shortcuts and updates.'),
+    b.append(el('p.pub-note', {}, `The ${this.noun} as a program, beside the browser version: build it, then put it on jumphp.net. Its page then offers it (Download), and the installer installs it with shortcuts and updates.`),
       el('label.field.pub-inline', {}, el('span', {}, 'Version'), version));
     if (d.error) b.append(el('p', {}, d.error));
     for (const [platform, name, gameConfig, appConfig] of PLATFORMS) {
@@ -195,7 +198,7 @@ export class PublishPanel {
     }
     const installer = d.installer;
     b.append(el('h4.pub-sub', {}, 'Installer'),
-      el('p.pub-note', {}, 'One small installer per system, hosted on jumphp.net: it installs the newest version you sent, with a shortcut and an uninstaller; installed games update with it.'),
+      el('p.pub-note', {}, 'One small installer per system, hosted on jumphp.net: it installs the newest version you sent, with a shortcut and an uninstaller; installed copies update with it.'),
       el('div.pub-row', {}, el('button.btn', { onclick: () => this.makeInstaller() }, installer ? 'Make the installer again' : 'Make the installer'),
         installer ? this.link('Its download page', installer.page) : null,
         el('button.btn', { title: 'Choose the systems, and jumphp.net, GitHub or another web site', onclick: () => createInstaller(this.app) }, 'Other systems or hosts…')));
@@ -218,7 +221,7 @@ export class PublishPanel {
   async build(config, after) {
     if (!config) { notify('Nothing to build that here.', 'error'); return; }
     if (/(GitHub)/.test(config.label) && !(await confirm(config.label,
-      'This commits the build settings, pushes the current branch to GitHub and builds there (GitHub\'s machines; the first time ~25 min, then ~10). The result is downloaded into the game\'s dist/ folder.', { ok: 'Push and build' }))) return;
+      'This commits the build settings, pushes the current branch to GitHub and builds there (GitHub\'s machines; the first time ~25 min, then ~10). The result is downloaded into the project\'s dist/ folder.', { ok: 'Push and build' }))) return;
     const end = await this.app.runner.startAndWait(config);
     if (end && end.code === 0) { after?.(); await this.load(); }
   }
@@ -233,7 +236,7 @@ export class PublishPanel {
   }
 
   async removeDownload(platform) {
-    if (!(await confirm('Remove it from jumphp.net?', `The ${platform} file will no longer be offered on the game's page.`, { ok: 'Remove', danger: true }))) return;
+    if (!(await confirm('Remove it from jumphp.net?', `The ${platform} file will no longer be offered on the ${this.noun}'s page.`, { ok: 'Remove', danger: true }))) return;
     try { this.data.downloads = await backend.invoke('playground.removeDownload', { platform }); } catch (e) { notify(e.message, 'error'); }
     this.render();
   }
