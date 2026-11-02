@@ -164,6 +164,11 @@ final class Main implements AppMain
         $c['update.check'] = fn () => $this->updates->check(true);
         $c['update.install'] = fn () => $this->updates->install();
         $c['update.restart'] = fn () => $this->updates->restart();
+        // a plugin updated or being developed: PHP cannot unload its classes, the IDE starts again with them
+        $c['plugins.restart'] = function () {
+            $this->app->updater()->relaunch();
+            return true;
+        };
         $c['update.auto'] = fn (array $p) => $this->updates->setAuto(!empty($p['on']));
         $c['session.login'] = fn () => $this->login();
         $c['session.cancelLogin'] = function () {
@@ -331,6 +336,8 @@ final class Main implements AppMain
         }, $this->processes);
         // games kept in their own repository (a jumphp.net project made of the game alone) run through this copy
         $this->ide->setToolkit($this->app->storage->path('jumphp'), Creator::TEMPLATE);
+        // the plugins (PHP): the user's (Settings > Plugins installs them there) and the project's .jumphp/plugins/
+        $this->ide->enablePlugins($this->app->storage->path('plugins'));
         $this->filesSignature = '';
         $this->authorizeGit();
         $this->app->options->set('reopen', true);

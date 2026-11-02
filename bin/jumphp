@@ -114,6 +114,8 @@ Games (<game> = a folder of games/, e.g. pong)
 
 CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; docs/cli.md)
   cli:new <app> [title]     create games/<app> from skeleton-cli/ (config/game.yaml: kind: cli)
+  plugin:new <id> [title]   a plugin of the JumPHP IDE, in PHP: games/<id> from skeleton-plugin/ (docs/ide-plugins.md)
+  plugin:pack <id>          the plugin as games/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
                             then run <app> [command...] / test <app> / shot <app> (the screen as text: JUMPHP_KEYS)
                             / export:standalone <app> [--linux] [--windows] [--macos] (one executable, console kept)
 
@@ -918,6 +920,7 @@ cmd_cli_uninstall() {
 cmd_run() {
   if is_app "${1:-}"; then cmd_app_run "$@"; return; fi
   if is_cli "${1:-}"; then cmd_cli_run "$@"; return; fi
+  if is_plugin "${1:-}"; then cmd_plugin_run "$@"; return; fi
   local dir; dir="$(game_dir "${1:-}")"
   ensure_vendor "$dir"
   local flags=(--network host -e "JUMPHP_NET_URL=${JUMPHP_NET_URL:-}" -e "JUMPHP_DEBUG=${JUMPHP_DEBUG:-}"
@@ -966,6 +969,7 @@ cmd_test() {
   fi
   if is_app "$target"; then cmd_app_test "$@"; return; fi
   if is_cli "$target"; then cmd_cli_test "$@"; return; fi
+  if is_plugin "$target"; then cmd_plugin_test "$@"; return; fi
   local dir; dir="$(game_dir "$target")"
   ensure_vendor "$dir"
   live_announce
@@ -1291,7 +1295,7 @@ cmd_pages() {
   local games=("$@")
   if [ ${#games[@]} -eq 0 ]; then
     # desktop apps (ui: webview) have no browser build: not published
-    for d in "$ROOT"/games/*/; do [ -f "$d/config/game.yaml" ] && ! is_app "$(basename "$d")" && ! is_cli "$(basename "$d")" && games+=("$(basename "$d")"); done
+    for d in "$ROOT"/games/*/; do [ -f "$d/config/game.yaml" ] && ! is_app "$(basename "$d")" && ! is_cli "$(basename "$d")" && ! is_plugin "$(basename "$d")" && games+=("$(basename "$d")"); done
   fi
   [ ${#games[@]} -gt 0 ] || die "no game to publish"
 
@@ -1345,6 +1349,9 @@ cmd_doctor() {
 # CLI apps (kind: cli): cli:new, and run / test / shot / export:standalone of their folders (docs/cli.md)
 # shellcheck source=../tools/cli-commands.sh
 . "$ROOT/tools/cli-commands.sh"
+# IDE plugins (kind: plugin): plugin:new, plugin:pack, and test of their folders (docs/ide-plugins.md)
+# shellcheck source=../tools/plugin-commands.sh
+. "$ROOT/tools/plugin-commands.sh"
 
 # Docker must answer before anything runs in it: else every command hangs or fails with Docker's own words (the IDE
 # showed a composer install that never ended). Docker Desktop (Windows, macOS) is started when it is installed but
@@ -1439,6 +1446,8 @@ main() {
     tauri:download) cmd_tauri_download "$@" ;;
     app:new) cmd_app_new "$@" ;;
     cli:new) cmd_cli_new "$@" ;;
+    plugin:new) cmd_plugin_new "$@" ;;
+    plugin:pack) cmd_plugin_pack "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;
     app:shot) cmd_app_shot "$@" ;;

@@ -504,3 +504,31 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 /* the Claude panel: jumphp.net's MCP server missing */
 .claude-mcp { margin: 8px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); font-size: 12.5px; line-height: 1.5; }
 .claude-mcp-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* plugins' tool windows (ide/ui/js/plugins.js: Ui nodes from PHP) and the Plugins window */
+.plugin-view { padding: 8px; overflow: auto; height: 100%; box-sizing: border-box; }
+.pv-column { display: flex; flex-direction: column; gap: 8px; }
+.pv-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pv-row > .pv-input { flex: 1; min-width: 80px; }
+.pv-heading { font-weight: 600; font-size: 13px; }
+.pv-text { white-space: pre-wrap; }
+.pv-text.muted { color: var(--text-2); font-size: 12px; }
+.pv-code { margin: 0; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border-2); border-radius: 4px; white-space: pre-wrap; font: 12px var(--mono, monospace); }
+.pv-input { background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); border-radius: 4px; padding: 4px 6px; }
+.pv-input:focus { outline: none; border-color: var(--accent); }
+.pv-link { color: var(--blue); cursor: pointer; }
+.pv-check { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.pv-list .tree-row { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 3px; }
+.pv-list .tree-row.clickable { cursor: pointer; }
+.pv-list .tree-row:hover { background: var(--hover); }
+.pv-list .tree-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-list .tree-hint { margin-left: auto; color: var(--text-3); font-size: 11px; white-space: nowrap; }
+.plugins-dialog { display: flex; flex-direction: column; gap: 6px; min-width: min(560px, 80vw); }
+.plugins-dialog h4 { margin: 12px 0 2px; }
+.plugin-row { display: flex; gap: 12px; align-items: flex-start; padding: 8px; border: 1px solid var(--border-2); border-radius: 6px; }
+.plugin-main { flex: 1; min-width: 0; }
+.plugin-buttons { display: flex; gap: 8px; align-items: center; }
+.plugin-status { font-size: 11px; padding: 0 5px; border-radius: 8px; background: var(--active); }
+.plugin-status.active { color: var(--green); }
+.plugin-status.error { color: var(--red); }
+.plugin-error { color: var(--red); font-size: 12px; margin-top: 4px; white-space: pre-wrap; }

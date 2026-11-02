@@ -1,0 +1,7 @@
+# A plugin of the JumPHP IDE (docs/ide-plugins.md): PHP that runs inside the IDE. Its description for the IDE is
+# composer.json (extra.jumphp-ide); this file only tells bin/jumphp and the IDE what this folder is.
+game:
+  id: hello-plugin
+  title: "TODO Finder"
+  version: 0.1.0
+  kind: plugin

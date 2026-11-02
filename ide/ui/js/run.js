@@ -327,8 +327,14 @@ export class Problems {
 
   title() { return 'Problems'; }
 
-  set(path, list) {
-    if (list.length) this.byPath.set(path, list); else this.byPath.delete(path);
+  /** The problems of a file found by one source (PHP, a plugin): the window shows them all. */
+  set(path, list, source = 'php') {
+    this.sources ??= new Map();
+    const bySource = this.sources.get(path) || {};
+    bySource[source] = list;
+    this.sources.set(path, bySource);
+    const all = Object.values(bySource).flat();
+    if (all.length) this.byPath.set(path, all); else this.byPath.delete(path);
     this.render();
     this.app.badge?.('problems', [...this.byPath.values()].some((l) => l.some((d) => d.severity === 'error')) ? 'red' : this.byPath.size ? 'on' : null);
   }

@@ -5,6 +5,7 @@ import { backend } from './backend.js';
 import { el, clear, icon, hydrateIcons, progressBar, menu, chooser, dialog, notify, notificationHistory, splitter, prefs, debounce, kbd, basename, timeAgo } from './ui.js';
 import { Editors, loadMonaco, monaco } from './editor.js';
 import { ProjectTree } from './tree.js';
+import { Plugins } from './plugins.js';
 import { searchEverywhere, recentFiles, fileStructure, FindPanel } from './search.js';
 import { Git } from './git.js';
 import { Runner, Problems, Structure, Hierarchy } from './run.js';
@@ -95,6 +96,10 @@ class App {
     if (this.project.capabilities?.preview) this.game = new GamePanel(this);
     if (this.project.capabilities?.claude) this.claude = new ClaudePanel(this);
     if (backend.kind === 'native' && this.project.playground) this.publishPanel = new PublishPanel(this);
+    if (this.project.capabilities?.plugins) {
+      this.plugins = new Plugins(this);
+      await this.plugins.load();
+    }
     this.console = { append: (source, text) => { if (this.gitConsole) this.gitConsole.textContent += text; } };
     this.registerTools();
     this.registerActions();
@@ -127,6 +132,7 @@ class App {
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
     if (this.claude) T('claude', 'right', 'Claude', 'claude', this.claude, 'Alt+8');
     if (this.publishPanel) T('publish', 'right', 'jumphp.net', 'globe', this.publishPanel, 'Alt+J');
+    this.plugins?.registerTools(T);
     if (caps.log) T('git', 'bottom', 'Git', 'log', { title: () => 'Git', node: this.git.logNode, actions: () => [el('button', { title: 'Refresh', onclick: () => this.git.showLog() }, icon('refresh'))] }, 'Alt+9');
   }
 
@@ -426,8 +432,8 @@ class App {
     node.title = list.length ? list.map((t) => t.text).join('\n') + '\n(click: the background tasks)' : '';
     if (!list.length) return;
     const last = list[list.length - 1];
-    node.append(el('span.spinner'), el('span.sb-task-text', {}, last.text), progressBar(last.ratio),
-      list.length > 1 ? el('span.sb-more', {}, `+${list.length - 1}`) : null);
+    node.append(el('span.spinner'), el('span.sb-task-text', {}, last.text), progressBar(last.ratio));
+    if (list.length > 1) node.append(el('span.sb-more', {}, `+${list.length - 1}`));
   }
 
   /** The tasks running in the background, each with its progress (a click on one: where it shows). */
@@ -567,6 +573,7 @@ class App {
       a.add('gameTool', 'Game', () => this.toggleTool('game'), { kbd: 'Alt+5', icon: 'game' });
       a.add('previewTab', 'Play in a New Tab', () => this.runner.preview(), { icon: 'globe' });
     }
+    this.plugins?.registerActions(a);
     a.add('settings', 'Settings…', () => this.settings(), { kbd: 'Ctrl+Alt+S', icon: 'settings' });
     a.add('theme', 'Toggle Light / Dark Theme', () => this.toggleTheme());
     a.add('rebuildIndex', 'Rebuild the PHP Index', () => backend.invoke('index.rebuild'));
@@ -580,7 +587,7 @@ class App {
 
   /** Keys PhpStorm users expect, outside Monaco too. */
   bindKeys() {
-    const map = {
+    const map = this.keyMap = {
       'ctrl+shift+n': 'gotoFile', 'ctrl+n': 'gotoClass', 'ctrl+alt+shift+n': 'gotoSymbol', 'ctrl+shift+a': 'findAction', 'ctrl+e': 'recentFiles',
       'ctrl+shift+f': 'findInFiles', 'ctrl+shift+r': 'replaceInFiles', 'ctrl+k': 'commit', 'ctrl+shift+k': 'push', 'ctrl+t': 'update',
       'shift+f10': 'run', 'ctrl+shift+f10': 'test', 'ctrl+f5': 'rerun', 'ctrl+f2': 'stop', 'alt+1': 'project', 'alt+0': 'commitTool',
@@ -625,15 +632,17 @@ class App {
       const a = this.actions.items.get(id);
       return a ? { label: a.label, kbd: a.kbd ? kbd(a.kbd) : '', icon: a.icon, action: () => this.actions.run(id), ...extra } : null;
     };
-    const section = (label, ids) => ({ label, items: ids.map((id) => (id === '-' ? '-' : item(id))).filter(Boolean).filter((x, i, all) => x !== '-' || (i > 0 && i < all.length - 1 && all[i - 1] !== '-')) });
+    const plugin = (label) => this.plugins?.menuIds(label) || [];
+    const section = (label, ids) => ({ label, items: [...ids, ...(plugin(label).length ? ['-', ...plugin(label)] : [])].map((id) => (id === '-' ? '-' : item(id))).filter(Boolean).filter((x, i, all) => x !== '-' || (i > 0 && i < all.length - 1 && all[i - 1] !== '-')) });
     menu([
-      section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'closeProject']),
+      section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'plugins', 'closeProject']),
       section('Edit', ['find', 'replace', 'findInFiles', 'replaceInFiles', 'comment']),
       section('View', ['project', 'structure', 'commitTool', 'gameTool', 'claudeTool', 'runTool', 'debugTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
       section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'toggleBreakpoint', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
+      section('Tools', ['plugins']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },

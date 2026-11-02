@@ -15,6 +15,7 @@ use JumPHP\Ide\Gui\FormFile;
 use JumPHP\Ide\Php\Index;
 use JumPHP\Ide\Php\Intelligence;
 use JumPHP\Ide\Php\Source;
+use JumPHP\Ide\Plugin\PluginHost;
 use JumPHP\Ide\Project\JumphpUpdater;
 use JumPHP\Ide\Project\ProjectInfo;
 use JumPHP\Ide\Run\Runner;
@@ -62,6 +63,9 @@ final class Ide
 
     /** Xdebug's debugger: the IDE listens, the programs run with JUMPHP_XDEBUG connect to it */
     public ?Debugger $debugger = null;
+
+    /** the IDE's plugins (PHP), when the host enables them (enablePlugins(): the desktop app) */
+    public ?PluginHost $plugins = null;
 
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
@@ -141,6 +145,26 @@ final class Ide
         }
     }
 
+    /**
+     * Loads the plugins: the user's ($userDir, where plugins.install puts them) and the project's own
+     * (.jumphp/plugins/). Only a host that runs on the user's computer does it: a plugin is PHP run by the IDE.
+     */
+    public function enablePlugins(?string $userDir): PluginHost
+    {
+        $this->plugins = new PluginHost($this, fn (string $event, array $payload) => ($this->emit)($event, $payload), $userDir);
+        $this->plugins->registerCommands();
+        $dirs = [];
+        if ($userDir !== null) {
+            $dirs[$userDir] = 'user';
+        }
+        $root = $this->workspace->localPath();
+        if ($root !== null) {
+            $dirs["$root/.jumphp/plugins"] = 'project';
+        }
+        $this->plugins->loadFrom($dirs);
+        return $this->plugins;
+    }
+
     public function register(string $name, callable $handler): void
     {
         $this->commands[$name] = $handler;
@@ -178,6 +202,7 @@ final class Ide
         $this->guard('Claude', fn () => $this->claude?->tick());
         $this->guard('Docker', fn () => $this->docker?->tick());
         $this->guard('Debugger', fn () => $this->debugger?->tick(), fn () => $this->debugger?->close());
+        $this->guard('plugins', fn () => $this->plugins?->tick());
         if (!$this->indexed) {
             $done = $this->index->refresh($budget);
             $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);
@@ -213,6 +238,7 @@ final class Ide
     /** Files changed outside (git checkout, a run): index them again. */
     public function filesChanged(): void
     {
+        $this->plugins?->dispatch('files.changed');
         $this->index->invalidate();
         $this->indexed = false;
         if ($this->librariesIndexed) {      // a composer install may have changed vendor/
@@ -306,7 +332,7 @@ final class Ide
 
     private function registerCore(): void
     {
-        $this->register('project.info', fn () => $this->project->describe() + [
+        $this->register('project.info', fn () => (fn (array $d) => ['run' => [...$d['run'], ...($this->plugins?->runConfigurations() ?? [])]] + $d)($this->project->describe()) + [
             // what the interface shows; the web IDE's host answers its own (gitMode 'drafts', preview, tests)
             'capabilities' => $this->capabilities + [
                 'git' => $this->git !== null && $this->git->isRepository(), 'gitMode' => 'local',
@@ -316,6 +342,7 @@ final class Ide
                 'claude' => $this->claude !== null,
                 // Xdebug through bin/jumphp (JUMPHP_XDEBUG): a JumPHP project run on this computer
                 'debug' => $this->debugger !== null && $this->docker !== null,
+                'plugins' => $this->plugins !== null,
             ],
             'root' => $this->workspace->localPath(),
         ]);
@@ -327,6 +354,7 @@ final class Ide
             if (Paths::extension($path) === 'php') {
                 $this->index->update($path);
             }
+            $this->plugins?->dispatch('file.saved', $path);
             return ['saved' => true, 'mtime' => $this->workspace->mtime($path)];
         });
         $this->register('file.create', function (array $p) {
@@ -499,7 +527,7 @@ final class Ide
         $runner = $this->runner;
         $this->register('run.start', function (array $p) use ($runner) {
             $config = null;
-            foreach ($this->project->describe()['run'] as $candidate) {
+            foreach ([...$this->project->describe()['run'], ...($this->plugins?->runConfigurations() ?? [])] as $candidate) {
                 if ($candidate['id'] === ($p['id'] ?? null)) {
                     $config = $candidate;
                 }

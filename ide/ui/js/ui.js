@@ -53,6 +53,8 @@ const ICONS = {
   stepOver: '<path d="M2.5 8.5a5.5 5.5 0 0 1 10.5-2.3M13.5 3v3.5H10"/><circle cx="8" cy="12.5" r="1.5"/>',
   stepInto: '<path d="M8 2v7.5M5 6.5l3 3 3-3"/><circle cx="8" cy="13" r="1.5"/>',
   stepOut: '<path d="M8 10V2.5M5 5.5l3-3 3 3"/><circle cx="8" cy="13" r="1.5"/>',
+  plugin: '<path d="M3 5h3V3.5a1.5 1.5 0 0 1 3 0V5h3v3h-1.5a1.5 1.5 0 0 0 0 3H12v3H3z"/>',
+  warning: '<path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.5v.5"/>',
   star: '<path d="M8 2l1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3l-3.7 2 .8-4.1L2 6.3l4.2-.5z"/>',
 };
 

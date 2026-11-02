@@ -1,0 +1,182 @@
+# Plugins of the JumPHP IDE
+
+The JumPHP IDE (docs/ide.md) can be extended with **plugins written in PHP**. A plugin runs inside the IDE, on the
+user's computer. It can add:
+
+- actions: the Tools menu (or another menu), Find Action and keyboard shortcuts;
+- tool windows, built from simple PHP nodes;
+- run configurations;
+- completion and problems for the files it chooses;
+- listeners and timers.
+
+You develop a plugin like any JumPHP project: one folder, `bin/jumphp test` to test it, and tests that use the
+plugin without a window. Example: `games/hello-plugin` (TODO Finder).
+
+```bash
+bin/jumphp plugin:new todo-finder "TODO Finder"   # games/todo-finder from skeleton-plugin/
+bin/jumphp install todo-finder
+bin/jumphp test todo-finder         # php -l, phpstan, the plugin loads in the IDE's core, its tests
+bin/jumphp plugin:pack todo-finder  # games/todo-finder/dist/todo-finder-0.1.0.zip
+```
+
+Try it in the IDE: **Tools > Plugins…** (also in File and Find Action). The window lists the installed plugins
+(enable, disable, remove) and **the plugins of this project** ("Install in the IDE"). "Install from a Folder…"
+takes any plugin folder. A plugin installed for the first time works at once; reload the window to see its tool
+windows. A new version of a plugin that is already loaded takes effect at the next start ("Restart Now"), because
+PHP cannot unload a class.
+
+The IDE looks for plugins in two places:
+- the user's plugins folder, in the IDE's data folder: `plugins/<id>/`. Its `plugins.json` keeps which plugins are
+  disabled and their settings;
+- the project's own plugins: `.jumphp/plugins/<id>/`, committed with the project.
+
+Plugins run in the desktop IDE only. The web IDE (jumphp.net/ide) does not run them: a plugin is PHP, and there it
+would run on the server.
+
+## A plugin's folder
+
+```
+games/todo-finder/
+  composer.json      what the IDE reads (below)
+  config/game.yaml   kind: plugin (so bin/jumphp and the IDE know this folder)
+  src/TodoPlugin.php the plugin's class
+  tests/             PluginTestCase tests
+  phpstan.neon
+```
+
+```json
+{
+    "name": "jumphp-plugins/todo-finder",
+    "type": "jumphp-ide-plugin",
+    "description": "Lists the TODO and FIXME comments of the project.",
+    "require-dev": { "jumphp/ide": "*" },
+    "repositories": [{ "type": "path", "url": "../../ide", "options": { "symlink": true } }],
+    "autoload": { "psr-4": { "JumphpPlugins\\TodoFinder\\": "src/" } },
+    "extra": {
+        "jumphp-ide": { "id": "todo-finder", "name": "TODO Finder", "version": "0.1.0", "class": "JumphpPlugins\\TodoFinder\\TodoPlugin" }
+    }
+}
+```
+
+- `extra.jumphp-ide`:
+  - `id`: lower case letters, digits and dashes;
+  - `name`: what the IDE shows;
+  - `version`;
+  - `class`: the class that implements `JumPHP\Ide\Plugin\Plugin`.
+- The IDE loads the plugin's classes with its `autoload` (`psr-4`, `classmap`, `files`). All plugins share one
+  PHP, so give each plugin a namespace of its own (`plugin:new` uses `JumphpPlugins\<Id>\`).
+- A plugin has **no Composer packages of its own** when it runs. It can use PHP and the IDE's own packages
+  (nikic/php-parser, symfony/yaml). `jumphp/ide` in `require-dev` is only for its tests.
+
+## The API
+
+```php
+use JumPHP\Ide\Plugin\{Api, EditorState, Plugin, Ui};
+
+final class TodoPlugin implements Plugin
+{
+    public function activate(Api $ide): void
+    {
+        $ide->action('count', 'Count the TODOs', fn (EditorState $at) => $ide->notify(substr_count($at->text, 'TODO') . ' TODO'),
+            ['kbd' => 'Ctrl+Alt+T', 'icon' => 'check', 'menu' => 'Tools']);
+
+        $window = $ide->toolWindow('todos', 'TODOs', fn () => Ui::column(
+            Ui::input('Filter', fn (string $q) => $this->filter = $q, $this->filter),
+            Ui::list(array_map(fn ($t) => Ui::item($t['text'], fn () => $ide->openFile($t['path'], $t['line']), $t['path']), $this->todos())),
+        ), ['side' => 'right', 'icon' => 'check']);
+
+        $ide->on('file.saved', fn (string $path) => $window->refresh());
+        $ide->diagnostics('*.php', fn (string $path, string $text) => [['line' => 3, 'message' => '...', 'severity' => 'warning']]);
+        $ide->completion('config/*.yaml', fn (EditorState $at) => [['label' => 'speed', 'insert' => 'speed: ', 'detail' => 'pixels per second']]);
+        $ide->runConfiguration('assets', 'Rebuild the assets', ['bin/jumphp', 'php', 'games/x', 'tools/assets.php'], ['kind' => 'build']);
+    }
+}
+```
+
+| `Api` method | What it does |
+|---|---|
+| `action($id, $label, fn (EditorState $at), [kbd, icon, menu])` | Adds an action: Find Action, the main menu (`menu`: Tools by default; also File, Edit, View, Navigate, Code, Refactor, Run, Git) and a shortcut. If the action returns a string, the IDE shows it as a notification. |
+| `toolWindow($id, $label, fn () => Ui node, [side, icon])` | Adds a tool window: a button on the stripe of `side` (left, right or bottom). The IDE calls the render function each time the window shows and after each of its callbacks. `->refresh()` draws the window again. |
+| `runConfiguration($id, $label, $command, [kind, icon, group])` | Adds a run configuration to the Run widget: the command runs in the project's folder, with its output in the Run window. |
+| `completion($glob, fn (EditorState) => items)` | Completion in the files that match: `label`, `insert`, `detail`, `kind` (text, keyword, value, property, method, function, class, snippet). |
+| `diagnostics($glob, fn ($path, $text) => problems)` | Problems in the files that match, checked as the user types: `line`, `column`, `endLine`, `endColumn`, `message`, `severity` (warning or error). |
+| `on('file.saved' \| 'files.changed', fn)` | A listener. `file.saved` gets the path; `files.changed` means files changed outside the editor (git, a run). |
+| `every($seconds, fn)` | A timer, called on the IDE's frame. |
+| `notify($message, $kind)`, `openFile($path, $line)`, `showToolWindow($id)`, `run($command, $label)` | Asks the interface to show a notification, open a file at a line, show a tool window, or run a command in the Run window. |
+| `workspace()` | The project's files: `files()`, `read()`, `write()`, `exists()`… Paths are relative to the project. |
+| `root()` | The project's folder on this computer. |
+| `core()` | The IDE's core: `->index` (the PHP index), `->php` (code intelligence: completion, definitions, usages), `->search`, `->git`. |
+| `setting($name, $default)`, `setSetting($name, $value)` | The plugin's settings, kept on this computer for all projects. |
+
+Globs: `*` (every file), `*.php` (a file name), `config/*.yaml` (a path).
+
+`EditorState` describes the editor:
+- `path` and `text`: the active file and its text as typed;
+- `line` and `column`: the caret's position, both counted from 1;
+- `selection`: the selected text;
+- helpers: `lineText()`, `before()` (the line up to the caret), `word()` (the word being typed), `extension()`.
+
+**Ui nodes** (`JumPHP\Ide\Plugin\Ui`):
+- `column(...)`, `row(...)`;
+- `heading()`, `text($t, $muted)`, `code()`, `separator()`;
+- `button($label, fn, $icon, $primary)`, `link($label, fn)`;
+- `list($items, $empty)` and `item($label, fn, $hint, $icon)`;
+- `input($placeholder, fn (string), $value)`, called on Enter;
+- `checkbox($label, $checked, fn (bool))`;
+- `html()`: trusted HTML of the plugin's own.
+
+The IDE draws them in its own style, in both themes. A string among the children is a text, and a `null` is
+skipped. The callbacks run in PHP, and the window is drawn again after each one.
+
+Icons use the IDE's names:
+- play, test, debug, refresh, check, warning;
+- file, folder, search, find, settings;
+- plus, minus, close, star, globe;
+- package, terminal, history, code, game, app, plugin.
+
+## The rules
+
+- **Never block.** The plugin runs on the IDE's frame: no `sleep()`, no long loops, no network calls that wait.
+  For work that takes time, do a slice at a time with `every()`, or run a command (`runConfiguration()`, `run()`).
+- If the plugin throws an exception (when it activates, in an action, a window, a provider or a timer), the IDE
+  shows it as a notification, and the Plugins window shows "failed" with the message. The IDE never stops because
+  of it. A plugin that fails to activate loses everything it had added.
+- **Only install plugins you trust.** A plugin is PHP that runs with the user's rights. The project's own plugins
+  (`.jumphp/plugins/`) load when the project opens, so only open projects you trust.
+
+## Tests
+
+`JumPHP\Ide\Testing\PluginTestCase` runs the IDE's core, with no window and no Docker, on a project made of a few
+files. The plugin is loaded in it, and the test does what a user does:
+
+```php
+final class TodoPluginTest extends PluginTestCase
+{
+    public function testAClickOpensTheLine(): void
+    {
+        $this->project(['src/Hero.php' => "<?php\n\n// TODO: jump higher\n"]);
+        self::assertStringContainsString('jump higher', $this->toolText('todos'));
+        $this->click('todos', 'jump higher');
+        self::assertSame(['path' => 'src/Hero.php', 'line' => 3], $this->opened());
+    }
+}
+```
+
+| Helper | What it does |
+|---|---|
+| `project([$path => $content])` | A fresh project made of these files, with the plugin loaded in it. |
+| `action($id, $path, $line)` | Runs an action. |
+| `tool($id)` | The window's Ui nodes. |
+| `toolText($id)` | The window's texts, one per line. |
+| `click($tool, $label)` | Clicks a button, link, list item or check box with this label. |
+| `submit($tool, $placeholder, $text)` | Types text into an input and presses Enter. |
+| `complete($path, "text with | at the caret")` | The completion labels. |
+| `problems($path, $text)` | The problems the plugin finds. |
+| `save($path, $content)` | Saves a file as the editor does, so the plugin hears `file.saved`. |
+| `wait($seconds)` | Lets time pass for the timers. |
+| `notifications()`, `opened()`, `ui($do)`, `errors()` | What the plugin asked the interface, and the errors it reported. |
+
+## Sharing a plugin
+
+`bin/jumphp plugin:pack <id>` makes `dist/<id>-<version>.zip`. The zip holds the folder without `vendor/`,
+`tests/`, `var/` and `dist/`. Others install it with "Install from a Folder…" after unzipping it.

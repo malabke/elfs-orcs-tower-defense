@@ -1,0 +1,41 @@
+{
+    "name": "jumphp-plugins/hello-plugin",
+    "type": "jumphp-ide-plugin",
+    "description": "Lists the TODO and FIXME comments of the project, warns about FIXME, completes @todo.",
+    "license": "MIT",
+    "require-dev": {
+        "jumphp/ide": "*"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../ide",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "JumphpPlugins\\HelloPlugin\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JumphpPlugins\\HelloPlugin\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "jumphp-ide": {
+            "id": "hello-plugin",
+            "name": "TODO Finder",
+            "version": "0.1.0",
+            "class": "JumphpPlugins\\HelloPlugin\\TodoPlugin"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true
+    }
+}

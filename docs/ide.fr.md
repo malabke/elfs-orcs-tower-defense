@@ -33,6 +33,10 @@ commits.
 - **Éditeur visuel HTML / CSS** : les fichiers `.html` en Code / Split / Design (composants à glisser, calques,
   inspecteur, règles CSS des feuilles liées, tailles d'écran) ; le HTML reste tel qu'écrit. Pour les pages des
   applications de bureau et les sites des jeux.
+- **Plugins** (bureau) : des plugins en PHP (docs/ide-plugins.md) ajoutent des actions (menus, Find Action, raccourcis),
+  des fenêtres d'outils, des configurations d'exécution, de la complétion et des problèmes pour les fichiers qu'ils
+  choisissent. Tools › Plugins… les installe (un dossier, les plugins du projet), les active, les retire ;
+  `bin/jumphp plugin:new` en crée un, testé sans fenêtre (PluginTestCase).
 - **Claude** (bureau) : la fenêtre Claude (`Alt+8`) parle au Claude Code de l'ordinateur. **Suivre** (l'œil, actif par
   défaut) : l'IDE montre ce que fait Claude au moment où il le fait : le fichier lu s'ouvre aux lignes lues (bleu), ce
   qu'une modification remplace est marqué avant (orange) et ce qu'il a écrit après (vert), ses commandes apparaissent

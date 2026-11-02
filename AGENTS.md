@@ -55,6 +55,7 @@ skeleton/               template of a game, copied by `bin/jumphp new`
 skeleton-app/           template of a desktop app (Tauri), copied by `bin/jumphp app:new` (§16)
 skeleton-gui/           template of a graphic app (forms, JumPHP\Gui), copied by `bin/jumphp gui:new` (§17)
 skeleton-cli/           template of a CLI app (terminal: Symfony Console + symfony/tui), copied by `bin/jumphp cli:new` (§18)
+skeleton-plugin/        template of a plugin of the JumPHP IDE (PHP), copied by `bin/jumphp plugin:new` (§19)
 tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C library PHP loads with FFI; §16)
 ide/                    JumPHP IDE: package jumphp/ide, PHP core (JumPHP\Ide\) + HTML interface, shared by games/ide
                         (the desktop app) and jumphp.net/ide (docs/ide.md)
@@ -147,6 +148,7 @@ games/<id>/
 | `bin/jumphp installer <id> --github \| --url https://site/folder/ \| --standalone [--windows] [--linux] [--macos] [--version X]` | an **installer** per system (jumphp2installer: shortcuts, uninstaller, always installs the newest version): `--github` = a release `v<version>` of the project's repository (gh, public repo), `--url` = `dist/installer/` to upload at that address, `--standalone` = the game inside each installer (`dist/installer/`: no site, no network, installs that version, never updates). Builds Windows / Linux first (`--no-build`: the existing ones); macOS: an existing build. jumphp.net: the IDE (Run > Create an Installer…). Publishing: only when asked |
 | `bin/jumphp gui:new <id> ["Title"] [--mobile]` | a **graphic app** (forms made in the IDE's visual editor, `JumPHP\Gui`, no HTML; §17); then run / test / shot / build / export as a game |
 | `bin/jumphp cli:new <id> ["Title"]` | a **CLI app** (commands + full-screen text screens in the terminal, §18); then run / test / shot (the screen as text) / export:standalone as a game |
+| `bin/jumphp plugin:new <id> ["Title"]` / `plugin:pack <id>` | a **plugin of the JumPHP IDE** in PHP (§19); `test` on its folder; `pack` = `dist/<id>-<version>.zip` |
 | `bin/jumphp video <id> <film.mp4> [name] [fps]` | a film as frames + sound for the `video` widget (`assets/videos/<name>/`) |
 | `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them; `app:export --windows --macos`; `app:release` (updates); `build` = the app in the browser |
 | `bin/jumphp tauri:setup` / `tauri:build` / `tauri:download` | the Tauri image / the runtime library `build/tauri/linux-x86_64/libjumphp_tauri.so`, built or downloaded (done automatically when needed) |
@@ -1002,6 +1004,7 @@ background), then ~10.
   (`bin/jumphp php ide vendor/bin/phpunit`), its interface checked with `games/ide/tools/shot.sh`.
 - `games/hello-gui/` — a graphic app (§17): a form made in the visual editor (responsive grid of two panels), its code
   behind, saved contacts, game tests.
+- `games/hello-plugin/` — a plugin of the JumPHP IDE (§19): a tool window, an action, problems, completion, its tests.
 - `games/hello-cli/` — a CLI app (§18): a task list, commands and a full-screen screen, tested on a virtual terminal.
 - `games/hello-desktop/` — a desktop app (Tauri, §16): a notepad, HTML page + PHP (files, native dialogs, PHP clock,
   drag and drop, quit confirmation), tested with `AppTestCase`.
@@ -1106,3 +1109,19 @@ When the user wants a command-line tool, "a CLI", "a TUI", a program "in the ter
   `ScreenBuffer::getScreen()`).
 - Don'ts: no SDL / engine scenes, no `sleep()` inside a screen (`scheduleInterval()`), data only in `Main::boot()`'s
   folder; no browser build (a terminal program).
+
+
+## 19. Plugins of the JumPHP IDE (PHP)
+
+When the user wants to extend the JumPHP IDE (a tool window, an action, completion, checks of their files, a run
+configuration): `bin/jumphp plugin:new <id> "Title"` (`skeleton-plugin/`, `config/game.yaml kind: plugin`). Full
+guide: `docs/ide-plugins.md`. Example: `games/hello-plugin`.
+
+- `composer.json` `extra.jumphp-ide` (id, name, version, class) + `autoload` psr-4 in a namespace of its own
+  (`JumphpPlugins\<Id>\`); no package of its own at run time.
+- The class implements `JumPHP\Ide\Plugin\Plugin::activate(Api $ide)`: `action()`, `toolWindow()` (`Ui::` nodes,
+  callbacks in PHP), `runConfiguration()`, `completion()`, `diagnostics()`, `on('file.saved')`, `every()`,
+  `notify()`, `openFile()`, `workspace()`, `setting()`.
+- Tests as you go: `tests/*Test.php` extend `JumPHP\Ide\Testing\PluginTestCase` (`project()`, `action()`,
+  `toolText()`, `click()`, `submit()`, `complete()`, `problems()`, `save()`). `bin/jumphp test <id>` must pass.
+- Don'ts: never block (the IDE's frame), no network waits, nothing written outside the project / its settings.
