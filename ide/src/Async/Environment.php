@@ -23,7 +23,7 @@ final class Environment
         $dirs = [];
         $add = function (string $list) use (&$dirs): void {
             foreach (explode(PATH_SEPARATOR, $list) as $dir) {
-                $dir = rtrim($dir, '/');
+                $dir = rtrim($dir, '/\\');
                 if ($dir !== '' && !in_array($dir, $dirs, true)) {
                     $dirs[] = $dir;
                 }
@@ -56,13 +56,20 @@ final class Environment
     /** Where a program is (null: not found in the PATH programs get). */
     public static function which(string $program): ?string
     {
-        if (str_contains($program, '/')) {
+        if (str_contains($program, '/') || str_contains($program, '\\')) {
             return is_file($program) && is_executable($program) ? $program : null;
         }
+        // Windows: git means git.exe (or .cmd, .bat...: PATHEXT) when no extension is given
+        $names = [$program];
+        if (PHP_OS_FAMILY === 'Windows' && pathinfo($program, PATHINFO_EXTENSION) === '') {
+            $names = array_map(fn (string $ext) => $program . strtolower($ext), array_filter(explode(';', (string)(getenv('PATHEXT') ?: '.EXE;.CMD;.BAT;.COM'))));
+        }
         foreach (explode(PATH_SEPARATOR, self::path()) as $dir) {
-            $candidate = "$dir/$program";
-            if (is_file($candidate) && is_executable($candidate)) {
-                return $candidate;
+            foreach ($names as $name) {
+                $candidate = $dir . DIRECTORY_SEPARATOR . $name;
+                if (is_file($candidate) && is_executable($candidate)) {
+                    return $candidate;
+                }
             }
         }
         return null;

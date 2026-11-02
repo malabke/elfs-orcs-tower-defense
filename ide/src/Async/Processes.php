@@ -5,6 +5,11 @@ namespace JumPHP\Ide\Async;
 /**
  * Programs run by the IDE (git, bin/jumphp, phpunit...) without blocking: started at once, their output read
  * a little at every poll() (the desktop app polls once per frame), their end settles a Deferred.
+ *
+ * Windows has no non-blocking pipes: PHP's read of an empty pipe waits up to ~32 s (PeekNamedPipe in a loop), so
+ * reading stdout while the program fills stderr froze the IDE for good (git clone --progress: a .git folder and a
+ * window that no longer answers). There, the program writes its stdout / stderr into temporary files that poll()
+ * reads from where it stopped (Symfony Process does the same: WindowsPipes); stdin stays a pipe (writes only).
  */
 final class Processes
 {
@@ -12,6 +17,13 @@ final class Processes
 
     /** @var array<int, array<string, mixed>> */
     private array $running = [];
+
+    private bool $files;
+
+    public function __construct(?bool $files = null)
+    {
+        $this->files = $files ?? PHP_OS_FAMILY === 'Windows';
+    }
 
     /**
      * @param list<string> $command
@@ -27,12 +39,21 @@ final class Processes
         $fullEnv = array_merge(Environment::variables(), ['GIT_TERMINAL_PROMPT' => '0', 'LC_ALL' => 'C.UTF-8'], $env);
         $program = (string)($command[0] ?? '');
         // a program name is looked for in the full PATH (proc_open would only search the IDE's own)
-        if ($program !== '' && !str_contains($program, '/') && ($found = Environment::which($program)) !== null) {
+        if ($program !== '' && !str_contains($program, '/') && !str_contains($program, '\\') && ($found = Environment::which($program)) !== null) {
             $command[0] = $found;
         }
         $pipes = [];
-        $process = @proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $cwd, $fullEnv);
+        $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $temp = [];
+        if ($this->files) {
+            foreach ([1, 2] as $n) {
+                $temp[$n] = (string)tempnam(sys_get_temp_dir(), 'jph');
+                $spec[$n] = ['file', $temp[$n], 'w'];
+            }
+        }
+        $process = @proc_open($command, $spec, $pipes, $cwd, $fullEnv);
         if (!is_resource($process)) {
+            array_map('unlink', array_filter($temp, 'is_file'));
             $done->reject(new \RuntimeException("cannot start $program" . (str_contains($program, '/') ? '' : ' (not found in the PATH: ' . Environment::path() . ')')));
             return ['id' => $id, 'done' => $done];
         }
@@ -42,9 +63,15 @@ final class Processes
         if (!$keepInput) {
             fclose($pipes[0]);
         }
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-        $this->running[$id] = ['process' => $process, 'pipes' => [1 => $pipes[1], 2 => $pipes[2]], 'stdin' => $keepInput ? $pipes[0] : null, 'stdout' => '', 'stderr' => '',
+        if ($temp !== []) {
+            $readers = [1 => fopen($temp[1], 'rb'), 2 => fopen($temp[2], 'rb')];
+        } else {
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            $readers = [1 => $pipes[1], 2 => $pipes[2]];
+        }
+        $this->running[$id] = ['process' => $process, 'pipes' => $readers, 'temp' => $temp, 'read' => [1 => 0, 2 => 0],
+            'stdin' => $keepInput ? $pipes[0] : null, 'stdout' => '', 'stderr' => '',
             'output' => '', 'done' => $done, 'onOutput' => $onOutput, 'command' => $command, 'started' => microtime(true)];
         return ['id' => $id, 'done' => $done];
     }
@@ -53,30 +80,18 @@ final class Processes
     public function poll(): void
     {
         foreach ($this->running as $id => &$p) {
-            foreach ($p['pipes'] as $n => $pipe) {
-                while (is_resource($pipe) && ($chunk = fread($pipe, 65536)) !== false && $chunk !== '') {
-                    $p[$n === 1 ? 'stdout' : 'stderr'] .= $chunk;
-                    $p['output'] .= $chunk;
-                    if ($p['onOutput']) {
-                        ($p['onOutput'])($chunk, $n === 1 ? 'stdout' : 'stderr');
-                    }
-                }
-            }
+            $this->read($p);
             $status = proc_get_status($p['process']);
             if (!$status['running']) {
                 if (is_resource($p['stdin'])) {
                     @fclose($p['stdin']);
                 }
-                foreach ($p['pipes'] as $n => $pipe) {
-                    $rest = (string)stream_get_contents($pipe);
-                    if ($rest !== '') {
-                        $p[$n === 1 ? 'stdout' : 'stderr'] .= $rest;
-                        $p['output'] .= $rest;
-                        if ($p['onOutput']) {
-                            ($p['onOutput'])($rest, $n === 1 ? 'stdout' : 'stderr');
-                        }
-                    }
-                    fclose($pipe);
+                $this->read($p, true);
+                foreach ($p['pipes'] as $pipe) {
+                    is_resource($pipe) && fclose($pipe);
+                }
+                foreach ($p['temp'] as $file) {
+                    @unlink($file);
                 }
                 $code = $status['exitcode'];
                 proc_close($p['process']);
@@ -88,6 +103,35 @@ final class Processes
             }
         }
         unset($p);
+    }
+
+    /**
+     * What a program wrote since the last time: from its pipes (non-blocking), or its temporary files (Windows),
+     * from where the last read stopped. $end: it has ended, everything that is left.
+     * @param array<string, mixed> $p
+     */
+    private function read(array &$p, bool $end = false): void
+    {
+        foreach ($p['pipes'] as $n => $pipe) {
+            if (!is_resource($pipe)) {
+                continue;
+            }
+            if ($p['temp'] !== []) {
+                fseek($pipe, $p['read'][$n]);     // a file that grows: read on from where we stopped
+            }
+            while (true) {
+                $chunk = $end && $p['temp'] === [] ? (string)stream_get_contents($pipe) : fread($pipe, 65536);
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                $p['read'][$n] += strlen($chunk);
+                $p[$n === 1 ? 'stdout' : 'stderr'] .= $chunk;
+                $p['output'] .= $chunk;
+                if ($p['onOutput']) {
+                    ($p['onOutput'])($chunk, $n === 1 ? 'stdout' : 'stderr');
+                }
+            }
+        }
     }
 
     /** Stops a program (SIGTERM, then the caller may kill it again: SIGKILL). */

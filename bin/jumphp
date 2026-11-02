@@ -713,11 +713,19 @@ cmd_export_standalone() {
   done
   [ ${#targets[@]} -gt 0 ] || targets=(linux-x86_64)
   ensure_vendor "$dir"
-  if is_hybrid "$game" && [ -z "${JUMPHP_STANDALONE_EXTENSIONS:-}" ]; then hybrid_export_env; fi
+  local hybrid=""
+  if is_hybrid "$game" && [ -z "${JUMPHP_STANDALONE_EXTENSIONS:-}" ]; then hybrid_export_env; hybrid=1; fi
   local home="${JUMPHP_HOME:-$HOME/.jumphp}" image="${JUMPHP_STANDALONE_IMAGE:-jumphp/standalone:dev}" target out log
   mkdir -p "$home/standalone"
   docker image inspect "$image" >/dev/null 2>&1 || { say "building $image (first time, ~3 min)"; docker build -t "$image" docker/standalone; }
   for target in "${targets[@]}"; do
+    # a hybrid game carries the Tauri library of the system it is made for (not this computer's Linux one)
+    if [ -n "$hybrid" ]; then
+      case "$target" in
+        windows-x86_64) ensure_tauri_platform_lib windows-x86_64; export JUMPHP_STANDALONE_NATIVE=build/tauri/windows-x86_64/jumphp_tauri.dll ;;
+        *) export JUMPHP_STANDALONE_NATIVE="$TAURI_LIB" ;;
+      esac
+    fi
     log="$(mktemp)"
     docker run --rm $TTY_FLAGS --user "$(id -u):$(id -g)" "${WS[@]}" -v "$home/standalone:/cache" \
       -e HOME=/tmp -e GAME="$game" -e TARGET="$target" -e JUMPHP_STANDALONE_PHP -e JUMPHP_STANDALONE_BUILD \

@@ -166,6 +166,27 @@ final class CoreTest extends TestCase
         }
     }
 
+    /** Windows' way (no non-blocking pipes): the output through temporary files, read as it grows; stdin a pipe. */
+    public function testProgramsRunWithTheirOutputInFilesAsOnWindows(): void
+    {
+        $processes = new Processes(files: true);
+        $seen = '';
+        // like git clone --progress: a lot on stderr, a little on stdout, over several polls
+        $clone = $processes->start(['sh', '-c', 'i=0; while [ $i -lt 3000 ]; do echo "Receiving objects: $i" >&2; i=$((i+1)); done; echo cloned'],
+            $this->dir, [], function (string $chunk, string $stream) use (&$seen) { $seen .= $stream === 'stderr' ? '' : $chunk; });
+        $result = $processes->wait($clone['done'], 20);
+        self::assertSame(0, $result['code']);
+        self::assertSame(3000, substr_count($result['stderr'], 'Receiving objects'));
+        self::assertSame("cloned\n", $result['stdout']);
+        self::assertSame("cloned\n", $seen);
+        // a conversation (Claude): stdin kept open, answers read from the file as they come
+        $cat = $processes->start(['cat'], $this->dir, [], null, "hello\n", true);
+        self::assertTrue($processes->write($cat['id'], "again\n"));
+        $processes->closeInput($cat['id']);
+        self::assertSame("hello\nagain\n", $processes->wait($cat['done'], 20)['stdout']);
+        self::assertSame([], glob(sys_get_temp_dir() . '/jph*') ?: [], 'temporary files left behind');
+    }
+
     public function testClaudeCodeAnswersAsItGoesAndTheConversationGoesOn(): void
     {
         $saved = (string)getenv('PATH');
