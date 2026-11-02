@@ -95,6 +95,14 @@ later iOS).
 - plugins to extend the IDE: a plugin API (tool windows, actions and menus, run configurations, editor features,
   PHP side and interface side), plugins developed and tested like any JumPHP project, and a plugin marketplace on
   jumphp.net (publish, versions, install / update / remove from the IDE)
+- editors for a game's resources, inside the IDE: sprites (sheets, animations, palettes), music, sound effects (and
+  tiles / levels): see how the Sonic project does it (github.com/davidnurdin/sonicGameSite: public/js/editor-sprites.js,
+  editor-music.js, editor-sfx.js, editor-tiles.js, editor-level.js, templates/editor/), made into IDE tool windows / editor
+  tabs that read and write the game's assets/
+- AI generation from these editors: for each kind (pictures, music, sound effects...) the online AIs that do it best
+  (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
+  effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
+  computer, never in the project)
 
 ## Cleaning
 
