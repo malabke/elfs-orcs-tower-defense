@@ -40,6 +40,7 @@ export class Plugins {
   async load() {
     this.contributions = await backend.invoke('plugins.contributions').catch(() => this.contributions);
     backend.on('plugins.ui', (m) => this.message(m));
+    if (backend.kind === 'native') backend.on('plugins.updates', (r) => this.updatesFound(r));
     const providers = this.contributions.providers || [];
     if (providers.some((p) => p.kind === 'completion')) this.registerCompletion();
     if (providers.some((p) => p.kind === 'diagnostics')) {
@@ -62,6 +63,7 @@ export class Plugins {
   /** The actions (App.registerActions), their shortcuts in the IDE's key map. */
   registerActions(a) {
     a.add('plugins', 'Plugins…', () => this.manage(), { icon: 'plugin' });
+    if (backend.kind === 'native') a.add('pluginUpdates', 'Check for Plugin Updates', () => this.checkUpdates(), { icon: 'download' });
     for (const x of this.contributions.actions || []) {
       a.add(x.id, x.label, () => this.runAction(x), { kbd: x.kbd || undefined, icon: x.icon || 'plugin' });
       const key = x.kbd && keyOf(x.kbd);
@@ -90,6 +92,47 @@ export class Plugins {
       if (result && typeof result === 'object' && result.message) notify(result.message, 'info', { title: x.pluginName });
     } catch (e) {
       notify(e.message, 'error', { title: x.pluginName });
+    }
+  }
+
+  // updates (jumphp.net) ---------------------------------------------------------------------------------------
+
+  /** What a check found (the IDE checks after its start and every 6 hours; Plugins window: Check for Updates). */
+  updatesFound(r, manual = false) {
+    const restart = { label: 'Restart Now', action: () => backend.invoke('plugins.restart') };
+    if (r.installed?.length) {
+      const names = r.updates.filter((u) => r.installed.includes(u.id)).map((u) => `${u.name} ${u.version}`).join(', ');
+      notify(`Updated: ${names}. Restart the IDE to use the new version${r.installed.length > 1 ? 's' : ''}.`, 'success', { title: 'Plugins', actions: [restart, { label: 'Later', action: () => null }], timeout: 0 });
+    }
+    for (const [id, message] of Object.entries(r.failed || {})) notify(`${id}: ${message}`, 'error', { title: 'Plugin update' });
+    const left = (r.updates || []).filter((u) => !(r.installed || []).includes(u.id) && !(r.failed || {})[u.id]);
+    if (left.length) {
+      notify(`Plugin update${left.length > 1 ? 's' : ''} on jumphp.net: ${left.map((u) => `${u.name} ${u.installed} → ${u.version}`).join(', ')}.`, 'info', { title: 'Plugins', timeout: 0, actions: [
+        { label: left.length > 1 ? 'Update All' : 'Update', action: () => this.updateAll() },
+        { label: 'Plugins…', action: () => this.manage() },
+        { label: 'Update Automatically', action: () => backend.invoke('market.auto', { on: true }).then(() => this.updateAll()) },
+      ] });
+    } else if (manual && !r.installed?.length) {
+      notify('Every plugin is up to date.', 'info', { title: 'Plugins' });
+    }
+  }
+
+  async updateAll() {
+    const done = this.app.task('Updating the plugins…');
+    try {
+      this.updatesFound(await backend.invoke('market.updates', { install: true }));
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Plugin update' });
+    } finally {
+      done();
+    }
+  }
+
+  async checkUpdates() {
+    try {
+      this.updatesFound(await backend.invoke('market.updates', {}), true);
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Plugins' });
     }
   }
 
@@ -209,7 +252,9 @@ export class Plugins {
   async manage() {
     const body = el('div.plugins-dialog');
     const d = dialog({ title: 'Plugins', body, wide: true, buttons: [
-      ...(backend.kind === 'native' ? [{ label: 'Install from a Folder…', action: async () => { await this.installFolder(); await draw(); return false; } }] : []),
+      ...(backend.kind === 'native' ? [
+        { label: 'Check for Updates', action: async () => { await this.checkUpdates(); await draw(); return false; } },
+        { label: 'Install from a Folder…', action: async () => { await this.installFolder(); await draw(); return false; } }] : []),
       { label: 'Close' },
     ] });
     const restart = () => notify('Restart the IDE to load the new version of the plugin (PHP keeps the classes it loaded).', 'info', { title: 'Plugins',
@@ -222,7 +267,7 @@ export class Plugins {
       for (const p of list) {
         const status = { active: 'on', disabled: 'off', error: 'failed' }[p.status] || p.status;
         body.append(el('div.plugin-row', {},
-          el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `, el(`span.plugin-status.${p.status}`, {}, status), p.restart ? el('span.muted', {}, ' — restart to update') : null,
+          el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `, el(`span.plugin-status.${p.status}`, {}, status), p.restart ? el('span.muted', {}, ` — ${p.installedVersion && p.installedVersion !== p.version ? p.installedVersion + ' installed: ' : ''}restart to use it`) : null,
             p.source !== 'user' ? el('span.muted', {}, p.source === 'project' ? ' — this project\'s' : ' — in development') : null,
             el('div.muted', {}, p.description || ''), p.error ? el('div.plugin-error', {}, p.error) : null,
             ...(() => {
@@ -275,7 +320,11 @@ export class Plugins {
   async market(body, installed, draw, restart) {
     const results = el('div.plugins-market');
     const search = el('input.pv-input', { type: 'search', placeholder: 'Search jumphp.net\'s plugins', value: this.marketQuery || '' });
-    body.append(el('h4', {}, 'On jumphp.net'), search, results);
+    const auto = el('input', { type: 'checkbox', onchange: () => backend.invoke('market.auto', { on: auto.checked }).catch((e) => notify(e.message, 'error')) });
+    backend.invoke('market.auto', {}).then((r) => { auto.checked = !!r.auto; }).catch(() => null);
+    body.append(el('h4', {}, 'On jumphp.net'),
+      el('label.pv-check', { title: 'The IDE checks jumphp.net after its start and every 6 hours; the new versions are used at the next start' }, auto, ' Update plugins automatically'),
+      search, results);
     const show = async () => {
       this.marketQuery = search.value.trim();
       clear(results);
@@ -292,8 +341,8 @@ export class Plugins {
       if (!found.length) results.append(el('div.placeholder', {}, this.marketQuery ? 'No plugin matches.' : 'No plugin on jumphp.net yet.'));
       for (const p of found) {
         const mine = installed.find((x) => x.id === p.id);
-        const newer = mine && versionCompare(p.version, mine.version) > 0;
-        const label = !mine ? 'Install' : newer ? `Update to ${p.version}` : 'Installed';
+        const newer = mine && versionCompare(p.version, mine.installedVersion || mine.version) > 0;
+        const label = !mine ? 'Install' : newer ? `Update to ${p.version}` : mine.restart ? 'Restart to use' : 'Installed';
         results.append(el('div.plugin-row', {},
           el('div.plugin-main', {}, el('b', {}, p.name), ` ${p.version} `, el('span.muted', {}, `by ${p.author} · ${p.downloads} downloads`),
             el('div.muted', {}, p.description || '')),

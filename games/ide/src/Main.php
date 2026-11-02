@@ -61,6 +61,12 @@ final class Main implements AppMain
         $this->updates = new SelfUpdate($app);
         $this->registerCommands();
         $this->updates->start();
+        // the plugins installed from jumphp.net: a check a little after the start, then every 6 hours (event
+        // plugins.updates; with "Update plugins automatically" they are installed at once, used at the next start)
+        if (getenv('JUMPHP_IDE_UPDATES') !== '0') {
+            $app->gameLoop->addTimer(30, fn () => $this->checkPluginUpdates());
+            $app->gameLoop->addPeriodicTimer(6 * 3600, fn () => $this->checkPluginUpdates());
+        }
         // bin/jumphp claude:connect, or the option kept from last time: this computer's Claude answers the web IDE
         if (getenv('JUMPHP_IDE_BRIDGE') === '1' || $app->options->get('claudeBridge', false)) {
             if (!empty($this->session['token'])) {
@@ -168,6 +174,13 @@ final class Main implements AppMain
         // the plugins of jumphp.net (Tools > Plugins…): search, install / update, publish the project's own
         $c['market.list'] = fn (array $p) => $this->marketList((string)($p['q'] ?? ''));
         $c['market.install'] = fn (array $p) => $this->marketInstall((string)($p['id'] ?? ''), isset($p['version']) ? (string)$p['version'] : null);
+        $c['market.updates'] = fn (array $p) => $this->pluginUpdates(!empty($p['install']));
+        $c['market.auto'] = function (array $p) {
+            if (isset($p['on'])) {
+                $this->app->options->set('pluginsAutoUpdate', (bool)$p['on']);
+            }
+            return ['auto' => (bool)$this->app->options->get('pluginsAutoUpdate', false)];
+        };
         $c['market.publish'] = fn (array $p) => $this->marketPublish((string)($p['dir'] ?? ''));
         // a plugin updated or being developed: PHP cannot unload its classes, the IDE starts again with them
         $c['plugins.restart'] = function () {
@@ -489,6 +502,66 @@ final class Main implements AppMain
                 }
                 return $data['plugins'];
             });
+    }
+
+    /**
+     * The installed plugins jumphp.net has a newer version of; $install: installs them too (each takes effect at the
+     * next start: PHP keeps the classes it loaded).
+     *
+     * @return Deferred resolved with {updates: [{id, name, installed, version}], installed: [ids], failed: {id: message}}
+     */
+    private function pluginUpdates(bool $install): Deferred
+    {
+        if ($this->ide?->plugins === null) {
+            return Deferred::resolved(['updates' => [], 'installed' => [], 'failed' => []]);
+        }
+        $plugins = $this->ide->plugins;
+        return $this->marketList('')->then(function (array $market) use ($plugins, $install) {
+            $byId = array_column($market, null, 'id');
+            $updates = [];
+            foreach ($plugins->listing() as $p) {
+                $m = $byId[$p['id']] ?? null;
+                // the user's plugins only (the project's own come with the project), a newer version than the one on disk
+                if ($m !== null && $p['source'] === 'user' && version_compare((string)$m['version'], (string)$p['version'], '>')
+                    && version_compare((string)$m['version'], (string)($p['installedVersion'] ?? $p['version']), '>')) {
+                    $updates[] = ['id' => $p['id'], 'name' => $p['name'], 'installed' => $p['version'], 'version' => $m['version']];
+                }
+            }
+            $result = ['updates' => $updates, 'installed' => [], 'failed' => []];
+            if (!$install || !$updates) {
+                return $result;
+            }
+            // one after the other
+            $chain = Deferred::resolved(null);
+            foreach ($updates as $u) {
+                // a closure (not fn): $result shared by reference, not copied
+                $chain = $chain->then(function () use (&$result, $u) {
+                    return $this->marketInstall($u['id'], $u['version'])->then(
+                        function () use (&$result, $u) {
+                            $result['installed'][] = $u['id'];
+                        },
+                        function (\Throwable $e) use (&$result, $u) {
+                            $result['failed'][$u['id']] = $e->getMessage();
+                        },
+                    );
+                });
+            }
+            return $chain->then(function () use (&$result) {
+                return $result;
+            });
+        });
+    }
+
+    /** The periodic check: tells the interface (plugins.updates), installs them first when the user wants it. */
+    private function checkPluginUpdates(): void
+    {
+        if ($this->ide?->plugins === null || !$this->ide->plugins->listing()) {
+            return;
+        }
+        $this->pluginUpdates((bool)$this->app->options->get('pluginsAutoUpdate', false))->then(
+            fn (array $r) => $r['updates'] ? $this->app->send('plugins.updates', $r) : null,
+            fn () => null,      // offline: next time
+        );
     }
 
     /** Downloads a plugin's zip from jumphp.net and installs it (the newest version, or $version). */

@@ -235,7 +235,15 @@ final class PluginHost
     private function describe(string $id): array
     {
         $p = $this->plugins[$id];
+        $installed = $p['info']->version;
+        if (isset($this->pending[$id])) {
+            try {
+                $installed = PluginInfo::read($this->pending[$id])->version;    // on disk, used at the next start
+            } catch (\InvalidArgumentException) {
+            }
+        }
         return $p['info']->describe() + ['status' => $p['status'], 'error' => $p['error'], 'restart' => isset($this->pending[$id]),
+            'installedVersion' => $installed,
             'removable' => $this->userDir !== null && $p['info']->source === 'user'];
     }
 

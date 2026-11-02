@@ -642,7 +642,7 @@ class App {
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
       section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'toggleBreakpoint', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
-      section('Tools', ['plugins']),
+      section('Tools', ['plugins', 'pluginUpdates']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },

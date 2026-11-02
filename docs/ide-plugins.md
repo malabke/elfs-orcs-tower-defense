@@ -237,6 +237,15 @@ final class TodoPluginTest extends PluginTestCase
 
 - **Install**: Tools › Plugins…, section "On jumphp.net". Search, then Install. When a newer version is out, the
   button says "Update to x.y.z".
+- **Updates**: the IDE checks jumphp.net for the plugins you installed, a little after it starts and then every 6
+  hours.
+  - When a newer version is out, a notification offers **Update**, **Plugins…** and **Update Automatically**.
+  - With **Update plugins automatically** (in the Plugins window), the IDE installs the new versions by itself and
+    tells you.
+  - **Tools › Check for Plugin Updates** checks now.
+  - An update takes effect at the next start ("Restart Now"), because PHP keeps the classes it loaded.
+  - Only the plugins installed in the IDE are updated. A project's own plugins (`.jumphp/plugins/`) change with the
+    project.
 - **Publish**: Tools › Plugins…, "Plugins of this project", then "Publish on jumphp.net". Sign in with jumphp.net
   first. The IDE packs the folder as `plugin:pack` does and sends that version.
   - The first account to publish an id owns it.
