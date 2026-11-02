@@ -21,6 +21,22 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
   unit (user or system); `bin/jumphp service:install / uninstall / status <id>`, the installers' step `service`,
   logs, restart on failure; the async runtime (threads) and JumPHP\Http for servers, tested on the three systems in CI
 
+## Engine extensions (Composer packages that extend JumPHP, mostly for games)
+
+Packages a game requires (`bin/jumphp composer <id> require vendor/pkg`) that add a whole subsystem to the engine,
+with their own data format and, often, their own editor: a tile engine with its level editor and its map format, a
+particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest system, a particle editor...
+- the contract: `"type": "jumphp-extension"` + `extra.jumphp` (services to register in the game's container, scenes,
+  asset loaders for their formats, `config/*.yaml` keys with their schema, stubs), discovered by the engine at boot
+  (no manual wiring), pure PHP so they run in the browser too (WebAssembly: no extensions of their own)
+- their editors inside the IDE: an extension can ship an IDE plugin (docs/ide-plugins.md) that opens its files
+  (its level format in a tool window / editor tab), its completion for its config keys, its run configurations
+- `bin/jumphp extension:new <id>` (a skeleton with an example game and tests: GameTestCase), tested in CI on the
+  desktop and in the browser build (webshot)
+- a catalogue on jumphp.net (like /ide-plugins: publish, versions, stats, marks), Packagist for the code, and the
+  playground's shared engine loading the extensions a published game requires (today a game's own Composer packages
+  are not supported there)
+
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
 `bin/jumphp apple <game>` (docs/apple.md) builds the macOS app (.dmg, Apple silicon + Intel), the iPhone / iPad
