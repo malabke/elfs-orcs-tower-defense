@@ -3,7 +3,7 @@
 // apps (Android, iPhone / iPad) with the steps to put them on the stores. Builds are run configurations (Run window);
 // files go to the game's downloads (playground.upload); the rest is the IDE's API on jumphp.net (games/ide Main).
 import { backend } from './backend.js';
-import { el, clear, icon, notify, confirm, prefs } from './ui.js';
+import { el, clear, icon, notify, confirm, prefs, copyText } from './ui.js';
 import { createInstaller } from './installer.js';
 
 const PLATFORMS = [
@@ -261,7 +261,7 @@ export class PublishPanel {
 
   command(text) {
     return el('div.pub-command', {}, el('code', {}, text),
-      el('button.btn.small', { title: 'Copy', onclick: () => { navigator.clipboard?.writeText(text); notify('Copied: paste it in a terminal, in the project\'s folder.', 'info'); } }, 'Copy'));
+      el('button.btn.small', { title: 'Copy', onclick: () => { copyText(text); notify('Copied: paste it in a terminal, in the project\'s folder.', 'info'); } }, 'Copy'));
   }
 
   androidSection(b) {

@@ -1,7 +1,8 @@
 // The Project tool window: the project's files as a tree, with Git colours, a context menu (new, rename,
 // delete, copy path...), keyboard navigation and drag and drop to move files.
 import { backend } from './backend.js';
-import { el, clear, icon, colorIcon, basename, dirname, fileIcon, folderIcon, menu, prompt, confirm, notify, prefs } from './ui.js';
+import { showLocalHistory } from './localhistory.js';
+import { el, clear, icon, colorIcon, basename, dirname, fileIcon, folderIcon, menu, prompt, confirm, notify, prefs, copyText } from './ui.js';
 
 export class ProjectTree {
   constructor(app) {
@@ -33,7 +34,12 @@ export class ProjectTree {
   async refresh() {
     const { files } = await backend.invoke('files.list', { all: this.showAll });
     this.files = files.map((f) => f.path);
-    if (!this.libraries) this.libraries = await backend.invoke('libraries.list').catch(() => []);
+    // listed again each time (a composer install adds some); the folders already listed keep their files
+    const libraries = await backend.invoke('libraries.list').catch(() => null);
+    if (libraries) {
+      const known = new Map((this.libraries || []).map((l) => [l.dir, l]));
+      this.libraries = libraries.map((l) => (known.get(l.dir)?.files?.length ? known.get(l.dir) : l));
+    }
     this.render();
   }
 
@@ -233,8 +239,9 @@ export class ProjectTree {
       !node.dir ? { label: 'Open to the Right', icon: 'split', action: () => { this.app.editors.split(); this.app.editors.open(node.path); } } : null,
       { label: 'Find in Directory…', icon: 'find', action: () => this.app.findInFiles?.({ include: dir ? dir + '/*' : '' }) },
       '-',
-      { label: 'Copy Path', action: () => navigator.clipboard?.writeText(node.path) },
-      { label: 'Copy Name', action: () => navigator.clipboard?.writeText(basename(node.path)) },
+      { label: 'Copy Path', action: () => copyText(node.path) },
+      { label: 'Copy Name', action: () => copyText(basename(node.path)) },
+      !node.dir && this.app.project?.capabilities?.localHistory ? { label: 'Show Local History', icon: 'history', action: () => showLocalHistory(this.app, node.path) } : null,
       node.path ? { label: 'Rename…', kbd: 'Shift+F6', action: () => this.rename(node.path) } : null,
       node.path ? { label: 'Delete…', kbd: 'Delete', action: () => this.remove(node.path) } : null,
       this.app.git?.enabled && node.path ? '-' : null,

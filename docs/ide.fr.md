@@ -19,12 +19,24 @@ commits.
   des usages, renommage (classe, méthode, propriété, constante, variable ; une classe renomme son fichier), documentation
   au survol, structure du fichier, problèmes (erreurs de syntaxe, classes / méthodes / fonctions inconnues).
 - **Navigation** : Search Everywhere (double Maj), aller au fichier / à la classe / au symbole, fichiers récents,
-  chercher / remplacer dans les fichiers.
+  chercher / remplacer dans les fichiers, position précédente / suivante (Ctrl+Alt+Gauche / Droite, ou les boutons
+  précédent / suivant de la souris).
 - **Git** : fenêtre Commit (modifications, cases à cocher, amend), diff avec HEAD, commit et push, mise à jour (pull),
   branches, stash, historique avec les fichiers de chaque commit, annotate (blame), annulation.
 - **Exécution** : les configurations du projet (`bin/jumphp run / test / shot / build / webshot / serve / export / lint`
   par jeu ou application), sortie en direct, liens `fichier:ligne`, résultats des tests en arbre, captures ouvertes dans
   un onglet.
+- **Terminal** (bureau) : `Alt+F12` (View > Terminal), des shells dans le dossier du projet, un onglet chacun (`+`).
+  Linux / macOS : ton shell (`$SHELL`) dans un pseudo-terminal (couleurs, invite, Ctrl+C, programmes plein écran, taille
+  qui suit la fenêtre) ; les touches vont au shell (seules les `Alt+…` vont à l'IDE), copier / coller avec
+  `Ctrl+Maj+C / V`. Windows : `cmd.exe` (`JUMPHP_IDE_SHELL=powershell` pour PowerShell) sur des tubes : la ligne est
+  éditée dans l'IDE puis envoyée.
+- **Historique local** (bureau) : File › Show Local History (aussi au clic droit d'un onglet ou d'un fichier de l'arbre) :
+  les versions d'un fichier gardées par l'IDE sur cet ordinateur, sans git : une à chaque sauvegarde, et une quand le
+  fichier a changé hors de l'IDE (Claude Code, un terminal, git) avant que l'IDE le sauve ou le rouvre. **Compare** (un
+  diff dont la droite est le fichier, modifiable) ou **Revert** (un seul changement dans l'éditeur : Ctrl+Z le défait).
+  Gardé dans `.jumphp/history/files/` (hors de git) : les 60 dernières versions de chaque fichier, 60 jours au plus,
+  fichiers texte jusqu'à 1 Mo.
 - **Débogueur** (bureau) : Xdebug. Un clic dans la marge à gauche d'une ligne PHP pose un point d'arrêt (clic droit :
   une condition, `Ctrl+F8` au curseur) ; **Debug** (`Maj+F9`, l'insecte à côté de Run) lance la configuration choisie
   avec Xdebug (`JUMPHP_XDEBUG`). À l'arrêt : la ligne marquée, la fenêtre **Debug** avec la pile, les variables en
@@ -48,6 +60,12 @@ commits.
   qu'une modification remplace est marqué avant (orange) et ce qu'il a écrit après (vert), ses commandes apparaissent
   dans Run avec leur sortie, ses recherches dans Find, son plan au-dessus de la conversation ; le clavier reste dans la
   fenêtre Claude et rien ne bouge pendant que vous tapez.
+- **Claude : onglets, fenêtres, historique** : un onglet par conversation ; `+` en démarre une autre sans arrêter les
+  autres (chacune son processus Claude Code). Clic droit sur un onglet : **Open in a Window** (la conversation continue
+  dans sa propre fenêtre ; fermer cette fenêtre la remet en onglet), renommer, copier en Markdown, fermer. Chaque
+  conversation est gardée dans le projet, `.jumphp/history/claude/<id>.json` (un `.gitignore` garde `.jumphp/history/`
+  hors de git) : l'onglet **History** les liste, la plus récente d'abord ; un clic la rouvre dans un onglet et elle
+  reprend où elle en était (`--resume`).
 - **Claude pilote l'IDE** : l'IDE donne au Claude qu'il lance ses propres outils (serveur MCP `jumphp-ide` sur
   `127.0.0.1`, jeton aléatoire) : ouvrir un fichier, pointer des lignes avec une note, montrer un diff ou une fenêtre,
   lancer une configuration dans Run et lire son résultat, jouer une scène, les problèmes d'un fichier, ce que vous

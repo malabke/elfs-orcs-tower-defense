@@ -5,7 +5,7 @@
 // bin/jumphp installer, run in the Run window; jumphp.net is the jumphp.net window's own commands (playground.upload,
 // playground.installer).
 import { backend } from './backend.js';
-import { el, dialog, notify, confirm, prefs } from './ui.js';
+import { el, dialog, notify, confirm, prefs, copyText } from './ui.js';
 
 const SYSTEMS = [['windows', 'Windows'], ['linux', 'Linux'], ['macos', 'macOS']];
 // the run configurations that build each system (games, apps)
@@ -137,7 +137,7 @@ async function make(app, { module, systems, where, url, version, local }) {
 }
 
 function result(app, where, links, page, note) {
-  const copy = (text) => { navigator.clipboard?.writeText(text); notify('Copied.', 'info'); };
+  const copy = (text) => { copyText(text); notify('Copied.', 'info'); };
   dialog({
     title: `The installers are ready (${where})`, wide: true,
     body: el('div.inst', {},

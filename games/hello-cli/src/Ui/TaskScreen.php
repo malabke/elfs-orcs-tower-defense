@@ -20,6 +20,8 @@ use Symfony\Component\Tui\Widget\TextWidget;
 final class TaskScreen
 {
     public readonly Tui $tui;
+    /** this console's own screen: the screen takes the whole terminal (its alternate screen), as vim or htop do */
+    private bool $fullScreen;
     private SelectListWidget $list;
     private InputWidget $input;
     private TextWidget $help;
@@ -27,6 +29,7 @@ final class TaskScreen
     /** @param TerminalInterface|null $terminal null: this console's (WindowsTerminal::create()) */
     public function __construct(private Tasks $tasks, ?TerminalInterface $terminal = null)
     {
+        $this->fullScreen = $terminal === null;
         $this->tui = new Tui(terminal: $terminal ?? WindowsTerminal::create());
         $this->list = new SelectListWidget([], 12);
         $this->input = new InputWidget();
@@ -57,7 +60,16 @@ final class TaskScreen
 
     public function run(): void
     {
-        $this->tui->run();
+        if ($this->fullScreen) {
+            fwrite(STDOUT, "\e[?1049h\e[2J\e[H");     // the alternate screen, cleared; the terminal comes back as it was after
+        }
+        try {
+            $this->tui->run();
+        } finally {
+            if ($this->fullScreen) {
+                fwrite(STDOUT, "\e[?1049l");
+            }
+        }
     }
 
     private function refresh(int $select = -1): void

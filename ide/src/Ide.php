@@ -9,6 +9,8 @@ use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Docker;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Claude\ClaudeCode;
+use JumPHP\Ide\Claude\ClaudeHistory;
+use JumPHP\Ide\History\LocalHistory;
 use JumPHP\Ide\Git\Git;
 use JumPHP\Ide\Gui\FormCode;
 use JumPHP\Ide\Gui\FormFile;
@@ -19,6 +21,7 @@ use JumPHP\Ide\Plugin\PluginHost;
 use JumPHP\Ide\Project\JumphpUpdater;
 use JumPHP\Ide\Project\ProjectInfo;
 use JumPHP\Ide\Run\Runner;
+use JumPHP\Ide\Run\Terminals;
 use JumPHP\Ide\Search\Search;
 use JumPHP\Ide\Workspace\Paths;
 use JumPHP\Ide\Workspace\Workspace;
@@ -67,6 +70,9 @@ final class Ide
     /** the IDE's plugins (PHP), when the host enables them (enablePlugins(): the desktop app) */
     public ?PluginHost $plugins = null;
 
+    /** the Terminal tool window's shells, when the host enables them (enableTerminal(): the desktop app only) */
+    public ?Terminals $terminals = null;
+
     /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
     public array $capabilities = [];
 
@@ -85,6 +91,7 @@ final class Ide
         $this->search = new Search($workspace);
         $this->project = new ProjectInfo($workspace);
         $this->processes = $processes ?? new Processes();
+        $this->librariesSignature = $this->librariesSignature();
         $root = $workspace->localPath();
         if ($root !== null) {
             // the extensions' functions (SDL, OpenGL, OpenAL...) from the engine's stubs, of the project or of a game's vendor/
@@ -126,8 +133,19 @@ final class Ide
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
-                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true));
+                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true, (string)($p['conv'] ?? 'main') ?: 'main'));
             $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
+            $this->register('claude.close', function (array $p): bool {
+                $this->claude?->close((string)($p['conv'] ?? ''));
+                return true;
+            });
+            // every conversation, kept in the project (.jumphp/history/claude/, not in git): History lists, reads, reopens them
+            $history = new ClaudeHistory($workspace);
+            $this->register('claude.history.save', fn (array $p) => $history->save((array)($p['conversation'] ?? [])));
+            $this->register('claude.history.list', fn () => $history->list());
+            $this->register('claude.history.read', fn (array $p) => $history->read((string)($p['id'] ?? '')));
+            $this->register('claude.history.delete', fn (array $p) => $history->delete((string)($p['id'] ?? '')));
+            $this->register('claude.history.markdown', fn (array $p) => $history->markdown((string)($p['id'] ?? '')));
         }
     }
 
@@ -168,6 +186,28 @@ final class Ide
         return $this->plugins;
     }
 
+    /**
+     * The Terminal tool window: shells in the project's folder. Only for a host that runs on the user's own computer
+     * (the desktop app): never on a server (the web IDE).
+     */
+    public function enableTerminal(): Terminals
+    {
+        $root = $this->workspace->localPath();
+        if ($root === null) {
+            throw new \LogicException('a terminal needs a project on this computer');
+        }
+        $this->terminals = $terminals = new Terminals($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+        $this->capabilities['terminal'] = true;
+        $this->register('terminal.open', fn (array $p) => $terminals->open((int)($p['cols'] ?? 120), (int)($p['rows'] ?? 30), isset($p['shell']) ? (string)$p['shell'] : null));
+        $this->register('terminal.write', fn (array $p) => $terminals->write((int)$p['id'], (string)($p['data'] ?? '')));
+        $this->register('terminal.resize', fn (array $p) => $terminals->resize((int)$p['id'], (int)($p['cols'] ?? 80), (int)($p['rows'] ?? 24)));
+        $this->register('terminal.close', function (array $p) use ($terminals): bool {
+            $terminals->close((int)$p['id']);
+            return true;
+        });
+        return $terminals;
+    }
+
     public function register(string $name, callable $handler): void
     {
         $this->commands[$name] = $handler;
@@ -201,6 +241,7 @@ final class Ide
     {
         // one part that fails never takes the IDE down: its error is shown (event ide.error), the rest goes on
         $this->guard('processes', fn () => $this->processes->poll());
+        $this->guard('Terminal', fn () => $this->terminals?->poll());
         $this->guard('Claude', fn () => $this->agent?->tick());
         $this->guard('Claude', fn () => $this->claude?->tick());
         $this->guard('Docker', fn () => $this->docker?->tick());
@@ -244,10 +285,32 @@ final class Ide
         $this->plugins?->dispatch('files.changed');
         $this->index->invalidate();
         $this->indexed = false;
-        if ($this->librariesIndexed) {      // a composer install may have changed vendor/
+        // a composer install changed vendor/ (even while the libraries were still being indexed): list them again
+        $signature = $this->librariesSignature();
+        if ($signature !== $this->librariesSignature) {
+            $this->librariesSignature = $signature;
             $this->index->invalidateLibraries();
             $this->librariesIndexed = false;
         }
+    }
+
+    private string $librariesSignature = '';
+
+    /**
+     * What Composer installed: the autoloaders of the project's vendor/ folders (vendor/ is not in the listing, so a
+     * composer install shows only through them). Changes when one is made or written again.
+     */
+    public function librariesSignature(): string
+    {
+        $parts = [];
+        foreach (array_keys($this->workspace->files()) as $manifest) {
+            if (basename($manifest) !== 'composer.json' || substr_count($manifest, '/') > 3) {
+                continue;
+            }
+            $path = ltrim((dirname($manifest) === '.' ? '' : dirname($manifest) . '/') . 'vendor/composer/autoload_psr4.php', '/');
+            $parts[] = $path . '@' . ($this->workspace->exists($path) ? $this->workspace->mtime($path) : '-');
+        }
+        return implode('|', $parts);
     }
 
     /** The visual editor of forms (graphic PHP apps, JumPHP\Gui): form files <-> arrays, the code behind them. */
@@ -349,14 +412,30 @@ final class Ide
                 // Xdebug through bin/jumphp (JUMPHP_XDEBUG): a JumPHP project run on this computer
                 'debug' => $this->debugger !== null && $this->docker !== null,
                 'plugins' => $this->plugins !== null,
+                'localHistory' => $this->workspace->localPath() !== null,
             ],
             'root' => $this->workspace->localPath(),
         ]);
         $this->register('files.list', fn (array $p) => ['files' => $this->listing(!empty($p['all']))]);
-        $this->register('file.read', fn (array $p) => $this->read((string)($p['path'] ?? '')));
-        $this->register('file.write', function (array $p) {
+        // the files' local history (Show Local History): a version at each save, and when a file changed outside the IDE;
+        // on this computer only (the web IDE's files are drafts on jumphp.net)
+        $history = $this->workspace->localPath() !== null ? new LocalHistory($this->workspace) : null;
+        $this->register('file.read', function (array $p) use ($history) {
+            $file = $this->read((string)($p['path'] ?? ''));
+            if ($history !== null && isset($file['content']) && empty($file['readOnly']) && !str_starts_with((string)$file['path'], '/')) {
+                $history->opened((string)$file['path'], (string)$file['content']);
+            }
+            return $file;
+        });
+        if ($history !== null) {
+            $this->register('history.local.list', fn (array $p) => $history->versions((string)($p['path'] ?? '')));
+            $this->register('history.local.read', fn (array $p) => $history->read((string)($p['path'] ?? ''), (string)($p['id'] ?? '')));
+        }
+        $this->register('file.write', function (array $p) use ($history) {
             $path = Paths::clean((string)($p['path'] ?? ''));
+            $history?->beforeWrite($path);
             $this->workspace->write($path, (string)($p['content'] ?? ''));
+            $history?->saved($path, (string)($p['content'] ?? ''));
             if (Paths::extension($path) === 'php') {
                 $this->index->update($path);
             }

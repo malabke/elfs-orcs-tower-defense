@@ -1,11 +1,13 @@
-// The Claude tool window (desktop): a conversation with the Claude Code of this computer, in the project's folder.
+// The Claude tool window (desktop): conversations with the Claude Code of this computer, in the project's folder, a tab
+// each (a new one never stops the others; Open in a Window moves one into a window of its own, closing it brings it
+// back). Every conversation is kept in the project (.jumphp/history/claude/, not in git): the History tab reopens them.
 // One `claude -p` per conversation (JumPHP\Ide\Claude\ClaudeCode), kept open: a message typed while Claude works goes
 // into the turn in progress (more information, "not that way"), as in Claude Code's own terminal. Its answer, the files it reads and changes, the
 // commands it runs, appear as they come (claude.event); the conversation goes on (--resume). What it changes on disk
 // comes back into the editors by themselves (the IDE watches the files). Follow (the eye): the IDE shows what Claude does
 // as it does it (ClaudeWatch); Claude also drives the IDE with its own tools (AgentTools, MCP server jumphp-ide).
 import { backend } from './backend.js';
-import { el, clear, icon, menu, notify, prefs, prompt } from './ui.js';
+import { el, clear, icon, menu, notify, prefs, prompt, confirm, copyText, debounce, timeAgo } from './ui.js';
 import { AgentTools, ClaudeWatch, IDE_TOOL, ideToolLabel } from './agent.js';
 
 const MODES = {
@@ -27,46 +29,203 @@ const MODELS = [
 const EFFORTS = [['', 'Thinking: default'], ['low', 'Thinking: low'], ['medium', 'Thinking: medium'], ['high', 'Thinking: high'],
   ['xhigh', 'Thinking: extra high'], ['max', 'Thinking: max']];
 
+const newKey = () => 'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
 export class ClaudePanel {
-  constructor(app) {
+  /**
+   * @param detached a conversation key: this page is a window of its own showing only that conversation (Open in a
+   * Window); the main window leaves it alone until the window closes (ui.broadcast claude.dock)
+   */
+  constructor(app, { detached = null } = {}) {
     this.app = app;
+    this.detached = detached;
     this.key = 'claude:' + app.projectKey;
-    const saved = prefs.get(this.key, {});
-    this.session = saved.session || null;
-    this.history = Array.isArray(saved.history) ? saved.history.slice(-200) : [];
     this.mode = prefs.get('claudeMode', 'acceptEdits');
-    this.run = null;                   // the turn in progress: {id, started, tools}
-    this.live = null;                  // the open conversation's process (its id), between turns too
-    this.status = el('span.game-status');
-    this.log = el('div.claude-log');
-    this.plan = el('div.claude-plan', { hidden: true });
-    this.watch = new ClaudeWatch(app, this);
-    if (backend.kind === 'native') this.tools = new AgentTools(app, this.watch);
-    this.input = el('textarea.input.claude-input', { rows: 3, placeholder: 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)',
-      onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); } } });
-    this.sendBtn = el('button.btn.primary.small', { title: 'Send (Enter): while Claude works, it reads it at once', onclick: () => this.send() }, 'Send');
-    this.stopBtn = el('button.btn.small', { title: 'Stop Claude', hidden: true, onclick: () => this.stop() }, icon('stop'), 'Stop');
     this.model = prefs.get('claudeModel', '');
     this.effort = prefs.get('claudeEffort', '');
+    this.status = el('span.claude-status');
+    // Follow (the editors show what Claude does) and the IDE's tools for Claude: the main window's (a conversation in a
+    // window of its own has no editors)
+    this.watch = detached ? { on: false, use() {}, result() {}, done() {}, toggle() {}, marks: { clearAll() {} } } : new ClaudeWatch(app, this);
+    if (backend.kind === 'native' && !detached) this.tools = new AgentTools(app, this.watch);
     this.modelSelect = el('select.input.small.claude-select', { title: 'The model Claude uses (claude --model)', onchange: () => this.pickModel() });
     this.effortSelect = el('select.input.small.claude-select', { title: 'How hard Claude thinks (claude --effort)',
       onchange: () => { this.effort = this.effortSelect.value; prefs.set('claudeEffort', this.effort); } },
       ...EFFORTS.map(([v, label]) => el('option', { value: v, selected: v === this.effort }, label)));
     this.fillModels();
     this.mcpBanner = el('div.claude-mcp', { hidden: true });
-    this.node = el('div.claude-panel', {}, this.mcpBanner, this.plan, this.log, el('div.claude-compose', {}, this.input,
-      el('div.claude-bar', {},
-        el('button.btn.small', { title: 'Mention the file open in the editor', onclick: () => this.mentionFile() }, icon('file'), 'File'),
-        el('button.btn.small', { title: 'Paste the selected code with its place', onclick: () => this.addSelection() }, icon('code'), 'Selection'),
-        el('span.tw-spacer'), this.stopBtn, this.sendBtn),
-      el('div.claude-bar', {}, this.modelSelect, this.effortSelect)));
-    for (const item of this.history) this.renderItem(item);
-    if (!this.history.length) this.placeholder();
-    backend.on('claude.event', (p) => this.event(p));
-    backend.on('claude.exit', (p) => this.exit(p));
+    this.tabsNode = el('div.claude-tabs');
+    this.body = el('div.claude-body');
+    this.node = el('div.claude-panel', {}, this.tabsNode, this.mcpBanner, this.body,
+      el('div.claude-bar.claude-settings', {}, this.modelSelect, this.effortSelect, this.status));
     this.remote = !!app.project.capabilities?.claudeRemote;     // the web IDE: the Claude of the user's computer
+    this.historyLocal = backend.kind === 'native' && !this.remote;
+    this.convs = [];
+    this.active = null;            // a Conversation, or 'history'
+    this.saveSoon = debounce(() => this.saveTabs(), 400);
+    this.restore();
+    backend.on('claude.event', (p) => this.route(p)?.event(p));
+    backend.on('claude.exit', (p) => this.route(p)?.exit(p));
+    backend.on('ui.broadcast', (m) => this.broadcast(m));
     this.checkStatus();
   }
+
+  /** The open tabs come back (an older IDE kept one conversation: it becomes the first tab). */
+  restore() {
+    if (this.detached) {
+      const url = new URLSearchParams(location.search);
+      backend.invoke('claude.history.read', { id: this.detached }).catch(() => null).then((data) => {
+        const c = this.openConversation({ key: this.detached, session: data?.session || null, items: data?.items || [], title: data?.title || '' });
+        const live = Number(url.get('live')) || null;
+        if (live) c.live = live;
+        if (url.get('running')) c.startTurn(live);
+      });
+      return;
+    }
+    const saved = prefs.get(this.key, {});
+    const tabs = Array.isArray(saved.tabs) ? saved.tabs
+      : (saved.session || saved.history?.length ? [{ key: newKey(), session: saved.session || null, items: saved.history || [] }] : []);
+    for (const t of tabs) if (!t.detached) this.openConversation(t, false);
+    if (!this.convs.length) this.openConversation({}, false);
+    this.show(this.convs.find((c) => c.key === saved.active) || this.convs[this.convs.length - 1]);
+  }
+
+  /** The conversation an event belongs to: by its key (claude.send's conv), else by its process (the web IDE). */
+  route({ id, conv }) {
+    return (conv && this.convs.find((c) => c.key === conv)) || this.convs.find((c) => c.run?.id === id || c.live === id) || null;
+  }
+
+  /** A new tab (a new conversation, or one from the history). */
+  openConversation(data = {}, show = true) {
+    const c = new Conversation(this, { key: data.key || newKey(), session: data.session || null, items: data.items || [], title: data.title || '' });
+    this.convs.push(c);
+    if (show || !this.active) this.show(c);
+    else this.renderTabs();
+    this.saveSoon();
+    return c;
+  }
+
+  show(target) {
+    this.active = target;
+    clear(this.body);
+    if (target === 'history') this.body.append(this.historyNode());
+    else if (target) { this.body.append(target.node); target.scroll(); requestAnimationFrame(() => target.input.focus()); }
+    this.renderTabs();
+    this.saveSoon();
+  }
+
+  current() { return this.active instanceof Conversation ? this.active : null; }
+
+  renderTabs() {
+    clear(this.tabsNode);
+    for (const c of this.convs) {
+      this.tabsNode.append(el(`button.tw-tab${c === this.active ? '.on' : ''}`, {
+        title: c.title() + (c.run ? ' (working…)' : '') + ' — right click: more',
+        onclick: () => this.show(c),
+        oncontextmenu: (e) => { e.preventDefault(); this.tabMenu(c, e); },
+      }, c.run ? el('span.spinner') : icon('claude'), el('span.claude-tab-title', {}, c.title()),
+      this.detached ? null : el('span.x', { title: 'Close (it stays in History)', onclick: (e) => { e.stopPropagation(); this.close(c); } }, '×')));
+    }
+    if (this.historyLocal && !this.detached) {
+      this.tabsNode.append(el(`button.tw-tab${this.active === 'history' ? '.on' : ''}`, { title: 'Every conversation of this project', onclick: () => this.show('history') },
+        icon('history'), 'History'));
+    }
+    this.app.refreshToolHeader?.('claude');
+  }
+
+  tabMenu(c, e) {
+    menu([
+      this.detached || backend.kind !== 'native' ? null : { label: 'Open in a Window', icon: 'split', action: () => this.undock(c) },
+      { label: 'Rename…', action: async () => { const t = await prompt('Rename the conversation', { value: c.title() }); if (t != null) { c.name = t.trim(); c.save(); this.renderTabs(); } } },
+      this.historyLocal ? { label: 'Copy as Markdown', action: () => c.markdown().then((md) => { copyText(md); notify('Copied', 'info'); }) } : null,
+      this.detached ? null : '-',
+      this.detached ? null : { label: 'Close', action: () => this.close(c) },
+    ].filter(Boolean), e);
+  }
+
+  /** Closes a tab: its process ends (the conversation stays in History). */
+  async close(c) {
+    if (c.run && !(await confirm('Close this conversation?', 'Claude is working in it: closing stops it. It stays in History.', { ok: 'Close', danger: true }))) return;
+    await c.saveNow();
+    if (!this.remote) backend.invoke('claude.close', { conv: c.key }).catch(() => null);
+    else if (c.run) backend.invoke('claude.stop', { id: c.run.id }).catch(() => null);
+    this.drop(c);
+  }
+
+  drop(c) {
+    c.dispose();
+    this.convs = this.convs.filter((x) => x !== c);
+    if (this.active === c) this.show(this.convs[this.convs.length - 1] || null);
+    if (!this.convs.length) this.openConversation();
+    this.renderTabs();
+    this.saveSoon();
+  }
+
+  /** Open in a Window: the conversation goes on in a window of its own (its process too: nothing stops). */
+  async undock(c) {
+    await c.saveNow();
+    try {
+      await backend.invoke('claude.window', { conv: c.key, title: c.title(), live: c.live ?? c.run?.id ?? null, running: !!c.run });
+    } catch (e) { notify(e.message, 'error'); return; }
+    this.drop(c);
+    this.saveTabs([c]);
+  }
+
+  /** Messages between the IDE's windows (the PHP side sends ui.broadcast to every window). */
+  broadcast(m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.type === 'claude.dock' && !this.detached && !this.convs.some((c) => c.key === m.conv)) {
+      // the window of a conversation closed: it comes back as a tab, as it was (its process went on meanwhile)
+      backend.invoke('claude.history.read', { id: m.conv }).catch(() => null).then((data) => {
+        const c = this.openConversation({ key: m.conv, session: data?.session, items: data?.items || [], title: data?.title || '' });
+        if (m.live) c.live = m.live;
+        if (m.running && m.live) c.startTurn(m.live);
+        this.saveSoon();
+      });
+    } else if (m.type === 'claude.open' && !this.detached) {
+      this.app.editors?.open(m.path, m.line ? { line: m.line } : {});
+    }
+  }
+
+  /** The open tabs, kept for the next start (the whole conversations are in the project's history). */
+  saveTabs(detachedNow = []) {
+    if (this.detached) return;
+    const tabs = this.convs.map((c) => ({ key: c.key, session: c.session, title: c.name || '', items: c.items.slice(-200) }));
+    prefs.set(this.key, { tabs, active: this.current()?.key || null });
+    void detachedNow;     // a conversation in a window is not reopened as a tab at the next start: History has it
+  }
+
+  /** History: every conversation of the project, newest first: open one again (a tab; it goes on), or delete it. */
+  historyNode() {
+    const node = el('div.claude-history', {}, el('div.placeholder', {}, 'Loading…'));
+    backend.invoke('claude.history.list').then((list) => {
+      clear(node);
+      if (!list.length) { node.append(el('div.placeholder.claude-empty', {}, 'No conversation yet.')); return; }
+      node.append(el('div.claude-history-head', {}, `${list.length} conversation(s), kept in .jumphp/history/claude/ (not in git)`));
+      for (const h of list) {
+        const open = this.convs.find((c) => c.key === h.id);
+        node.append(el('div.claude-history-row', { title: 'Open it in a tab (it goes on where it was)', onclick: () => this.reopen(h.id) },
+          icon('claude'), el('div.claude-history-text', {}, el('div.claude-history-title', {}, h.title),
+            el('div.claude-history-meta', {}, `${timeAgo(h.updated)} · ${h.messages} message(s)${open ? ' · open' : ''}`)),
+          el('button.btn.small', { title: 'Copy as Markdown', onclick: (e) => { e.stopPropagation(); backend.invoke('claude.history.markdown', { id: h.id }).then((md) => { copyText(md); notify('Copied', 'info'); }); } }, icon('file')),
+          el('button.btn.small', { title: open ? 'Close its tab first' : 'Delete', disabled: !!open, onclick: async (e) => {
+            e.stopPropagation();
+            if (await confirm('Delete this conversation?', h.title, { ok: 'Delete', danger: true })) { await backend.invoke('claude.history.delete', { id: h.id }); this.show('history'); }
+          } }, icon('close'))));
+      }
+    }).catch((e) => { clear(node); node.append(el('div.placeholder', {}, e.message)); });
+    return node;
+  }
+
+  async reopen(id) {
+    const open = this.convs.find((c) => c.key === id);
+    if (open) { this.show(open); return; }
+    const data = await backend.invoke('claude.history.read', { id }).catch((e) => { notify(e.message, 'error'); return null; });
+    if (data) this.openConversation({ key: data.id, session: data.session, items: data.items || [], title: data.title });
+  }
+
+  /** The plan (TodoWrite) goes to the conversation whose event is being read (ClaudeWatch calls it). */
+  showPlan(todos) { (this.planTarget || this.current())?.showPlan(todos); }
 
   /** The model list, with the one typed in "Other…" when it is not a known one. */
   fillModels() {
@@ -98,9 +257,9 @@ export class ClaudePanel {
     const was = this.available;
     this.available = s.available;
     this.say(s.available ? (s.version || 'Claude Code') : (this.remote ? 'not connected' : 'not installed'));
-    if (!s.available) this.notInstalled();
-    else if (was === false) { clear(this.log); for (const item of this.history) this.renderItem(item); if (!this.history.length) this.placeholder(); }
-    if (s.available && !this.remote && backend.kind === 'native') this.checkMcp({ quiet: true });
+    if (!s.available) for (const c of this.convs) c.notInstalled();
+    else if (was === false) for (const c of this.convs) c.rerender();
+    if (s.available && !this.remote && backend.kind === 'native' && !this.detached) this.checkMcp({ quiet: true });
     // the web IDE: keep looking for the computer while it is not connected
     clearTimeout(this.statusTimer);
     if (this.remote && !s.available) this.statusTimer = setTimeout(() => this.checkStatus(), 5000);
@@ -148,22 +307,75 @@ export class ClaudePanel {
 
   title() { return 'Claude'; }
 
-  headerExtra() { return this.status; }
+  headerExtra() { return this.detached ? el('span.tw-title', {}, 'Claude') : null; }
 
   actions() {
     return [
-      el(`button${this.watch.on ? '.on' : ''}`, { title: this.watch.on ? 'Following Claude: the IDE shows what it reads, edits and runs (click to stop)' : 'Follow Claude: show in the IDE what it reads, edits and runs',
-        onclick: () => { this.watch.toggle(); this.app.refreshToolHeader('claude'); } }, icon('eye')),
-      el('button', { title: 'New conversation', onclick: () => this.reset() }, icon('plus')),
+      this.detached ? null : el(`button${this.watch.on ? '.on' : ''}`, { title: this.watch.on ? 'Following Claude: the IDE shows what it reads, edits and runs (click to stop)' : 'Follow Claude: show in the IDE what it reads, edits and runs',
+        onclick: () => { this.watch.toggle(); this.app.refreshToolHeader?.('claude'); } }, icon('eye')),
+      this.detached ? null : el('button', { title: 'New conversation (the others go on)', onclick: () => this.openConversation() }, icon('plus')),
+      this.detached || backend.kind !== 'native' || this.remote ? null
+        : el('button', { title: 'Open this conversation in a window', onclick: () => this.current() && this.undock(this.current()) }, icon('split')),
       el('button', { title: 'What Claude may do: ' + MODES[this.mode][0], onclick: (e) => menu([
         { head: 'What Claude may do' },
         ...Object.entries(MODES).map(([id, [label, hint]]) => ({ label, hint, checked: this.mode === id, action: () => {
           this.mode = id;
           prefs.set('claudeMode', id);
-          this.app.refreshToolHeader('claude');
+          this.app.refreshToolHeader?.('claude');
         } })),
       ], e.currentTarget) }, icon('settings')),
-    ];
+    ].filter(Boolean);
+  }
+
+  say(text) { this.status.textContent = text; }
+
+  /** The editor's "Ask Claude": the window, the current conversation, text in its box. */
+  ask(text = '') {
+    this.app.showTool('claude');
+    const c = this.current() || this.convs[0] || this.openConversation();
+    if (this.active !== c) this.show(c);
+    if (text) c.insert(text);
+    c.input.focus();
+  }
+}
+
+/** One conversation: its log, its plan, its box, its Claude Code process (a tab of the Claude window). */
+class Conversation {
+  constructor(panel, { key, session, items, title }) {
+    this.panel = panel;
+    this.app = panel.app;
+    this.key = key;
+    this.session = session;
+    this.items = items;
+    this.name = title || '';
+    this.run = null;                   // the turn in progress: {id, started, tools}
+    this.live = null;                  // the open conversation's process (its id), between turns too
+    this.log = el('div.claude-log');
+    this.plan = el('div.claude-plan', { hidden: true });
+    this.input = el('textarea.input.claude-input', { rows: 3, placeholder: 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)',
+      onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); } } });
+    this.sendBtn = el('button.btn.primary.small', { title: 'Send (Enter): while Claude works, it reads it at once', onclick: () => this.send() }, 'Send');
+    this.stopBtn = el('button.btn.small', { title: 'Stop Claude', hidden: true, onclick: () => this.stop() }, icon('stop'), 'Stop');
+    this.node = el('div.claude-conv', {}, this.plan, this.log, el('div.claude-compose', {}, this.input,
+      el('div.claude-bar', {},
+        el('button.btn.small', { title: 'Mention the file open in the editor', onclick: () => this.mentionFile() }, icon('file'), 'File'),
+        el('button.btn.small', { title: 'Paste the selected code with its place', onclick: () => this.addSelection() }, icon('code'), 'Selection'),
+        el('span.tw-spacer'), this.stopBtn, this.sendBtn)));
+    this.saveHistory = debounce(() => this.saveNow(), 1500);
+    this.rerender();
+  }
+
+  title() {
+    if (this.name) return this.name;
+    const first = this.items.find((i) => i.role === 'user');
+    return first ? first.text.replace(/\s+/g, ' ').slice(0, 40) : 'New conversation';
+  }
+
+  rerender() {
+    clear(this.log);
+    for (const item of this.items) this.renderItem(item);
+    if (!this.items.length) this.placeholder();
+    if (this.run && this.thinking) this.log.append(this.thinking);
   }
 
   placeholder() {
@@ -171,60 +383,58 @@ export class ClaudePanel {
       el('p', { style: { fontSize: '12px' } }, 'It reads AGENTS.md, writes the game, runs bin/jumphp test… The files it changes open here as it goes.')));
   }
 
+  /** No Claude Code (or, on the web IDE, no computer connected): how to get it, above what the conversation holds. */
   notInstalled() {
     clear(this.log);
-    if (this.remote) {
+    if (this.panel.remote) {
       const command = 'bin/jumphp claude:connect';
       this.log.append(el('div.placeholder.claude-empty', {}, el('p', {}, 'Use the Claude Code of your computer here.'),
         el('p', { style: { fontSize: '12px' } }, 'In your JumPHP project, on your computer, run:'),
-        el('pre.claude-code', { title: 'Click to copy', style: { cursor: 'copy' }, onclick: () => { navigator.clipboard?.writeText(command); notify('Copied', 'info'); } }, command),
+        el('pre.claude-code', { title: 'Click to copy', style: { cursor: 'copy' }, onclick: () => { copyText(command); notify('Copied', 'info'); } }, command),
         el('p', { style: { fontSize: '12px' } }, 'It opens the JumPHP IDE and asks you, in your browser, to allow it (or in the JumPHP IDE: your account menu › Claude for jumphp.net). Claude then works on a copy of this project on your computer; what it changes comes back here as drafts.'),
         el('p', { style: { fontSize: '12px', color: 'var(--text-3)' } }, 'Waiting for your computer…')));
-      return;
+    } else {
+      this.log.append(el('div.placeholder.claude-empty', {}, el('p', {}, 'Claude Code is not installed on this computer.'),
+        el('button.btn.primary', { onclick: () => this.app.openUrl('https://claude.com/claude-code') }, 'Install Claude Code'),
+        el('p', { style: { fontSize: '12px' } }, 'Then sign in once in a terminal (claude), and come back.')));
     }
-    this.log.append(el('div.placeholder.claude-empty', {}, el('p', {}, 'Claude Code is not installed on this computer.'),
-      el('button.btn.primary', { onclick: () => this.app.openUrl('https://claude.com/claude-code') }, 'Install Claude Code'),
-      el('p', { style: { fontSize: '12px' } }, 'Then sign in once in a terminal (claude), and come back.')));
+    for (const item of this.items) this.renderItem(item);     // an old conversation can still be read
   }
 
-  say(text) { this.status.textContent = text; }
+  /** The open tabs (prefs) and the project's history (the whole conversation, a moment later). */
+  save() {
+    this.panel.saveSoon();
+    if (this.panel.historyLocal && this.items.length) this.saveHistory();
+  }
 
-  save() { prefs.set(this.key, { session: this.session, history: this.history.slice(-200) }); }
+  saveNow() {
+    if (!this.panel.historyLocal || !this.items.length) return Promise.resolve();
+    return backend.invoke('claude.history.save', { conversation: { id: this.key, title: this.name, session: this.session, items: this.items } })
+      .catch(() => null);
+  }
 
-  reset() {
-    if (this.run || this.live) backend.invoke('claude.stop', { id: this.run?.id ?? this.live }).catch(() => null);
-    this.live = null;
-    this.endTurn();
-    this.session = null;
-    this.history = [];
-    this.showPlan([]);
-    this.watch.marks.clearAll();
-    this.save();
-    clear(this.log);
-    this.placeholder();
-    this.input.focus();
+  markdown() {
+    return this.saveNow().then(() => backend.invoke('claude.history.markdown', { id: this.key }));
+  }
+
+  dispose() {
+    this.task?.();
+    this.task = null;
   }
 
   mentionFile() {
-    const path = this.app.editors.activePath();
+    const path = this.app.editors?.activePath();
     if (!path) return;
     this.insert(`@${path} `);
   }
 
   addSelection() {
-    const ed = this.app.editors.editor();
-    const path = this.app.editors.activePath();
+    const ed = this.app.editors?.editor();
+    const path = this.app.editors?.activePath();
     const sel = ed?.getSelection();
     if (!ed || !path || !sel || sel.isEmpty()) { notify('Select some code first.', 'info'); return; }
     const code = ed.getModel().getValueInRange(sel);
     this.insert(`In ${path} (lines ${sel.startLineNumber}-${sel.endLineNumber}):\n\`\`\`\n${code}\n\`\`\`\n`);
-  }
-
-  /** Opens the window with text in the box (the editor's "Ask Claude"). */
-  ask(text = '') {
-    this.app.showTool('claude');
-    if (text) this.insert(text);
-    this.input.focus();
   }
 
   insert(text) {
@@ -235,20 +445,22 @@ export class ClaudePanel {
 
   async send() {
     const prompt = this.input.value.trim();
+    const p = this.panel;
     // the web IDE's Claude (through jumphp.net) takes one message per run
-    if (!prompt || (this.run && this.remote)) return;
-    if (this.available === false) { this.notInstalled(); return; }
-    await this.app.editors.saveAll(true);
+    if (!prompt || (this.run && p.remote)) return;
+    if (p.available === false) { this.notInstalled(); return; }
+    await this.app.editors?.saveAll(true);
     this.log.querySelector('.claude-empty')?.remove();
     const during = !!this.run;
     this.add({ role: 'user', text: prompt, during });
     this.input.value = '';
+    p.renderTabs();
     try {
-      const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: this.mode, model: this.model, effort: this.effort });
-      if (!this.remote) this.live = id;
+      const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: p.mode, model: p.model, effort: p.effort, conv: this.key });
+      if (!p.remote) this.live = id;
       if (this.run && this.run.id === id) return;       // read by Claude in the turn in progress
       this.startTurn(id);
-      if (this.remote) this.pollRemote(id, 0);
+      if (p.remote) this.pollRemote(id, 0);
     } catch (e) {
       this.add({ role: 'error', text: e.message });
     }
@@ -258,14 +470,15 @@ export class ClaudePanel {
   startTurn(id) {
     this.run = { id, started: Date.now(), tools: 0 };
     this.stopBtn.hidden = false;
-    this.input.placeholder = this.remote ? 'Claude is working…' : 'Tell Claude more while it works: it reads it at once (Enter)';
+    this.input.placeholder = this.panel.remote ? 'Claude is working…' : 'Tell Claude more while it works: it reads it at once (Enter)';
     this.thinking?.remove();
     this.thinking = el('div.claude-thinking', {}, el('span.spinner'), 'Claude is working…');
     this.log.append(this.thinking);
     this.scroll();
-    this.say('working…');
+    this.panel.say('working…');
+    this.panel.renderTabs();
     this.task?.();
-    this.task = this.app.task('Claude is working…', { open: () => this.app.showTool('claude') });
+    this.task = this.app.task?.(`Claude is working… (${this.title()})`, { open: () => { this.app.showTool('claude'); this.panel.show(this); } }) || null;
   }
 
   /** The turn is over (its result, or the process ended): what it changed comes in. */
@@ -274,12 +487,14 @@ export class ClaudePanel {
     this.task = null;
     if (!this.run) return;
     this.run = null;
-    this.watch.done();
+    this.panel.watch.done();
     this.thinking?.remove();
     this.stopBtn.hidden = true;
     this.input.placeholder = 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)';
-    this.say('ready');
-    this.save();
+    this.panel.say('ready');
+    this.panel.renderTabs();
+    this.saveNow();
+    this.panel.saveSoon();
     // what it changed: the tree, Git, the open files
     this.app.tree?.refresh();
     this.app.git?.refresh();
@@ -301,34 +516,39 @@ export class ClaudePanel {
   event({ id, event }) {
     // the open conversation goes on by itself (a message that came just as a turn ended): a turn again
     if (!this.run && id === this.live && event.type !== 'result' && event.type !== 'system') this.startTurn(id);
+    if (this.run && this.run.id === null) this.run.id = id;     // a window that opened in the middle of a turn
     if (!this.run || id !== this.run.id) return;
     if (event.session_id) this.session = event.session_id;
+    const panel = this.panel;
     if (event.type === 'system' && event.subtype === 'init') {
-      this.say(event.model ? `${event.model}` : 'working…');
+      panel.say(event.model ? `${event.model}` : 'working…');
     } else if (event.type === 'assistant') {
       for (const part of event.message?.content || []) {
         if (part.type === 'text' && part.text?.trim()) this.add({ role: 'assistant', text: part.text });
         else if (part.type === 'tool_use') {
           this.run.tools++;
           this.add({ role: 'tool', name: part.name, input: part.input || {} });
-          this.watch.use(part);
+          if (part.name === 'TodoWrite') this.showPlan(part.input?.todos || []);
+          panel.planTarget = this;
+          panel.watch.use(part);
+          panel.planTarget = null;
           this.task?.update(`Claude: ${toolText(part.name, part.input || {}, this.app.project?.root || '')}`);
         }
       }
     } else if (event.type === 'user') {
       for (const part of event.message?.content || []) {
         if (part.type === 'tool_result' && part.is_error) this.add({ role: 'tool-error', text: toText(part.content).slice(0, 600) });
-        if (part.type === 'tool_result') this.watch.result(part);
+        if (part.type === 'tool_result') panel.watch.result(part);
       }
     } else if (event.type === 'result') {
       const seconds = Math.round((event.duration_ms || (Date.now() - this.run.started)) / 1000);
       const cost = typeof event.total_cost_usd === 'number' ? ` · $${event.total_cost_usd.toFixed(3)}` : '';
       if (event.is_error && event.result) this.add({ role: 'error', text: event.result });
       if (event.permission_denials?.length) {
-        this.add({ role: 'note', text: `Refused (mode “${MODES[this.mode][0]}”): ${event.permission_denials.map((d) => d.tool_name).join(', ')}. Change what Claude may do (⚙) and ask again.` });
+        this.add({ role: 'note', text: `Refused (mode “${MODES[panel.mode][0]}”): ${event.permission_denials.map((d) => d.tool_name).join(', ')}. Change what Claude may do (⚙) and ask again.` });
       }
       this.add({ role: 'done', text: `${event.is_error ? 'Stopped' : 'Done'} · ${seconds} s · ${this.run.tools} action(s)${cost}` });
-      if (!this.remote) { this.endTurn(); return; }
+      if (!panel.remote) { this.endTurn(); return; }
     }
     this.save();
   }
@@ -342,9 +562,10 @@ export class ClaudePanel {
   }
 
   add(item) {
-    this.history.push(item);
+    this.items.push(item);
     this.renderItem(item);
     this.scroll();
+    this.save();
   }
 
   renderItem(item) {
@@ -369,11 +590,17 @@ export class ClaudePanel {
         t.status === 'in_progress' && t.activeForm ? t.activeForm : t.content)));
   }
 
+  /** A file to show: here, or in the main window when this conversation is in a window of its own. */
+  openFile(path, opts = {}) {
+    if (this.panel.detached) backend.invoke('ui.broadcast', { type: 'claude.open', path, line: opts.line || null }).catch(() => null);
+    else this.app.editors.open(path, opts);
+  }
+
   toolRow({ name, input }) {
     if (name.startsWith(IDE_TOOL)) {
       const { tool, what, label } = ideToolLabel(name, input);
       const path = input.path && !String(input.path).startsWith('/') ? String(input.path) : null;
-      return el(`div.claude-tool.ide${path ? '.link' : ''}`, { title: `IDE tool: ${tool}`, onclick: () => path && this.app.editors.open(path, input.start_line || input.line ? { line: input.start_line || input.line } : {}) },
+      return el(`div.claude-tool.ide${path ? '.link' : ''}`, { title: `IDE tool: ${tool}`, onclick: () => path && this.openFile(path, input.start_line || input.line ? { line: input.start_line || input.line } : {}) },
         icon('claude'), el('b', {}, label), el('span', {}, what.slice(0, 300)));
     }
     const root = this.app.project?.root || '';
@@ -385,7 +612,7 @@ export class ClaudePanel {
       WebFetch: ['globe', 'Fetched', input.url], WebSearch: ['globe', 'Searched the web', input.query], TodoWrite: ['check', 'Planned', `${(input.todos || []).length} step(s)`],
     }[name] || ['settings', name, input.description || ''];
     const opens = file && !file.startsWith('/') && ['Read', 'Write', 'Edit', 'MultiEdit'].includes(name);
-    return el(`div.claude-tool${opens ? '.link' : ''}`, { title: opens ? 'Open ' + file : '', onclick: () => opens && this.app.editors.open(file) },
+    return el(`div.claude-tool${opens ? '.link' : ''}`, { title: opens ? 'Open ' + file : '', onclick: () => opens && this.openFile(file) },
       icon(what[0]), el('b', {}, what[1]), el('span', {}, String(what[2] || '').slice(0, 300)));
   }
 

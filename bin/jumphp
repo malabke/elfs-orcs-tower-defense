@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CALLER_DIR="$PWD"     # where the command was typed (run inside games/<id>: that one)
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 
@@ -66,7 +67,8 @@ Games (<game> = a folder of games/, e.g. pong)
   video <app> <file.mp4> [name] [fps]  a film as frames for the Video widget: assets/videos/<name>/ (+ audio.ogg)
   install <game>            composer install (engine linked from engine/)
   composer <game> <args>    any composer command in the game
-  run <game>                play on desktop (window + sound)
+  run [game] [args...]      play on desktop (window + sound); no game: the folder of games/ you are in, else
+                            JUMPHP_GAME (.env), else the only game of games/
   test <game> [tests/X.php]  lint + phpstan (if configured) + phpunit (if tests/) + headless smoke test; a test file: only its tests
   shot <game> [frames] [out.png]   headless screenshot after N frames (default 120) -> var/screenshots/
   build <game>              browser build -> games/<game>/dist/web (static files)
@@ -152,6 +154,17 @@ Environment (headless runs): JUMPHP_SCENE, JUMPHP_SCENE_PARAMS, JUMPHP_INPUT, JU
 EOF
 }
 
+# the game / app a command means when none is named: the folder of games/ it is typed in, else JUMPHP_GAME (.env),
+# else the only one of games/ (none of these: empty)
+default_game() {
+  case "$CALLER_DIR/" in "$ROOT/games/"*/*) local rest="${CALLER_DIR#"$ROOT/games/"}"; echo "${rest%%/*}"; return ;; esac
+  if [ -n "${JUMPHP_GAME:-}" ] && [ -d "$ROOT/games/$JUMPHP_GAME" ]; then echo "$JUMPHP_GAME"; return; fi
+  local all=() g
+  for g in "$ROOT"/games/*/; do [ -f "$g/composer.json" ] && all+=("$(basename "$g")"); done
+  [ ${#all[@]} -eq 1 ] && echo "${all[0]}"
+  return 0
+}
+
 game_dir() {
   local g="${1:-}"
   [ -n "$g" ] || die "missing <game> (a folder of games/)"
@@ -213,7 +226,12 @@ php_run() {
   else
     ensure_desktop_image
   fi
-  docker run --rm $TTY_FLAGS --user "$(id -u):$(id -g)" \
+  # a terminal for the program when this one is a terminal (a CLI app's full-screen screens need it: raw keys, its
+  # size), checked now: TTY_FLAGS is always -i (its -t 1 runs inside $(...), a pipe), and a php_run inside $(...) must
+  # not get -t (its output would come with \r)
+  local tty=-i
+  if [ -t 0 ] && [ -t 1 ]; then tty=-it; fi
+  docker run --rm "$tty" --user "$(id -u):$(id -g)" \
     "${WS[@]}" -w "/workspace/$wd" \
     -e HOME=/tmp -e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/workspace/.cache/composer \
     ${JUMPHP_LIVE:+-e JUMPHP_LIVE=/workspace/var/live/frame.png -e JUMPHP_LIVE_EVERY=${JUMPHP_LIVE_EVERY:-10}} \
@@ -933,6 +951,12 @@ cmd_cli_uninstall() {
 }
 
 cmd_run() {
+  # `bin/jumphp run` alone, or followed by the program's own arguments (a CLI app's command): the default game
+  if [ -z "${1:-}" ] || [ ! -d "$ROOT/games/$1" ]; then
+    local g; g="$(default_game)"
+    [ -n "$g" ] || die "which game? bin/jumphp run <game> (or run it inside games/<game>/, or set JUMPHP_GAME in .env)"
+    set -- "$g" "$@"
+  fi
   if is_app "${1:-}"; then cmd_app_run "$@"; return; fi
   if is_cli "${1:-}"; then cmd_cli_run "$@"; return; fi
   if is_plugin "${1:-}"; then cmd_plugin_run "$@"; return; fi

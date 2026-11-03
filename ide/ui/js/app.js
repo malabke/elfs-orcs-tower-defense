@@ -15,6 +15,8 @@ import { PublishPanel } from './publish.js';
 import { createInstaller } from './installer.js';
 import { ClaudePanel } from './claude.js';
 import { DebugPanel } from './debug.js';
+import { TerminalPanel } from './terminal.js';
+import { showLocalHistory } from './localhistory.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,7 +41,20 @@ class App {
     hydrateIcons();
     // the browser's own context menu never shows over the IDE (the IDE has its menus), but in text fields
     document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, .claude-log, .console, .game-log')) e.preventDefault(); });
+    // the mouse's back / forward buttons (3 / 4): Navigate > Back / Forward (the last positions, file to file), never
+    // the page's own history (the WebView would leave the IDE)
+    const side = (e) => e.button === 3 || e.button === 4;
+    window.addEventListener('mousedown', (e) => { if (side(e)) e.preventDefault(); }, true);
+    window.addEventListener('mouseup', (e) => {
+      if (!side(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.button === 3) this.editors?.back(); else this.editors?.forward();
+    }, true);
     document.documentElement.dataset.theme = prefs.get('theme', 'dark');
+    // a Claude conversation in a window of its own (Open in a Window): that page shows only it
+    const claudeWindow = new URLSearchParams(location.search).get('claude');
+    if (claudeWindow) { await this.startClaudeWindow(claudeWindow); return; }
     try {
       await loadMonaco();
     } catch (e) {
@@ -66,6 +81,26 @@ class App {
     } else {
       await this.projectOpened(await backend.invoke('project.info'), false);
     }
+  }
+
+  /**
+   * The page of a window that shows one Claude conversation: its log and its box, nothing else. The files it names open
+   * in the main window (ui.broadcast); closing the window brings the conversation back into the Claude window there.
+   */
+  async startClaudeWindow(key) {
+    const state = await backend.invoke('session.state').catch(() => null);
+    if (!state?.project) { document.body.replaceChildren(el('div.placeholder', {}, 'No project is open.')); return; }
+    this.project = state.project;
+    this.projectKey = state.project.root || state.project.name;
+    this.task = undefined;          // no status bar here
+    this.showTool = () => {};
+    const panel = this.claude = new ClaudePanel(this, { detached: key });
+    const actions = el('div.tw-actions', {}, ...panel.actions());
+    this.refreshToolHeader = () => actions.replaceChildren(...panel.actions());
+    document.body.replaceChildren(el('div.claude-window', {},
+      el('div.tw-header', {}, panel.headerExtra(), el('span.tw-spacer'), actions),
+      el('div.tw-body', {}, panel.node)), el('div', { id: 'overlays' }));
+    hydrateIcons();
   }
 
   /** A project was opened (the welcome screen, or a reload): build the workbench for it. */
@@ -95,6 +130,7 @@ class App {
     this.find = new FindPanel(this);
     if (this.project.capabilities?.preview) this.game = new GamePanel(this);
     if (this.project.capabilities?.claude) this.claude = new ClaudePanel(this);
+    if (this.project.capabilities?.terminal) this.terminal = new TerminalPanel(this);
     if (backend.kind === 'native' && this.project.playground) this.publishPanel = new PublishPanel(this);
     if (this.project.capabilities?.plugins) {
       this.plugins = new Plugins(this);
@@ -129,6 +165,7 @@ class App {
     if (this.debugger) T('debug', 'bottom', 'Debug', 'debug', this.debugger, null);
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
+    if (this.terminal) T('terminal', 'bottom', 'Terminal', 'terminal', this.terminal, 'Alt+F12');
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
     if (this.claude) T('claude', 'right', 'Claude', 'claude', this.claude, 'Alt+8');
     if (this.publishPanel) T('publish', 'right', 'jumphp.net', 'globe', this.publishPanel, 'Alt+J');
@@ -532,6 +569,7 @@ class App {
       a.add('gitLog', 'Git Log', () => this.toggleTool('git'), { kbd: 'Alt+9', icon: 'log' });
       a.add('fileHistory', 'Show History of the File', () => this.git.showLog(this.editors.activePath()), { icon: 'history' });
     }
+    if (caps.localHistory) a.add('localHistory', 'Show Local History', () => showLocalHistory(this, this.editors.activePath()), { icon: 'history' });
     if (caps.blame) a.add('annotate', 'Annotate with Git Blame', () => this.git.toggleBlame(), { icon: 'history' });
     if (caps.run) {
       a.add('run', 'Run', () => this.runner.runSelected(), { kbd: 'Shift+F10', icon: 'play' });
@@ -569,6 +607,7 @@ class App {
       a.add('runTool', 'Run Tool Window', () => this.toggleTool('run'), { kbd: 'Alt+4', icon: 'play' });
     }
     if (this.claude) a.add('claudeTool', 'Claude', () => this.toggleTool('claude'), { kbd: 'Alt+8', icon: 'claude' });
+    if (this.terminal) a.add('terminalTool', 'Terminal', () => this.toggleTool('terminal'), { kbd: 'Alt+F12', icon: 'terminal' });
     if (this.claude && backend.kind === 'native') a.add('claudeMcp', 'Connect Claude to jumphp.net', async () => {
       this.showTool('claude');
       const m = await this.claude.checkMcp();
@@ -599,13 +638,15 @@ class App {
       'shift+f10': 'run', 'ctrl+shift+f10': 'test', 'ctrl+f5': 'rerun', 'ctrl+f2': 'stop', 'alt+1': 'project', 'alt+0': 'commitTool',
       'alt+4': 'runTool', 'alt+6': 'problemsTool', 'alt+7': 'structure', 'alt+9': 'gitLog', 'alt+3': 'findTool', 'ctrl+alt+s': 'settings',
       'ctrl+shift+f12': 'hideTools', 'alt+f1': 'selectInProject', 'ctrl+s': 'saveAll', 'alt+shift+f10': 'runConfigs', 'ctrl+alt+z': 'rollbackFile',
-      'alt+insert': 'newFile', 'ctrl+shift+`': 'branches',
+      'alt+f12': 'terminalTool', 'alt+insert': 'newFile', 'ctrl+shift+`': 'branches',
       'shift+f9': 'debug', 'f9': 'debugResume', 'f8': 'stepOver', 'f7': 'stepInto', 'shift+f8': 'stepOut', 'alt+f9': 'runToCursor', 'ctrl+f8': 'toggleBreakpoint',
     };
     let lastShift = 0;
     let lastCtrl = 0;
     document.addEventListener('keydown', (e) => {
       if (!this.project) return;
+      // in the Terminal the keys are the shell's (Ctrl+E, Ctrl+K, Escape...): only Alt+… reaches the IDE
+      if (e.target.closest?.('.terminal-panel') && !(e.altKey && !e.ctrlKey && !e.metaKey)) return;
       // Ctrl twice: Run Anything (bin/jumphp commands)
       if (e.key === 'Control' && !e.repeat && !e.shiftKey && !e.altKey) {
         const now = Date.now();
@@ -641,9 +682,9 @@ class App {
     const plugin = (label) => this.plugins?.menuIds(label) || [];
     const section = (label, ids) => ({ label, items: [...ids, ...(plugin(label).length ? ['-', ...plugin(label)] : [])].map((id) => (id === '-' ? '-' : item(id))).filter(Boolean).filter((x, i, all) => x !== '-' || (i > 0 && i < all.length - 1 && all[i - 1] !== '-')) });
     menu([
-      section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', '-', 'settings', 'plugins', 'closeProject']),
+      section('File', ['newFile', 'openProject', 'saveAll', 'closeTab', 'localHistory', '-', 'settings', 'plugins', 'closeProject']),
       section('Edit', ['find', 'replace', 'findInFiles', 'replaceInFiles', 'comment']),
-      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'claudeTool', 'runTool', 'debugTool', 'findTool', 'problemsTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
+      section('View', ['project', 'structure', 'commitTool', 'gameTool', 'claudeTool', 'runTool', 'debugTool', 'findTool', 'problemsTool', 'terminalTool', 'gitLog', 'hideTools', '-', 'split', 'theme']),
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),

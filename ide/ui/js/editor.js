@@ -1,7 +1,8 @@
 // The editor area: Monaco, editor groups (split) with tabs, text / image / diff / designer views, saving, and the
 // PHP language features answered by the IDE's PHP side (completion, definition, usages, rename, hover...).
 import { backend } from './backend.js';
-import { el, clear, icon, colorIcon, basename, dirname, extension, fileIcon, notify, debounce, prefs, menu, kbd } from './ui.js';
+import { showLocalHistory } from './localhistory.js';
+import { el, clear, icon, colorIcon, basename, dirname, extension, fileIcon, notify, debounce, prefs, menu, kbd, copyText, pasteText } from './ui.js';
 
 export let monaco = null;
 
@@ -350,9 +351,9 @@ export class Editors {
   }
 
   /** A diff tab: {path, original (text), title, modified?: text (read only, e.g. a past commit)} */
-  async openDiff(path, { original, modified = null, title, readOnly = false } = {}) {
+  async openDiff(path, { original, modified = null, title, readOnly = false, left = 'HEAD' } = {}) {
     const group = this.focused;
-    const tab = { id: 'diff' + Math.random().toString(36).slice(2), path, kind: 'diff', original, modified, title: title || basename(path) + ' (diff)', readOnly };
+    const tab = { id: 'diff' + Math.random().toString(36).slice(2), path, kind: 'diff', original, modified, title: title || basename(path) + ' (diff)', readOnly, left };
     if (modified === null) await this.load(path).catch(() => null);
     group.tabs.push(tab);
     this.activate(group, tab);
@@ -362,7 +363,7 @@ export class Editors {
     const view = el('div.view.with-header');
     const body = el('div.diff-body');
     view.append(el('div.diff-header', {}, icon('diff'), tab.title, el('span', { style: { flex: 1 } }),
-      el('span', {}, tab.modified === null ? 'HEAD  ↔  your version (editable)' : 'before  ↔  after')), body);
+      el('span', {}, tab.modified === null ? `${tab.left || 'HEAD'}  ↔  your version (editable)` : 'before  ↔  after')), body);
     group.host.append(view);
     group.diff?.dispose();
     group.diff = monaco.editor.createDiffEditor(body, { ...this.editorOptions(), renderSideBySide: prefs.get('diffSideBySide', true), originalEditable: false, readOnly: tab.modified !== null, ignoreTrimWhitespace: false });
@@ -413,8 +414,9 @@ export class Editors {
       '-',
       { label: 'Split Right', icon: 'split', action: () => { this.activate(group, tab); this.split(); } },
       { label: 'Select in Project View', action: () => this.app.tree?.reveal(tab.path) },
-      { label: 'Copy Path', action: () => navigator.clipboard?.writeText(tab.path) },
+      { label: 'Copy Path', action: () => copyText(tab.path) },
       tab.kind === 'text' && this.app.git?.enabled ? { label: 'Show Diff with HEAD', icon: 'diff', action: () => this.app.git.diff(tab.path) } : null,
+      tab.kind === 'text' && this.app.project?.capabilities?.localHistory ? { label: 'Show Local History', icon: 'history', action: () => showLocalHistory(this.app, tab.path) } : null,
     ].filter(Boolean), { x: e.clientX, y: e.clientY });
   }
 
@@ -823,9 +825,9 @@ export class Editors {
       writable ? { label: 'Reformat Code', kbd: 'Ctrl+Alt+L', action: run('editor.action.formatDocument') } : null,
       writable ? { label: 'Comment with Line Comment', kbd: 'Ctrl+/', action: run('editor.action.commentLine') } : null,
       writable ? '-' : null,
-      writable ? { label: 'Cut', kbd: 'Ctrl+X', action: () => { const text = ed.getModel().getValueInRange(ed.getSelection()); navigator.clipboard?.writeText(text); ed.executeEdits('cut', [{ range: ed.getSelection(), text: '' }]); } } : null,
-      { label: 'Copy', kbd: 'Ctrl+C', action: () => navigator.clipboard?.writeText(ed.getModel().getValueInRange(ed.getSelection())) },
-      writable ? { label: 'Paste', kbd: 'Ctrl+V', action: async () => { const text = await navigator.clipboard?.readText?.().catch(() => null); if (text != null) { ed.focus(); ed.executeEdits('paste', [{ range: ed.getSelection(), text, forceMoveMarkers: true }]); } } } : null,
+      writable ? { label: 'Cut', kbd: 'Ctrl+X', action: () => { const text = ed.getModel().getValueInRange(ed.getSelection()); copyText(text); ed.executeEdits('cut', [{ range: ed.getSelection(), text: '' }]); } } : null,
+      { label: 'Copy', kbd: 'Ctrl+C', action: () => copyText(ed.getModel().getValueInRange(ed.getSelection())) },
+      writable ? { label: 'Paste', kbd: 'Ctrl+V', action: async () => { const text = await pasteText(); if (text != null) { ed.focus(); ed.executeEdits('paste', [{ range: ed.getSelection(), text, forceMoveMarkers: true }]); } } } : null,
       '-',
       this.app.git?.enabled ? { label: 'Git', icon: 'branch', items: [
         { label: 'Annotate with Git Blame', action: () => this.app.git.toggleBlame() },

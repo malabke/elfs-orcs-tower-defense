@@ -134,7 +134,7 @@ games/<id>/
 | `bin/jumphp new <id> ["Title"]` | creates `games/<id>` from `skeleton/` (id: `a-z0-9-`) |
 | `bin/jumphp install <id>` | composer install of the game |
 | `bin/jumphp composer <id> require vendor/pkg` | composer (pure-PHP packages only: no extension exists in the browser) |
-| `bin/jumphp run <id>` | plays on the desktop (window + sound). Needs a display; not usable by an agent without a screen. |
+| `bin/jumphp run <id>` | plays on the desktop (window + sound). Needs a display; not usable by an agent without a screen. Without `<id>`: the folder of `games/` it is typed in, else `JUMPHP_GAME` (.env), else the only game |
 | `bin/jumphp test <id>` | `php -l`, phpstan (level 5, if `phpstan.neon` and `bin/jumphp test engine` ran once), phpunit (`tests/` if any, game tests included), **headless smoke test** (600 frames, any PHP warning = failure) |
 | `bin/jumphp shot <id> [frames] [out.png]` | **headless screenshot**: runs N frames (default 120) and saves a PNG in `games/<id>/var/screenshots/` — open it to SEE the game |
 | `bin/jumphp build <id>` | browser build → `games/<id>/dist/web/` (static files) |

@@ -243,6 +243,28 @@ final class CoreTest extends TestCase
         self::assertSame([], glob(sys_get_temp_dir() . '/jph*') ?: [], 'temporary files left behind');
     }
 
+    public function testClaudesConversationsAreKeptInTheProjectOutOfGit(): void
+    {
+        $ws = new LocalWorkspace($this->dir);
+        $ide = new Ide($ws);
+        self::assertSame([], $ide->handle('claude.history.list', []));
+        $items = [['role' => 'user', 'text' => "Make a\nbreakout game"], ['role' => 'tool', 'name' => 'Write', 'input' => ['file_path' => 'a.php']],
+            ['role' => 'assistant', 'text' => 'Done: **breakout**.']];
+        $saved = $ide->handle('claude.history.save', ['conversation' => ['id' => 'c-1234', 'session' => 'sess-12345678', 'items' => $items]]);
+        self::assertSame(['c-1234', 'Make a breakout game', 2], [$saved['id'], $saved['title'], $saved['messages']]);
+        $ide->handle('claude.history.save', ['conversation' => ['id' => 'c-5678', 'title' => 'Second', 'items' => []]]);
+        self::assertSame(['c-5678', 'c-1234'], array_column($ide->handle('claude.history.list', []), 'id'));
+        $read = $ide->handle('claude.history.read', ['id' => 'c-1234']);
+        self::assertSame(['sess-12345678', $items], [$read['session'], $read['items']]);
+        self::assertStringContainsString('**You:** Make a', $ide->handle('claude.history.markdown', ['id' => 'c-1234']));
+        self::assertFileExists("$this->dir/.jumphp/history/claude/c-1234.json");
+        self::assertStringContainsString("\n*\n", (string)file_get_contents("$this->dir/.jumphp/history/.gitignore"));
+        self::assertTrue($ide->handle('claude.history.delete', ['id' => 'c-5678']));
+        self::assertSame(['c-1234'], array_column($ide->handle('claude.history.list', []), 'id'));
+        $this->expectException(\InvalidArgumentException::class);
+        $ide->handle('claude.history.read', ['id' => '../../etc/passwd']);
+    }
+
     public function testClaudeCodeAnswersAsItGoesAndTheConversationGoesOn(): void
     {
         $saved = (string)getenv('PATH');
@@ -295,7 +317,16 @@ final class CoreTest extends TestCase
             $other = $send('Hi', null);
             self::assertNotSame($run['id'], $other['id']);
             $until(fn (array $events) => array_filter($events, fn ($e) => $e[0] === 'claude.exit'));
-            self::assertSame(['claude.exit', ['id' => $run['id'], 'code' => 0, 'error' => null]], array_values(array_filter($events, fn ($e) => $e[0] === 'claude.exit'))[0]);
+            self::assertSame(['claude.exit', ['id' => $run['id'], 'conv' => null, 'code' => 0, 'error' => null]], array_values(array_filter($events, fn ($e) => $e[0] === 'claude.exit'))[0]);
+            // another tab: a conversation of its own beside it; neither stops the other
+            $tab = $ide->handle('claude.send', ['prompt' => 'Other tab', 'conv' => 'tab2']);
+            self::assertNotSame($other['id'], $tab['id']);
+            self::assertSame(['id' => $other['id'], 'joined' => true], $send('Hi again', null));
+            self::assertTrue($processes->isRunning($other['id']) && $processes->isRunning($tab['id']));
+            $ide->handle('claude.close', ['conv' => 'tab2']);
+            $until(fn (array $events) => count(array_filter($events, fn ($e) => $e[0] === 'claude.exit')) === 2);
+            self::assertFalse($processes->isRunning($tab['id']));
+            self::assertTrue($processes->isRunning($other['id']));
             $ide->handle('claude.stop', ['id' => $other['id']]);
             $args = (string)file("$this->dir/args.txt")[0];
             self::assertStringStartsWith('-p --input-format stream-json --output-format stream-json --verbose --permission-mode plan --resume sess-00000000 --model claude-opus-5-5 --effort xhigh ', $args);
@@ -354,6 +385,25 @@ final class CoreTest extends TestCase
         self::assertSame('JumPHP\\Scene\\AbstractScene', $tree['supers'][0]['supers'][0]['name']);
         $scene = $ide->handle('php.hierarchy', ['class' => 'JumPHP\\Ui\\MenuScene']);
         self::assertContains('App\\Scene\\TitleScene', array_column($scene['subs'], 'name'));
+    }
+
+    public function testAComposerInstallAfterTheProjectOpenedAddsItsPackagesToExternalLibraries(): void
+    {
+        // a new CLI app: opened before `composer install` ends, the libraries still being indexed
+        $ws = new LocalWorkspace($this->dir);
+        $ws->write('composer.json', '{"autoload": {"psr-4": {"App\\\\": "src/"}}}');
+        $text = "<?php\nnamespace App\\Command;\n\nuse Symfony\\Component\\Console\\Attribute\\AsCommand;\n\n#[AsCommand('hello')]\nfinal class Hello\n{\n}\n";
+        $ws->write('src/Command/Hello.php', $text);
+        $ide = new Ide($ws);
+        $ide->tick(0.0001);
+        self::assertSame([], array_column($ide->handle('libraries.list', []), 'prefix'));
+
+        $ws->write('vendor/composer/autoload_psr4.php', "<?php\n\$vendorDir = dirname(__DIR__);\n\$baseDir = dirname(\$vendorDir);\nreturn array(\n    'Symfony\\\\Component\\\\Console\\\\' => array(\$vendorDir . '/symfony/console'),\n    'App\\\\' => array(\$baseDir . '/src'),\n);\n");
+        $ws->write('vendor/symfony/console/Attribute/AsCommand.php', "<?php\nnamespace Symfony\\Component\\Console\\Attribute;\n\n#[\\Attribute]\nclass AsCommand\n{\n}\n");
+        $ide->filesChanged();
+        self::assertContains('Symfony\\Component\\Console', array_column($ide->handle('libraries.list', []), 'prefix'));
+        $definition = $ide->handle('php.definition', ['path' => 'src/Command/Hello.php', 'text' => $text, 'line' => 4, 'column' => 50]);
+        self::assertSame('vendor/symfony/console/Attribute/AsCommand.php', $definition[0]['path']);
     }
 
     public function testAFileOfTheEngineLinkedByVendorOpensFromExternalLibraries(): void

@@ -81,6 +81,14 @@ final class Main implements AppMain
             return $this->toTask($this->handle((string)($payload['name'] ?? ''), $payload['payload'] ?? []));
         });
         $app->on('frame', fn () => $this->frame());
+        // the IDE closed: its other windows (conversations with Claude) with it
+        $app->window()->on('closed', function () use ($app): void {
+            foreach ($app->windows() as $label => $window) {
+                if ($label !== 'main') {
+                    $window->close();
+                }
+            }
+        });
         // headless checks and screenshots drive the interface: JUMPHP_IDE_EVAL is JavaScript run once the page loaded
         $script = getenv('JUMPHP_IDE_EVAL');
         if (is_string($script) && $script !== '') {
@@ -128,7 +136,7 @@ final class Main implements AppMain
         // files changed by something else (a terminal, Claude Code, git): refresh what shows them
         if (microtime(true) >= $this->nextScan) {
             $this->nextScan = microtime(true) + 3.0;
-            $signature = md5(json_encode($this->ide->workspace->files()) ?: '');
+            $signature = md5((json_encode($this->ide->workspace->files()) ?: '') . $this->ide->librariesSignature());
             if ($this->filesSignature !== '' && $signature !== $this->filesSignature) {
                 $this->ide->filesChanged();
                 $this->app->send('files.changed', []);
@@ -284,6 +292,33 @@ final class Main implements AppMain
             return $this->info();
         };
 
+        // the IDE's windows talk to each other through here (every window gets ui.broadcast)
+        $c['ui.broadcast'] = function (array $p): bool {
+            $this->app->send('ui.broadcast', $p);
+            return true;
+        };
+        // a Claude conversation in a window of its own (its process goes on); closed, it goes back into the Claude window
+        $c['claude.window'] = function (array $p): bool {
+            $conv = (string)($p['conv'] ?? '');
+            if (!preg_match('/^[A-Za-z0-9_-]{4,64}$/', $conv)) {
+                throw new \InvalidArgumentException('not a conversation');
+            }
+            $label = 'claude-' . $conv;
+            if (isset($this->app->windows()[$label])) {
+                $this->app->windows()[$label]->focus();
+                return true;
+            }
+            $query = ['claude' => $conv] + (!empty($p['live']) ? ['live' => (int)$p['live']] : []) + (!empty($p['running']) ? ['running' => 1] : []);
+            $title = mb_strimwidth(trim((string)($p['title'] ?? '')), 0, 60, '…');
+            $window = $this->app->createWindow($label, ['title' => ($title !== '' ? "$title – " : '') . 'Claude', 'url' => 'index.html?' . http_build_query($query),
+                'width' => 560, 'height' => 780]);
+            $window->on('closed', function () use ($conv): void {
+                $state = $this->ide?->claude?->state($conv);
+                $this->app->send('ui.broadcast', ['type' => 'claude.dock', 'conv' => $conv, 'live' => $state['id'] ?? null, 'running' => $state['busy'] ?? false]);
+            });
+            return true;
+        };
+
         // the system's dialogs and browser, for the pages (the built-in native.* commands, through the same door)
         $c['native.open'] = fn (array $p) => Native::supports('open')
             ? self::deferred(!empty($p['folder']) ? FilePicker::folder($p) : FilePicker::open($p))
@@ -354,6 +389,7 @@ final class Main implements AppMain
         $workspace = new LocalWorkspace($path);
         $root = (string)$workspace->localPath();
         $this->ide?->agent?->close();
+        $this->ide?->terminals?->closeAll();
         $this->ide = new Ide($workspace, $this->app->storage->path('cache'), function (string $event, array $payload): void {
             $this->app->send($event, $payload);
         }, $this->processes);
@@ -361,6 +397,7 @@ final class Main implements AppMain
         $this->ide->setToolkit($this->app->storage->path('jumphp'), Creator::TEMPLATE);
         // the plugins (PHP): the user's (Settings > Plugins installs them there) and the project's .jumphp/plugins/
         $this->ide->enablePlugins($this->app->storage->path('plugins'));
+        $this->ide->enableTerminal();
         $this->filesSignature = '';
         $this->authorizeGit();
         $this->app->options->set('reopen', true);

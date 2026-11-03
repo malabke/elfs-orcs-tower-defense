@@ -39,8 +39,11 @@ final class ClaudeCode
     /** @var array<int, string> run id => the part of a line not ended yet */
     private array $buffers = [];
 
-    /** @var array{id: int, session: ?string, settings: string, busy: bool, last: float}|null the open conversation */
-    private ?array $live = null;
+    /**
+     * The open conversations (several at once: the Claude window's tabs), by the key the page gives each one.
+     * @var array<string, array{id: int, session: ?string, settings: string, busy: bool, last: float}>
+     */
+    private array $lives = [];
 
     /** @param callable(string $event, array $payload): void $emit */
     public function __construct(private Processes $processes, private string $root, private $emit, private ?IdeAgent $agent = null)
@@ -65,24 +68,24 @@ final class ClaudeCode
      * @return array{id: int}
      */
     public function send(string $prompt, ?string $session = null, string $mode = 'acceptEdits', ?string $model = null, ?string $effort = null,
-        bool $conversation = false): array
+        bool $conversation = false, string $conv = 'main'): array
     {
         if (trim($prompt) === '') {
             throw new \InvalidArgumentException('Nothing to send.');
         }
         $settings = json_encode([$mode, $model, $effort]);
-        $live = $this->live;
+        $live = $this->lives[$conv] ?? null;
         if ($conversation && $live !== null && $this->processes->isRunning($live['id']) && $live['session'] === $session
             && ($live['busy'] || $live['settings'] === $settings)) {
             // the open conversation: at once, even in the middle of a turn
             if ($this->processes->write($live['id'], self::message($prompt))) {
-                $this->live = ['busy' => true, 'last' => microtime(true)] + $live;
+                $this->lives[$conv] = ['busy' => true, 'last' => microtime(true)] + $live;
                 return ['id' => $live['id'], 'joined' => $live['busy']];
             }
         }
         if ($live !== null) {
             $this->processes->closeInput($live['id']);     // it ends once its turn is over
-            $this->live = null;
+            unset($this->lives[$conv]);
         }
         if (Environment::which('claude') === null) {
             throw new \RuntimeException('Claude Code was not found on this computer (the `claude` command). Install it: https://claude.com/claude-code');
@@ -119,22 +122,20 @@ final class ClaudeCode
         $id = $started['id'];
         $this->buffers[$id] = '';
         if ($conversation) {
-            $this->live = ['id' => $id, 'session' => $session, 'settings' => $settings, 'busy' => true, 'last' => microtime(true)];
+            $this->lives[$conv] = ['id' => $id, 'session' => $session, 'settings' => $settings, 'busy' => true, 'last' => microtime(true)];
         }
         $started['done']->then(function (array $result) use ($id): void {
             $this->lines($id, "\n");
             unset($this->buffers[$id]);
-            if (($this->live['id'] ?? null) === $id) {
-                $this->live = null;
-            }
-            ($this->emit)('claude.exit', ['id' => $id, 'code' => $result['code'],
+            $conv = $this->convOf($id);
+            $this->forget($id);
+            ($this->emit)('claude.exit', ['id' => $id, 'conv' => $conv, 'code' => $result['code'],
                 'error' => $result['code'] !== 0 ? mb_substr(trim($result['stderr']), -2000) : null]);
         }, function (\Throwable $e) use ($id): void {
             unset($this->buffers[$id]);
-            if (($this->live['id'] ?? null) === $id) {
-                $this->live = null;
-            }
-            ($this->emit)('claude.exit', ['id' => $id, 'code' => -1, 'error' => $e->getMessage()]);
+            $conv = $this->convOf($id);
+            $this->forget($id);
+            ($this->emit)('claude.exit', ['id' => $id, 'conv' => $conv, 'code' => -1, 'error' => $e->getMessage()]);
         });
         return ['id' => $id];
     }
@@ -144,12 +145,58 @@ final class ClaudeCode
         return $this->processes->stop($id);
     }
 
+    /** A conversation closed in the page (its tab): its process ends, the others go on. */
+    public function close(string $conv): void
+    {
+        $live = $this->lives[$conv] ?? null;
+        if ($live !== null) {
+            unset($this->lives[$conv]);
+            $live['busy'] ? $this->processes->stop($live['id']) : $this->processes->closeInput($live['id']);
+        }
+    }
+
+    /** @return array{id: int, busy: bool}|null a conversation's open process: its id, whether a turn is in progress */
+    public function state(string $conv): ?array
+    {
+        $live = $this->lives[$conv] ?? null;
+        return $live === null ? null : ['id' => $live['id'], 'busy' => $live['busy']];
+    }
+
+    /** @return list<string> the conversations whose process is open */
+    public function open(): array
+    {
+        return array_keys($this->lives);
+    }
+
+    /** The conversation of a process that ended is no longer open. */
+    private function forget(int $id): void
+    {
+        foreach ($this->lives as $conv => $live) {
+            if ($live['id'] === $id) {
+                unset($this->lives[$conv]);
+            }
+        }
+    }
+
+    /** The open conversation a process belongs to (by reference: its session and state are updated in place). */
+    private function convOf(int $id): ?string
+    {
+        foreach ($this->lives as $conv => $live) {
+            if ($live['id'] === $id) {
+                return (string)$conv;
+            }
+        }
+        return null;
+    }
+
     /** Every frame or so: an idle conversation's process ends after IDLE seconds (it resumes at the next message). */
     public function tick(): void
     {
-        if ($this->live !== null && !$this->live['busy'] && microtime(true) - $this->live['last'] > self::IDLE) {
-            $this->processes->closeInput($this->live['id']);
-            $this->live = null;
+        foreach ($this->lives as $conv => $live) {
+            if (!$live['busy'] && microtime(true) - $live['last'] > self::IDLE) {
+                $this->processes->closeInput($live['id']);
+                unset($this->lives[$conv]);
+            }
         }
     }
 
@@ -171,16 +218,17 @@ final class ClaudeCode
                 continue;
             }
             $event = json_decode($line, true);
-            if (is_array($event) && ($this->live['id'] ?? null) === $id) {
+            $conv = is_array($event) ? $this->convOf($id) : null;
+            if ($conv !== null) {
                 if (is_string($event['session_id'] ?? null)) {
-                    $this->live['session'] = $event['session_id'];
+                    $this->lives[$conv]['session'] = $event['session_id'];
                 }
                 if (($event['type'] ?? null) === 'result') {
-                    $this->live['busy'] = false;     // the turn is over: the process waits for the next message
-                    $this->live['last'] = microtime(true);
+                    $this->lives[$conv]['busy'] = false;     // the turn is over: the process waits for the next message
+                    $this->lives[$conv]['last'] = microtime(true);
                 }
             }
-            ($this->emit)('claude.event', ['id' => $id, 'event' => is_array($event) ? $event : ['type' => 'text', 'text' => $line]]);
+            ($this->emit)('claude.event', ['id' => $id, 'conv' => $conv ?? $this->convOf($id), 'event' => is_array($event) ? $event : ['type' => 'text', 'text' => $line]]);
         }
         $this->buffers[$id] = $buffer;
     }

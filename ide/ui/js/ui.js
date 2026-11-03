@@ -399,6 +399,33 @@ export const prefs = {
   },
 };
 
+/**
+ * Text to the system clipboard. The desktop IDE's WebView has no navigator.clipboard: the native one (native.copy)
+ * there; in the web IDE the browser's, else the old way through a hidden text field.
+ */
+export async function copyText(text) {
+  text = String(text ?? '');
+  if (window.jumphp?.native) {
+    try { await window.jumphp.invoke('native.copy', { text }); return true; } catch { /* the browser's ways below */ }
+  }
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* below */ }
+  const area = el('textarea', { style: { position: 'fixed', opacity: '0' } });
+  area.value = text;
+  document.body.append(area);
+  area.select();
+  const ok = document.execCommand('copy');
+  area.remove();
+  return ok;
+}
+
+/** Text of the system clipboard (null when it cannot be read). */
+export async function pasteText() {
+  if (window.jumphp?.native) {
+    try { return String(await window.jumphp.invoke('native.paste') ?? ''); } catch { /* below */ }
+  }
+  return navigator.clipboard?.readText?.().catch(() => null) ?? null;
+}
+
 export function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
