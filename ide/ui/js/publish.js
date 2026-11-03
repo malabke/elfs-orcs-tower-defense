@@ -13,6 +13,7 @@ const PLATFORMS = [
   ['android', 'Android (APK)', 'android-local', null],
 ];
 const MB = (n) => `${(n / 1048576).toFixed(1)} MB`;
+const STAGES = { dev: 'in development', beta: 'beta', done: 'finished' };
 
 export class PublishPanel {
   constructor(app) {
@@ -64,7 +65,8 @@ export class PublishPanel {
     if (!p) { this.node.append(el('div.placeholder', {}, 'Loading…')); return; }
     if (p.error) { this.node.append(el('div.placeholder', {}, el('p', {}, p.error))); return; }
     this.node.append(
-      el('div.pub-head', {}, el('div.pub-title', {}, p.title), el('span.pub-badge', { dataset: { status: p.status } }, p.status),
+      el('div.pub-head', {}, el('div.pub-title', {}, p.title), el('span.pub-badge', { dataset: { status: p.status } }, p.status === 'ready' ? 'published' : p.status),
+        p.stage ? el('span.pub-badge', { dataset: { status: p.stage === 'done' ? 'ready' : 'creating' } }, STAGES[p.stage]) : null,
         el('div.pub-links', {}, p.url ? this.link('Page', p.url) : null, p.play ? this.link('Play', p.play) : null, p.repoUrl ? this.link('GitHub', p.repoUrl) : null)),
       p.statusMessage ? el('pre.pub-message', {}, p.statusMessage) : null,
       this.section('publish', 'Publish', (b) => this.publishSection(b)),
@@ -96,13 +98,14 @@ export class PublishPanel {
     const description = el('textarea.input', { rows: 3 }, p.description || '');
     const category = el('select.input', {}, el('option', { value: p.category || '' }, p.category || '(category)'));
     const listed = el('input', { type: 'checkbox', checked: !!p.listed });
+    const stage = el('select.input', {}, ...Object.entries(STAGES).map(([v, label]) => el('option', { value: v, selected: v === (p.stage || 'dev') || undefined }, label)));
     backend.invoke('projects.categories').then((list) => {
       clear(category);
       for (const c of list) category.append(el('option', { value: c.slug, selected: c.slug === p.category || undefined }, c.name));
     }).catch(() => null);
     const save = async () => {
       try {
-        this.data.project = await backend.invoke('playground.update', { settings: { title: title.value.trim(), description: description.value.trim(), category: category.value, listed: listed.checked } });
+        this.data.project = await backend.invoke('playground.update', { settings: { title: title.value.trim(), description: description.value.trim(), category: category.value, stage: stage.value, listed: listed.checked } });
         notify('Saved on jumphp.net.', 'success', { title: 'Settings' });
         this.render();
       } catch (e) { notify(e.message, 'error', { title: 'Settings' }); }
@@ -111,6 +114,7 @@ export class PublishPanel {
       el('label.field', {}, el('span', {}, 'Title'), title),
       el('label.field', {}, el('span', {}, 'Description (the directory, the page)'), description),
       el('label.field', {}, el('span', {}, 'Category'), category),
+      el('label.field', {}, el('span', {}, 'Progress (shown on its page; “published” only says it is online)'), stage),
       el('label.pub-check', {}, listed, el('span', {}, 'Listed in the directory (else only people with the link see it)')),
       el('div.pub-row', {}, el('button.btn.primary', { onclick: save }, 'Save'), this.link('More in Studio', (p.url || '').replace(/\/[^/]+$/, '') + '/studio/projet/' + p.slug)),
     );

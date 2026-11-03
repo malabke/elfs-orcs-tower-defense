@@ -449,6 +449,7 @@ class Conversation {
     // the web IDE's Claude (through jumphp.net) takes one message per run
     if (!prompt || (this.run && p.remote)) return;
     if (p.available === false) { this.notInstalled(); return; }
+    if (/^\/(rc|remote-control)$/.test(prompt)) { this.remoteControl(); return; }
     await this.app.editors?.saveAll(true);
     this.log.querySelector('.claude-empty')?.remove();
     const during = !!this.run;
@@ -464,6 +465,15 @@ class Conversation {
     } catch (e) {
       this.add({ role: 'error', text: e.message });
     }
+  }
+
+  /** /rc: `claude -p` has no Remote Control, so this conversation goes on in an interactive claude in the Terminal. */
+  remoteControl() {
+    if (this.panel.remote) { notify('Remote Control needs Claude Code on this computer (the desktop IDE).', 'info'); return; }
+    this.input.value = '';
+    const session = /^[\w-]+$/.test(this.session || '') ? ` --resume ${this.session}` : '';
+    this.app.terminal.run(`claude --remote-control${session}`, 'Claude Remote Control');
+    this.add({ role: 'note', text: 'Remote Control: this conversation goes on in the Terminal; open it from claude.ai/code or the Claude app.' });
   }
 
   /** Claude works: the spinner, Stop, the box for more. */
