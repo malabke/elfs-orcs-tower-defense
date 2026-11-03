@@ -149,6 +149,8 @@ later iOS).
   (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
   computer, never in the project)
+- Claude's usage in the IDE's Claude pane: three bars from 0 to 100 %, the context window of the conversation, the
+  5-hour limit and the weekly limit, each with the date / time it resets
 
 ## Windows: Docker through WSL, and a composer install that seemed to loop
 

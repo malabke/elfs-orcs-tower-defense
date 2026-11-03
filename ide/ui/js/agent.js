@@ -512,7 +512,7 @@ export class AgentTools {
       const input = el('textarea.input', { rows: 2, placeholder: options.length ? 'Or another answer…' : 'Your answer…', style: { width: '100%' } });
       const choices = el('div.claude-choices', {}, ...options.map((o) => el('button.btn', { onclick: () => { answer(o); box.close(); } }, o)));
       const box = dialog({
-        title: 'Claude asks',
+        title: 'Claude asks', sticky: true,
         body: el('div.claude-ask', {}, el('p', {}, question), options.length ? choices : null, input),
         buttons: [{ label: 'Skip' }, { label: 'Answer', primary: true, action: () => { if (!input.value.trim()) return false; answer(input.value.trim()); } }],
         onClose: () => { if (!answered) resolve({ answer: null, skipped: true }); },
@@ -548,7 +548,7 @@ export class AgentTools {
         el('pre.claude-permission', { style: { whiteSpace: 'pre-wrap', maxHeight: '240px', overflow: 'auto' } }, String(what)),
         input.description ? el('p.pub-faint', {}, String(input.description)) : null);
       dialog({
-        title: 'Claude asks for permission', body,
+        title: 'Claude asks for permission', body, sticky: true,
         onClose: () => { if (!answered) answer(false, false); },
         buttons: [
           { label: 'No', action: () => answer(false, false) },

@@ -146,7 +146,7 @@ export function symbolIcon(kind) {
 const overlays = () => document.getElementById('overlays');
 
 /** Closes on Escape / click outside. Returns close(). */
-function overlay(dim, onClose) {
+function overlay(dim, onClose, backdrop = true) {
   const layer = el(`div.overlay${dim ? '.dim' : ''}`);
   const close = () => {
     layer.remove();
@@ -154,7 +154,8 @@ function overlay(dim, onClose) {
     onClose && onClose();
   };
   const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
-  layer.addEventListener('mousedown', (e) => { if (e.target === layer) close(); });
+  // backdrop false: a click beside it (to take the window back) keeps it; only its buttons / Escape close it
+  if (backdrop) layer.addEventListener('mousedown', (e) => { if (e.target === layer) close(); });
   document.addEventListener('keydown', onKey, true);
   overlays().append(layer);
   return { layer, close };
@@ -283,9 +284,10 @@ export function chooser(items, { at, placeholder = 'Type to filter', width = 420
 
 /**
  * A modal dialog. buttons: [{label, primary, danger, action(dialog) -> false keeps it open}]. Returns {close, body}.
+ * sticky: a click outside does not close it (questions that wait for an answer: Claude's permissions...).
  */
-export function dialog({ title, body, buttons = [{ label: 'Close' }], wide = false, onClose }) {
-  const { layer, close } = overlay(true, onClose);
+export function dialog({ title, body, buttons = [{ label: 'Close' }], wide = false, onClose, sticky = false }) {
+  const { layer, close } = overlay(true, onClose, !sticky);
   const box = el(`div.dialog${wide ? '.wide' : ''}`);
   const content = el('div.dialog-body');
   if (body instanceof Node) content.append(body); else if (body) content.innerHTML = body;
