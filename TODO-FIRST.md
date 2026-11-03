@@ -26,8 +26,11 @@ in `apps/`, `bin/jumphp update` and the IDE's updater leave `apps/` alone, `JUMP
 standalone / twa / android / apple scripts and workflows, the IDE (modules, stubs, New Project of a plugin), jumphp.net
 (applications made in `apps/<id>` when the JumPHP has `project_path`, publishing finds `apps/<id>`), docs. Tried: a CLI, a
 gui and a plugin project in `apps/`: install, test, run (inside the folder), shot, build + webshot, export:standalone
---linux, plugin:pack; games/pong and games/hello-cli still pass. Not tried: app:new (Tauri) export, installer, apple /
-android workflows, deploy / pages, the IDE opened on a project with `apps/`.
+--linux, plugin:pack; games/pong and games/hello-cli still pass. Also tried (2026-11-04): a desktop app in `apps/` (app:test, app:shot, app:export --linux, the executable started
+headless, app:release to a local folder), `export:standalone` and `installer --standalone --linux` of a gui app,
+`build:remote` + remote webshot, `site:new` + `build:site` + `siteshot` of a game with `config/project.yaml`, the IDE on a
+repository with `apps/` (modules and run configurations right); `pages` / `deploy` read (they go through `project_path`).
+Not tried: the apple / android workflows (GitHub's machines), `deploy` / `pages` run for real (they publish).
 
 Plan (agreed):
 - one function in `bin/jumphp` finds `<id>` in `games/` then `apps/`; every command and every tools/ script goes through
