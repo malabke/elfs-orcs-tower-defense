@@ -1,0 +1,49 @@
+# TODO FIRST: do this before anything else of TODO.md
+
+David's decision (2026-11-03): this is the next piece of work, first thing in the next session with tokens.
+
+## `apps/` beside `games/`: projects that are not games get a folder of their own
+
+It is odd that a CLI app, a graphic app (gui), a desktop app (Tauri) or an IDE plugin lives in `games/<id>`. Goal: those
+are made in `apps/<id>`, games stay in `games/<id>`, and **nothing breaks** (existing projects keep `games/`).
+
+Measured on 2026-11-03, the places that assume `games/`:
+
+| Where | Hits |
+|---|---|
+| `bin/jumphp` | 53 |
+| `tools/` (18 scripts: standalone, installers, init, post-create, sites, cli/plugin commands...) | 94 |
+| `.github/workflows/` (apple, android, standalone, ide-*, tauri, app-export...) | 25 |
+| the IDE (`ide/src`, `ide/ui/js`, `games/ide/src`) | ~26 |
+| `engine/src` | 1 |
+| jumphp-playground `src/` (it publishes only `games/<id>/` of a repository) | 37 |
+
+Plan (agreed):
+- one function in `bin/jumphp` finds `<id>` in `games/` then `apps/`; every command and every tools/ script goes through
+  it (no more `games/$id` written by hand); the Docker mounts (`WS`, the linked games mounted at `/workspace/games/<id>`)
+  handle `apps/` too
+- `cli:new`, `gui:new`, `app:new`, `plugin:new` create in `apps/`; `new` (a game) in `games/`
+- `default_game()` (run without an id) and `JUMPHP_GAME` work for both
+- the IDE: ProjectInfo's modules, run configurations, External Libraries / the index (composer.json up to 3 levels),
+  the toolkit / linked games (`Runner::linkedCommand`), New Project, the Terminal's Run
+- jumphp.net: accept `games/<id>/` or `apps/<id>/` (publishing, sync, private files, the source browser, the web IDE,
+  `create_project` / MCP, the AGENTS.md / BRIEF.md texts it writes); the docs in all 14 languages
+- docs: AGENTS.md (map of the repository, §16-§19), docs/*.md, README, skeletons' AGENTS.md
+
+Check EVERYTHING, target by target, with an app in `apps/` and a game in `games/`:
+`test`, `shot`, `run` (with and without an id, inside the folder), `build` (WebAssembly) + `webshot`, `build:remote`,
+`export:standalone` (Linux, Windows; macOS through its workflow), `installer` (`--standalone`, `--github`, `--url`),
+`app:export` / `app:release`, `apple`, `twa` / `android` (dry run), `deploy`, `pages`, `bin/jumphp update` of an older
+project (games/ only), a game kept in its own repository (linked into the IDE's copy of JumPHP), the IDE (Run, Test,
+the Terminal, External Libraries, debugger), publishing on jumphp.net (a test project), the GitHub workflows that build
+apps. Then a JumPHP release (VERSION, runtime, Packagist) and an IDE release.
+
+## Where the entry point of a project is (asked by David, to keep in the docs)
+
+- which project: the folder name, `games/<id>`, given to the commands; without it: the folder of `games/` the command
+  is typed in, else `JUMPHP_GAME` (.env), else the only project
+- what kind: `config/game.yaml` `kind:` (`gui`, `cli`, `plugin`; a game by default), or `ui: webview` / `ui: hybrid`
+  (desktop apps)
+- what starts: a game: `start_scene:` (game.yaml); a desktop app: `main: App\Main` (its `boot()`); a CLI app: `app.php`
+  calls `App\Main::boot()`. The PHP entry is always `app.php` on the desktop; `engine/bootstrap/wasm.php` in the
+  browser (it reads the same game.yaml); `tools/standalone-stub.php` in the one-file executables (it loads `app.php`)
