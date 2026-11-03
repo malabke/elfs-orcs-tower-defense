@@ -17,9 +17,12 @@ Done:
   `post-create.sh`, `init.sh`, `update`: the `jumphp` remote cannot be pushed to;
 - Create an Installer: remembers the ticked systems, no longer ticks macOS by itself (default: Linux).
 
+- released: JumPHP 0.5.4 (engine 0.5.4 installed on jumphp.net), IDE 0.1.34; jumphp.net deployed; the release `v1.0`
+  made by mistake on JumPHP's repository deleted with its tag.
+
 Left:
-- delete the release `v1.0` (and its tag) made by mistake on JumPHP's repository, put "Latest" back on `v0.5.3`
-  (David's yes needed);
-- release the IDE (the fix reaches the installed IDEs with a new version) and deploy jumphp.net;
-- existing projects without `origin` (like todojum): not needed for now (David), maybe later a "Create its GitHub
-  repository" button in the IDE.
+- try it for real once the IDE is 0.1.34: New Project > CLI app -> a repository on the user's account with `origin`,
+  commit + push from the IDE, Publish -> on jumphp.net; Create an Installer > GitHub -> a release of that repository;
+- existing projects without `origin` (like todojum): done in IDE 0.1.35: the IDE offers "Create its GitHub
+  repository…" (also behind Publish): public repository, commit + push, then a jumphp.net project
+  (`POST /api/ide/projects/import`); try it on todojum.

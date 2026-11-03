@@ -255,6 +255,7 @@ final class Main implements AppMain
         };
         $c['projects.create'] = fn (array $p) => (new Creator($this, $this->playground, $this->processes))->create($p);
         $c['playground.publish'] = fn () => $this->publish();
+        $c['project.createRepository'] = fn (array $p) => $this->createRepository((string)($p['name'] ?? ''));
         // the open project's page on jumphp.net (the jumphp.net tool window): settings, numbers, messages, downloads
         $api = fn (string $method, string $path = '', ?array $body = null) => $this->withSlug(fn (string $slug) =>
             self::deferred($this->playground->request($method, '/api/ide/projects/' . rawurlencode($slug) . $path, $body)));
@@ -415,7 +416,82 @@ final class Main implements AppMain
         $info = $this->ide->handle('project.info', []);
         $settings = $this->projectSettings((string)$info['root']);
         $info['playground'] = $settings['slug'] ?? null;
+        $info['repository'] = self::ownRepository((string)$info['root']);
+        // a JumPHP project (not JumPHP's own checkout) with no repository of its own: the IDE offers to create it
+        $info['needsRepository'] = $info['repository'] === null && is_file($info['root'] . '/bin/jumphp')
+            && (is_file($info['root'] . '/' . \JumPHP\Ide\Project\JumphpUpdater::RECORD) || self::remote((string)$info['root'], 'jumphp') !== null
+                || !is_dir($info['root'] . '/.git'));
         return $info;
+    }
+
+    /** owner/name of the project's GitHub repository (remote origin), never JumPHP's own. */
+    public static function ownRepository(string $root): ?string
+    {
+        $url = self::remote($root, 'origin');
+        if ($url === null || !preg_match('#github\.com[/:]([A-Za-z0-9-]+/[A-Za-z0-9._-]+?)(?:\.git)?/?$#', $url, $m)) {
+            return null;
+        }
+        return strtolower($m[1]) === 'davidnurdin/jumphp' && (self::remote($root, 'jumphp') !== null || is_file("$root/" . \JumPHP\Ide\Project\JumphpUpdater::RECORD)) ? null : $m[1];
+    }
+
+    private static function remote(string $root, string $name): ?string
+    {
+        if (!is_dir("$root/.git")) {
+            return null;
+        }
+        $out = [];
+        exec('git -C ' . escapeshellarg($root) . ' remote get-url ' . escapeshellarg($name) . ' 2>/dev/null', $out, $code);
+        return $code === 0 && isset($out[0]) ? trim($out[0]) : null;
+    }
+
+    /**
+     * A project made before New Project created repositories (no origin, or origin = JumPHP): its own public repository
+     * on the user's account, everything committed and pushed there, then a jumphp.net project (Publish works).
+     */
+    private function createRepository(string $name): Deferred
+    {
+        if ($this->user() === null) {
+            return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first: it gives the IDE access to your GitHub account.'));
+        }
+        $info = $this->info();
+        $root = (string)$info['root'];
+        if ($info['repository'] !== null) {
+            return Deferred::rejected(new \RuntimeException('This project already has its repository: ' . $info['repository']));
+        }
+        $module = $info['modules'][0] ?? null;
+        $name = trim((string)preg_replace('/[^a-z0-9._-]+/', '-', strtolower($name !== '' ? $name : (string)($module['id'] ?? basename($root)))), '-.');
+        if ($name === '') {
+            return Deferred::rejected(new \InvalidArgumentException('A name for the repository, please.'));
+        }
+        $creator = new Creator($this, $this->playground, $this->processes);
+        $sh = fn (string $command) => exec('cd ' . escapeshellarg($root) . " && $command 2>&1");
+        if (!is_dir("$root/.git")) {
+            $sh('git init -q -b main');
+        }
+        // origin was JumPHP itself (a clone of the template): it becomes "jumphp", the updates' remote
+        if (self::remote($root, 'origin') !== null) {
+            $sh(self::remote($root, 'jumphp') === null ? 'git remote rename origin jumphp' : 'git remote remove origin');
+        }
+        return $creator->noPushToJumphp($root)
+            ->then(fn () => $creator->git($root))
+            ->then(fn (\JumPHP\Ide\Git\Git $git) => $creator->createRepository($git, $name, (string)($module['title'] ?? $name))
+                ->then(fn (array $r) => $git->run(['remote', 'add', 'origin', (string)$r['clone_url']])
+                    ->then(fn () => $git->status())
+                    ->then(fn (array $st) => $st['files'] !== [] ? $git->commit(($module['title'] ?? basename($root)) . ': its own repository', ['.']) : null)
+                    ->then(fn () => $git->push())
+                    ->then(fn () => $r)))
+            ->then(function (array $repo) use ($root, $module) {
+                $kind = match ($module['kind'] ?? 'game') { 'app' => 'desktop', 'cli' => 'cli', 'gui' => 'gui', 'plugin' => null, default => 'original' };
+                if ($kind === null || $module === null) {
+                    return ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => null, 'message' => null];
+                }
+                return self::deferred($this->playground->import(['repository' => (string)$repo['full_name'], 'slug' => (string)$module['id'], 'kind' => $kind]))
+                    ->then(function (array $project) use ($root, $repo) {
+                        $this->saveProjectSettings($root, ['slug' => (string)$project['slug']]);
+                        return ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => $project['slug'], 'message' => null];
+                    }, fn (\Throwable $e) => ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => null,
+                        'message' => 'The repository is made and pushed, but jumphp.net did not take the project: ' . $e->getMessage()]);
+            });
     }
 
     /** @return list<array{path: string, name: string, opened: int, slug: ?string}> */

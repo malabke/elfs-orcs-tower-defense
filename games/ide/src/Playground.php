@@ -61,6 +61,12 @@ final class Playground
         return $this->call('POST', '/api/ide/projects', $project);
     }
 
+    /** @param array{repository: string, slug: string, kind?: string, category?: string} $project an existing repository of the user */
+    public function import(array $project): Task
+    {
+        return $this->call('POST', '/api/ide/projects/import', $project);
+    }
+
     public function sync(string $slug): Task
     {
         return $this->call('POST', '/api/ide/projects/' . rawurlencode($slug) . '/sync', []);

@@ -159,7 +159,7 @@ final class Creator
     }
 
     /** The user's public repository <login>/<name> (GitHub's API, the user's token): <name>-2, -3... when taken. */
-    private function createRepository(Git $git, string $name, string $description, int $try = 1): Deferred
+    public function createRepository(Git $git, string $name, string $description, int $try = 1): Deferred
     {
         $token = $git->token();
         $http = \JumPHP\Tauri\App::current()?->http();
@@ -184,7 +184,7 @@ final class Creator
     }
 
     /** git for a project, with the user's GitHub token (through jumphp.net) to push. */
-    private function git(string $root): Deferred
+    public function git(string $root): Deferred
     {
         $git = new Git($this->processes, $root);
         $login = (string)($this->main->user()['login'] ?? 'jumphp');
@@ -196,7 +196,7 @@ final class Creator
     }
 
     /** The remote "jumphp" (if any) fetches JumPHP's updates and can never be pushed to. */
-    private function noPushToJumphp(string $root): Deferred
+    public function noPushToJumphp(string $root): Deferred
     {
         return $this->run(['git', 'remote'], $root)->then(function ($r) use ($root) {
             $remotes = preg_split('/\s+/', trim((string)(is_array($r) ? ($r['output'] ?? $r['stdout'] ?? '') : $r))) ?: [];

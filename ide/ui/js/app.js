@@ -147,6 +147,11 @@ class App {
     this.restoreTabs();
     this.docker();   // in the background: Docker Desktop started if needed, before the first run asks for it
     this.updateJumphp();   // the project's JumPHP as new as the IDE (bin/jumphp, engine...; games/ never touched)
+    // a project made before New Project created repositories: its own GitHub repository, then jumphp.net
+    if (backend.kind === 'native' && info.needsRepository) {
+      notify('This project has no GitHub repository of its own: commits cannot be pushed and it cannot be published on jumphp.net.', 'warning',
+        { title: 'GitHub', timeout: 0, actions: [{ label: 'Create its GitHub repository…', action: () => this.createRepository() }] });
+    }
     setInterval(() => { if (document.visibilityState === 'visible') this.git.refresh(); }, 15000);
     window.addEventListener('focus', () => { this.git.refresh(); this.editors.reloadFromDisk(); this.tree.refresh(); });
     window.addEventListener('beforeunload', () => this.saveTabs());
@@ -852,11 +857,32 @@ class App {
   fileStructure() { fileStructure(this); }
 
   async publish() {
+    if (this.project.needsRepository) { this.createRepository(); return; }
     const done = this.task('Publishing on jumphp.net…');
     try {
       const result = await backend.invoke('playground.publish');
       notify(result.message || 'Published', result.ok === false ? 'error' : 'success', { title: 'jumphp.net', actions: result.url ? [{ label: 'Open its page', action: () => this.openUrl(result.url) }] : [] });
     } catch (e) { notify(e.message, 'error', { title: 'Publish' }); } finally { done(); }
+  }
+
+  /** Its own public repository on the user's GitHub account, everything committed and pushed, then a jumphp.net project. */
+  createRepository() {
+    const module = (this.project.modules || [])[0];
+    const name = el('input.input', { value: module?.id || this.project.name || '' });
+    dialog({
+      title: 'Create its GitHub repository', wide: true,
+      body: el('div', {}, el('label.field', {}, el('span', {}, 'Name of the repository (on your GitHub account, public)'), name),
+        el('p.pub-faint', {}, 'The IDE creates the repository, commits every file of the project (but what .gitignore leaves out) and pushes it. '
+          + 'JumPHP stays as the "jumphp" remote, for its updates only. Then the project is put on jumphp.net (not listed): Publish works.')),
+      buttons: [{ label: 'Cancel' }, { label: 'Create and push', primary: true, action: async () => {
+        const done = this.task('Creating the GitHub repository…');
+        try {
+          const r = await backend.invoke('project.createRepository', { name: name.value.trim() });
+          notify(r.message || `${r.repository}: pushed${r.playground ? ', and on jumphp.net' : ''}.`, r.message ? 'warning' : 'success',
+            { title: 'GitHub', timeout: 0, actions: [{ label: 'Open the repository', action: () => this.openUrl(r.url) }, { label: 'Reload the project', action: () => location.reload() }] });
+        } finally { done(); }
+      } }],
+    });
   }
 
   afterPush() {

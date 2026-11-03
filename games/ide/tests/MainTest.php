@@ -105,6 +105,33 @@ final class MainTest extends AppTestCase
         self::assertDirectoryDoesNotExist($this->project . '/new/todo');
     }
 
+    public function testAProjectWithoutARepositoryOfItsOwnIsOfferedOne(): void
+    {
+        $project = $this->ide('session.state')['project'];
+        self::assertNull($project['repository']);
+        self::assertTrue($project['needsRepository']);
+        try {
+            $this->ide('project.createRepository', ['name' => 'demo']);
+            self::fail('a repository was made without the sign-in');
+        } catch (\Throwable $e) {
+            self::assertStringContainsString('Sign in with jumphp.net first', $e->getMessage());
+        }
+    }
+
+    public function testTheRepositoryOfAProjectIsItsOriginNeverJumphps(): void
+    {
+        $root = $this->project . '/repo';
+        mkdir($root);
+        $git = fn (string $args) => exec('cd ' . escapeshellarg($root) . " && git $args 2>&1");
+        $git('init -q -b main');
+        self::assertNull(\App\Main::ownRepository($root));
+        $git('remote add jumphp https://github.com/davidnurdin/jumPhp.git');
+        $git('remote add origin https://github.com/davidnurdin/jumPhp.git');
+        self::assertNull(\App\Main::ownRepository($root), 'origin = the framework, in a project made from it');
+        $git('remote set-url origin git@github.com:someone/todojum.git');
+        self::assertSame('someone/todojum', \App\Main::ownRepository($root));
+    }
+
     public function testEveryKindOfTheIdeHasItsKindOnJumphpNet(): void
     {
         self::assertSame(['original', 'cpc', 'port', 'original', 'gui', 'mobile', 'desktop', 'cli'], array_values(\App\Creator::PLAYGROUND_KINDS));
