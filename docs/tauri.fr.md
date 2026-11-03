@@ -258,6 +258,18 @@ on dépose `dist/standalone/` à cette adresse, et game.yaml `app: {update: {url
 `relaunch()` relance. `games/hello-desktop` a Aide > Check for updates (essayé pour de vrai : la 0.1.0 a trouvé,
 installé et relancé la 0.1.1). Détails : [tauri.md](tauri.md#updates).
 
+## Démarrer avec l'ordinateur
+
+Une app exportée peut se lancer quand l'utilisateur ouvre sa session (sans droits administrateur ;
+`JumPHP\Native\Autostart`) : `$app->autostart()->set(true)` (ou `false`), `isSupported()` (une app exportée sous
+Windows, macOS ou Linux, pas `php app.php`), `isEnabled()`, `startedAtLogin()` (lancée par l'ordinateur : le drapeau
+`--autostart`). Windows : la valeur `<id>` de `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` ; macOS : un
+LaunchAgent `~/Library/LaunchAgents/<identifier>.plist` qui ouvre la `.app` ; Linux : `~/.config/autostart/<id>.desktop`.
+game.yaml `app: {autostart: {default: true, hidden: true}}` : activé au premier lancement (une fois, ensuite
+l'utilisateur décide), fenêtre principale cachée quand l'ordinateur l'a lancée (une app de la zone de notification).
+Une page demande avec `jumphp.invoke('native.autostart', {on: true})`. Exemple : `games/hello-desktop`, View > Start
+with the computer.
+
 ## Plateformes
 
 Le workflow `.github/workflows/tauri.yml` (à chaque changement de `tauri/` ou du côté PHP, ou à la main) compile la

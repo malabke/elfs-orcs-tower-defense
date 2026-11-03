@@ -126,6 +126,8 @@ game:
     icon: assets/icon.png       # default: assets/icon.png when it exists
     native_commands: true       # the built-in native.* commands for pages (below)
     smoke_page: true            # app:test fails when the main page never loads
+    autostart: {default: false, hidden: true}   # starting with the computer (below): on at the first start?
+                                # started at login, the main window hidden (a tray app)? `autostart: true` = default on
     window:                     # the main window: every window.create option
       url: index.html
       width: 960
@@ -222,7 +224,30 @@ const dir = await jumphp.invoke('native.open', {folder: true});
 const out = await jumphp.invoke('native.save', {file_name: 'notes.txt'});
 await jumphp.invoke('native.notify', {title: 'Done', body: 'Export finished'});
 await jumphp.invoke('native.openUrl', {url: 'https://jumphp.net'});
+const s = await jumphp.invoke('native.autostart');               // {supported, enabled, atLogin}
+await jumphp.invoke('native.autostart', {on: true});             // starts with the computer (below)
 ```
+
+### Starting with the computer
+
+An exported app can start when the user logs in (no administrator rights; `JumPHP\Native\Autostart`):
+
+```php
+$start = $app->autostart();
+if ($start->isSupported()) {                  // an exported app on Windows, macOS or Linux (not `php app.php`)
+    $start->set(true);                        // or false; isEnabled() reads what the system has
+}
+$start->startedAtLogin();                     // true when the computer started it (the --autostart flag)
+```
+
+- Windows: the value `<id>` of `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (`"<exe>" --autostart`);
+- macOS: `~/Library/LaunchAgents/<identifier>.plist` (RunAtLoad) that runs `open -a <the .app> --args --autostart`;
+- Linux: `~/.config/autostart/<id>.desktop` (GNOME, KDE, Xfce...).
+
+game.yaml `app.autostart`: `default: true` turns it on at the first start of the exported app (once: then the user
+decides, e.g. a check box of the app's menu or settings); `hidden: true` starts the main window hidden when the
+computer started it, for an app that lives in the tray (`$app->tray()`: its menu shows the window). A page asks with
+`native.autostart`. `games/hello-desktop` has View > Start with the computer.
 
 ### The command line (no window): `AppCli`
 
@@ -595,9 +620,12 @@ On Windows and macOS without Docker: a PHP 8.2+ with FFI (`ffi.enable=1`), `comp
 Done: the runtime (Linux, Windows, macOS), PHP driving it from its main thread, windows, pages, page <-> PHP both
 ways, native dialogs / notifications / opener / clipboard, menus, tray icon, global shortcuts, drag and drop, closing
 decided by PHP, hybrid games (SDL + Tauri), tests without a window, real-window tests (Xvfb here, the three systems
-on GitHub), one-file export for Linux and Windows, an `.app` for macOS, menus, updates, a hybrid game in one window.
+on GitHub), one-file export for Linux and Windows, an `.app` and a `.dmg` for macOS, menus, updates, a hybrid game in
+one window, starting with the computer.
 
 Next:
+- **Services / daemons** (an app or a CLI app running without a user session: Windows service, LaunchDaemon,
+  systemd unit; docs: TODO.md).
 - **Signed apps**: macOS notarization and Windows Authenticode need the developer's certificates (the Apple
   account, a code signing certificate); unsigned, the systems warn the first time.
 - **Android, iOS as native Tauri apps** (the browser version above runs there already): Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`

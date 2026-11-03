@@ -10,6 +10,7 @@ use JumPHP\Http\Http;
 use JumPHP\Kernel\GameConfig;
 use JumPHP\Kernel\Platform;
 use JumPHP\Loop\GameLoop;
+use JumPHP\Native\Autostart;
 use JumPHP\Save\Options;
 use JumPHP\Save\Storage;
 use JumPHP\Util\Lang;
@@ -44,6 +45,7 @@ final class App extends EventEmitter
     public readonly GameLoop $gameLoop;
     public readonly Storage $storage;
     public readonly Options $options;
+    private ?Autostart $autostart = null;
     public readonly Lang $lang;
 
     /** @var array<string, Window> */
@@ -116,7 +118,16 @@ final class App extends EventEmitter
         $runtime ??= TauriRuntime::create($root, $config->title()) ?? throw new \RuntimeException(self::missingRuntime($root));
         $app = new self($config, $runtime);
         $window = (array)$app->option('window', []);
+        $start = $app->autostartPolicy();
+        if ($start['hidden'] && $app->autostart()->startedAtLogin()) {
+            $window['visible'] = false;      // started with the computer: in the tray until the user opens it
+        }
         $app->createWindow('main', $window + ['title' => $config->title()]);
+        // game.yaml app.autostart: true: on by default, once (the first start of the exported app); the user decides then
+        if ($start['default'] && $app->options->get('autostart_set') === null && $app->autostart()->isSupported()) {
+            $app->autostart()->enable();
+            $app->options->set('autostart_set', true);
+        }
         if ($main !== null) {
             if (!class_exists((string)$main)) {
                 throw new \RuntimeException("game.main: class '$main' not found (namespace / file name?)");
@@ -327,6 +338,24 @@ final class App extends EventEmitter
     {
         $this->sendCommand(['cmd' => 'menu.set_item', 'window' => '*', 'item' => $item] + array_intersect_key($changes, ['enabled' => 1, 'checked' => 1, 'text' => 1]));
         return $this;
+    }
+
+    /**
+     * Starting with the computer (an exported app; docs/tauri.md "Starting with the computer"): isSupported(),
+     * isEnabled(), set($on), startedAtLogin().
+     */
+    public function autostart(): Autostart
+    {
+        return $this->autostart ??= new Autostart($this->config->id(), $this->config->title(), (string)$this->runtimeConfig()['identifier'],
+            $this->updater()->executable(), PHP_OS_FAMILY, null, array_values(array_map('strval', (array)($_SERVER['argv'] ?? []))));
+    }
+
+    /** @return array{default: bool, hidden: bool} game.yaml app.autostart: true, or {default: bool, hidden: bool} */
+    private function autostartPolicy(): array
+    {
+        $o = $this->option('autostart', false);
+        return is_array($o) ? ['default' => (bool)($o['default'] ?? false), 'hidden' => (bool)($o['hidden'] ?? false)]
+            : ['default' => (bool)$o, 'hidden' => false];
     }
 
     /** The app's updates (an exported app, game.yaml app.update.url; docs/tauri.md "Updates"). */

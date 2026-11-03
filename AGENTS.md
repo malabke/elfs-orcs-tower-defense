@@ -1051,6 +1051,8 @@ bin/jumphp build notes               # dist/web/: the same app in a web page (we
   Write one per feature as you go, like game tests.
 - Also for apps (and hybrid games): `Clipboard::copy()` / `paste()`, `$app->tray($id, ['menu' => [...]])->on('menu', ...)`,
   `$app->globalShortcut('CmdOrCtrl+Shift+K', fn () => ...)`. `JUMPHP_TAURI_TRACE=1` prints every native command / event.
+- **Starting with the computer** (an exported app): `$app->autostart()->set(true)` / `isEnabled()` / `startedAtLogin()`;
+  game.yaml `app: {autostart: {default: true, hidden: true}}` (on at the first start; window hidden at login: a tray app).
 - **Menus**: `$app->window()->setMenu([['text' => 'File', 'items' => [['id' => 'open', 'text' => 'Open...',
   'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]], ...])` (check items: `'checked' => true`; roles: quit
   copy cut paste undo redo select_all...), `$app->window()->on('menu', fn (string $item, ?bool $checked) => ...)`,

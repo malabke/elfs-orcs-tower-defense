@@ -79,13 +79,19 @@ final class Main implements AppMain
                 ['role' => 'quit'],
             ]],
             ['text' => 'Edit', 'items' => [['role' => 'undo'], ['role' => 'redo'], '-', ['role' => 'cut'], ['role' => 'copy'], ['role' => 'paste'], ['role' => 'select_all']]],
-            ['text' => 'View', 'items' => [['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true]]],
+            ['text' => 'View', 'items' => [['id' => 'wrap', 'text' => 'Wrap lines', 'checked' => true],
+                // an exported app only (Autostart: the Run key, a LaunchAgent, ~/.config/autostart)
+                ...($app->autostart()->isSupported() ? ['-', ['id' => 'autostart', 'text' => 'Start with the computer', 'checked' => $app->autostart()->isEnabled()]] : [])]],
             ['text' => 'Help', 'items' => [['id' => 'update', 'text' => 'Check for updates...']]],
         ]);
         $app->window()->on('menu', function (string $item, ?bool $checked): void {
             $this->menuClicks++;
             if ($item === 'update') {
                 $this->checkForUpdates();
+                return;
+            }
+            if ($item === 'autostart') {
+                $this->app->autostart()->set((bool)$checked);
                 return;
             }
             $this->app->window()->send('menu', ['item' => $item, 'checked' => $checked]);

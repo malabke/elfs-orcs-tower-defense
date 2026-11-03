@@ -11,10 +11,8 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
   Tauri's mobile loop is driven by the activity / UIKit, so PHP has to be embedded in the app (the PHP builds of
   `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
 - signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
-- native apps that start with the computer: `app: {autostart: true}` (or `$app->autostart(true)`, a setting the user
-  turns on): Windows (Run registry key / Startup folder), macOS (a LaunchAgent / SMAppService login item), Linux
-  (~/.config/autostart/*.desktop); often with the tray and no window at start (`--hidden`); the installers
-  (jumphp2installer) offering the box
+- the installers (jumphp2installer) offering a "start with the computer" box (the app does it: `$app->autostart()`,
+  done; docs/tauri.md)
 - services / daemons in PHP: an app (or a CLI app) that runs in the background without a user session: Windows
   service (SCM: start / stop / status, a service wrapper around the executable), macOS LaunchDaemon, Linux systemd
   unit (user or system); `bin/jumphp service:install / uninstall / status <id>`, the installers' step `service`,
