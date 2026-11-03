@@ -27,6 +27,9 @@ final class World3d
         attribute vec3 a_color;
         uniform mat4 u_vp;
         uniform mat4 u_model;
+        uniform float u_outline;
+        uniform float u_push;
+        uniform mediump vec3 u_eye;
         varying vec3 v_color;
         varying vec3 v_normal;
         varying vec3 v_world;
@@ -34,8 +37,11 @@ final class World3d
         varying float v_dist;
         void main() {
             vec4 w = u_model * vec4(a_pos, 1.0);
+            vec3 nw = normalize((u_model * vec4(a_normal, 0.0)).xyz);
+            // the ink: pushed out along the normal, then away from the eye so the model itself stays in front
+            w.xyz += nw * u_outline + normalize(w.xyz - u_eye) * u_push;
             gl_Position = u_vp * w;
-            v_normal = (u_model * vec4(a_normal, 0.0)).xyz;
+            v_normal = nw;
             v_color = a_color;
             v_world = w.xyz;
             v_local = a_pos.y;
@@ -43,8 +49,9 @@ final class World3d
         }
         GLSL;
 
-    // Stylised light: half-lambert between a cool shade and a warm sun, the foot of every model darkened (a cheap
-    // occlusion that sets it on the ground), a pale rim against the camera, a little more colour.
+    // Comic-book look: the light is cut into three flat bands (shade, mid, sun) with sharp edges, the shade carries a
+    // halftone dot pattern, colours are punchy, a hard pale rim, and every model gets an ink outline (a second draw of
+    // the model pushed out along its normals, drawn on its back faces only: u_ink > 0).
     private const FRAGMENT = <<<'GLSL'
         precision mediump float;
         uniform vec3 u_light;
@@ -53,6 +60,7 @@ final class World3d
         uniform float u_alpha;
         uniform float u_emit;
         uniform float u_ao;
+        uniform float u_ink;
         uniform vec3 u_fog;
         uniform vec2 u_fogRange;
         varying vec3 v_color;
@@ -61,22 +69,32 @@ final class World3d
         varying float v_local;
         varying float v_dist;
         void main() {
-            vec3 n = normalize(v_normal);
-            float d = clamp(dot(n, u_light) * 0.5 + 0.5, 0.0, 1.0);
-            d = d * d * (3.0 - 2.0 * d);
-            vec3 light = mix(vec3(0.46, 0.55, 0.80), vec3(1.22, 1.08, 0.86), d);
-            float foot = mix(1.0, mix(0.52, 1.0, smoothstep(0.0, 9.0, v_local)), u_ao);
-            vec3 view = normalize(u_eye - v_world);
-            float rim = pow(1.0 - clamp(dot(n, view), 0.0, 1.0), 2.4) * 0.26 * u_ao;
-            vec3 base = v_color * u_tint;
-            vec3 lit = base * light * foot + rim * vec3(0.85, 0.92, 1.0);
-            float g = dot(lit, vec3(0.299, 0.587, 0.114));
-            lit = mix(vec3(g), lit, 1.16);
-            lit = mix(lit, base * 1.3, u_emit);
             float f = clamp((v_dist - u_fogRange.x) / (u_fogRange.y - u_fogRange.x), 0.0, 1.0);
-            gl_FragColor = vec4(mix(lit, u_fog, f * 0.75), u_alpha);
+            if (u_ink > 0.5) {
+                gl_FragColor = vec4(mix(vec3(0.07, 0.05, 0.12), u_fog, f * 0.6), 1.0);
+                return;
+            }
+            vec3 n = normalize(v_normal);
+            float d = dot(n, u_light) * 0.5 + 0.5;
+            float band = smoothstep(0.37, 0.41, d) * 0.5 + smoothstep(0.70, 0.74, d) * 0.5;
+            vec3 light = mix(vec3(0.50, 0.52, 0.86), vec3(1.18, 1.06, 0.88), band);
+            float foot = mix(1.0, mix(0.60, 1.0, smoothstep(0.0, 8.0, v_local)), u_ao);
+            vec3 view = normalize(u_eye - v_world);
+            float rim = smoothstep(0.62, 0.70, 1.0 - clamp(dot(n, view), 0.0, 1.0)) * 0.20 * u_ao;
+            vec3 base = v_color * u_tint;
+            vec3 lit = base * light * foot + rim * vec3(0.9, 0.95, 1.0);
+            vec2 p = mod(gl_FragCoord.xy, 8.0) - 4.0;
+            float dots = (1.0 - smoothstep(1.4, 2.0, length(p))) * (1.0 - smoothstep(0.0, 0.5, band));
+            lit *= 1.0 - 0.20 * dots * u_ao;
+            float g = dot(lit, vec3(0.299, 0.587, 0.114));
+            lit = mix(vec3(g), lit, 1.28);
+            lit = mix(lit, base * 1.3, u_emit);
+            gl_FragColor = vec4(mix(lit, u_fog, f * 0.7), u_alpha);
         }
         GLSL;
+
+    /** How far the ink outline sticks out, in world units. */
+    private const OUTLINE = 1.4;
 
     private ?WebGl $gl = null;
     private int $prog = 0;
@@ -84,6 +102,7 @@ final class World3d
     private array $models = [];
     /** @var array{key: string, buffer: int, count: int, fog: array<int, float>}|null */
     private ?array $scene = null;
+    private bool $outlines = true;
     /** @var array{0: float, 1: float, 2: float} */
     private array $light;
 
@@ -144,6 +163,9 @@ final class World3d
             'u_alpha' => 1.0,
             'u_emit' => 0.0,
             'u_ao' => 0.0,
+            'u_ink' => 0.0,
+            'u_outline' => 0.0,
+            'u_push' => 0.0,
         ], false));
     }
 
@@ -164,13 +186,32 @@ final class World3d
             return;
         }
         [$sx, $sy, $sz] = is_array($scale) ? $scale : [$scale, $scale, $scale];
+        $model = self::matrix($x, $y, $z, $yaw, $sx, $sy, $sz);
         $this->gl->draw($this->prog, $this->options($buffer, $count, [
-            'u_model' => self::matrix($x, $y, $z, $yaw, $sx, $sy, $sz),
+            'u_model' => $model,
             'u_tint' => $tint,
             'u_alpha' => $alpha,
             'u_emit' => $emit,
             'u_ao' => $ao,
+            'u_ink' => 0.0,
+            'u_outline' => 0.0,
+            'u_push' => 0.0,
         ], $alpha < 1.0));
+        if ($ao > 0.0 && $alpha >= 1.0 && $this->outlines) {
+            // the ink: the same model, pushed out, only its back faces
+            $this->gl->draw($this->prog, $this->options($buffer, $count, [
+                'u_model' => $model,
+                'u_ink' => 1.0,
+                'u_outline' => self::OUTLINE,
+                'u_push' => self::OUTLINE * 1.6,
+            ], false));
+        }
+    }
+
+    /** Ink outlines on or off (on by default). */
+    public function setOutlines(bool $on): void
+    {
+        $this->outlines = $on;
     }
 
     /** A flat disc on the ground, $r wide (shadows, ranges, blasts). */
@@ -203,13 +244,14 @@ final class World3d
     }
 
     /** @return array<string, mixed> */
-    private function options(int $buffer, int $count, array $uniforms, bool $blend): array
+    private function options(int $buffer, int $count, array $uniforms, bool $blend, ?string $cull = null): array
     {
         return [
             'attributes' => ['a_pos' => [$buffer, 3, 9, 0], 'a_normal' => [$buffer, 3, 9, 3], 'a_color' => [$buffer, 3, 9, 6]],
             'count' => $count,
             'uniforms' => $uniforms,
             'blend' => $blend,
+            'cull' => $cull,
         ];
     }
 
