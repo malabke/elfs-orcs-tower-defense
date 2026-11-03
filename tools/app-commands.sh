@@ -4,6 +4,7 @@
 # docs/tauri.md.
 
 TAURI_IMAGE="${JUMPHP_TAURI_IMAGE:-jumphp/tauri:dev}"
+XDEBUG_TAURI_IMAGE="${JUMPHP_XDEBUG_TAURI_IMAGE:-jumphp/tauri-xdebug:dev}"
 TAURI_HOME="${JUMPHP_HOME:-$HOME/.jumphp}/tauri"
 TAURI_PLATFORM="linux-x86_64"
 TAURI_LIB="build/tauri/$TAURI_PLATFORM/libjumphp_tauri.so"
@@ -20,6 +21,14 @@ tauri_run() {
   while [ $# -gt 0 ] && [ "$1" != "--" ]; do flags+=("$1"); shift; done
   [ "${1:-}" = "--" ] && shift
   ensure_tauri_image
+  local image="$TAURI_IMAGE"
+  # JUMPHP_XDEBUG=<port>: the Tauri image with Xdebug (cargo builds left alone)
+  if [ -n "${JUMPHP_XDEBUG:-}" ] && [[ " $* " != *" cargo "* ]]; then
+    xdebug_image "$TAURI_IMAGE" "$XDEBUG_TAURI_IMAGE" docker/desktop-xdebug "the Tauri image"
+    image="$XDEBUG_IMAGE_USED"
+    flags+=("${XDEBUG_FLAGS[@]}")
+    [[ " ${flags[*]-} " == *" --network host "* ]] || [ "$(uname -s)" != Linux ] || flags+=(--network host)
+  fi
   mkdir -p "$TAURI_HOME/cargo" "$TAURI_HOME/target"
   docker run --rm $TTY_FLAGS --user "$(id -u):$(id -g)" \
     "${WS[@]}" -w "/workspace/$wd" \
@@ -27,7 +36,7 @@ tauri_run() {
     -e HOME=/tmp -e XDG_RUNTIME_DIR=/tmp -e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/workspace/.cache/composer \
     -e CARGO_HOME=/opt/jumphp-cargo -e CARGO_TARGET_DIR=/opt/jumphp-target \
     -e "JUMPHP_TAURI_LIB=/workspace/$TAURI_LIB" \
-    ${flags[@]+"${flags[@]}"} "$TAURI_IMAGE" "$@"
+    ${flags[@]+"${flags[@]}"} "$image" "$@"
 }
 
 cmd_tauri_setup() {

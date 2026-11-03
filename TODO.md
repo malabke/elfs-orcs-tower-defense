@@ -150,9 +150,11 @@ later iOS).
 
 - the debugger, what is left (done in IDE 0.1.13 and 0.1.31: Xdebug, breakpoints with conditions, the Debug window,
   steps, watches, Run to Cursor, a variable's new value, stop at exceptions, Claude's debug_* tools in the IDE and in a
-  terminal through `bin/jumphp debug`): games in the browser / jumphp.net/ide (no Xdebug in WebAssembly: a step
-  debugger of its own?), the async runtime (PHP 8.6 ZTS image with Xdebug), desktop apps (Tauri, `ui: webview`:
-  app:run uses the Tauri image, without Xdebug); try it on Windows / macOS (host.docker.internal), and
+  terminal through `bin/jumphp debug`; 2026-11-04: the async runtime (`jumphp/desktop-async-xdebug`, Xdebug's
+  development branch at a fixed commit: the 3.5 releases stop below PHP 8.6; TrueAsync's threads crash under Xdebug,
+  so `Tasks` runs the jobs between frames there, where breakpoints work) and desktop apps (`jumphp/tauri-xdebug`:
+  app:run / app:test), both tried with a real DBGp session): games in the browser / jumphp.net/ide (no Xdebug in
+  WebAssembly: a step debugger of its own?); try it on Windows / macOS (host.docker.internal), and
   `bin/jumphp debug` there too (only tried on Linux: there its container listens on 0.0.0.0 with the port published)
 - plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
   PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
