@@ -160,11 +160,11 @@ later iOS).
   the Runner wraps the commands) and from bin/jumphp itself. To try on a real Windows: the project on C:\ seen as /mnt/c
   is slow in WSL (volumes in Docker even more): maybe offer to keep projects in the WSL file system (\\wsl$\...),
   Docker Desktop staying the default (it runs on WSL 2 already).
-- Reported on Windows (2026-11-02, before Docker was started by the IDE): `composer install` of a new project seemed to
-  run forever (its status bar task stayed, nothing in the Run window). Likely Docker not answering (bin/jumphp and the IDE
-  now wait for it, 20 s per check, and say so); check again on Windows with IDE 0.1.12: if it still happens, look at the
-  Run window's output with files on Windows (ide/src/Async/Processes.php) and at a `docker build` of the desktop image
-  that prints nothing for minutes (the first time: say it in the Run window).
+- Reported on Windows (2026-11-02): `composer install` of a new project seemed to run forever. Found (2026-11-03, on
+  GitHub's Windows, workflow ide-windows): the IDE could not start bin/jumphp at all on Windows (a bash script: nothing
+  ran it), and before that it waited for Docker (up to 4 min while Docker Desktop starts). Fixed in IDE 0.1.30: bin/jumphp
+  and `sh -c` go through Git for Windows' bash, a stopped run ends its whole tree. Left: try it on a real PC with
+  Docker Desktop (GitHub's Windows has no Linux containers): the first `composer install` of a new project, Run, Test.
 
 ## jumphp.net: big downloads, to watch
 
