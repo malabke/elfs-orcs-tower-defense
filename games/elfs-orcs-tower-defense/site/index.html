@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elfs &amp; Orcs Tower Defense - fantasy tower defense game, play online free</title>
+<meta name="description" content="Elfs &amp; Orcs Tower Defense: a free fantasy tower defense game in your browser. Pick one of five peoples, build towers on stone platforms, command a hero and fight through six maps. Works on phones.">
+<link rel="canonical" href="https://{{DOMAIN}}/">
+<link rel="icon" type="image/png" href="images/favicon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Elfs &amp; Orcs Tower Defense - play free in your browser">
+<meta property="og:description" content="Five peoples, six maps, heroes and powers: hold the pass against the orc horde, or lead the orcs against the free peoples.">
+<meta property="og:url" content="https://{{DOMAIN}}/">
+<meta property="og:image" content="https://{{DOMAIN}}/images/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Elfs &amp; Orcs Tower Defense">
+<meta name="twitter:description" content="A free fantasy tower defense: five peoples, six maps, heroes. Play in your browser, on desktop or phone.">
+<meta name="twitter:image" content="https://{{DOMAIN}}/images/og.png">
+<meta name="theme-color" content="#14110f">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Elfs & Orcs Tower Defense",
+  "description": "A free fantasy tower defense game: choose elves, dwarves, horsefolk, little folk or orcs, build towers on stone platforms, command a hero and win six maps.",
+  "genre": ["Strategy", "Tower defense"],
+  "gamePlatform": ["Web browser", "Desktop", "Mobile"],
+  "applicationCategory": "Game",
+  "operatingSystem": "Any",
+  "inLanguage": ["en", "fr", "es", "de", "it", "pt", "nl", "pl", "ru", "uk", "tr", "ja", "zh", "ko"],
+  "url": "https://{{DOMAIN}}/",
+  "image": "https://{{DOMAIN}}/images/og.png",
+  "screenshot": [
+    "https://{{DOMAIN}}/images/battle-thornvale.png",
+    "https://{{DOMAIN}}/images/battle-greystone.png",
+    "https://{{DOMAIN}}/images/sides.png"
+  ],
+  "isAccessibleForFree": true,
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"},
+  "potentialAction": {"@type": "PlayAction", "target": "https://{{DOMAIN}}/play/"}
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type": "Question", "name": "Is Elfs & Orcs Tower Defense free?",
+     "acceptedAnswer": {"@type": "Answer", "text": "Yes. It runs in your browser: no download, no account."}},
+    {"@type": "Question", "name": "Can I play it on my phone?",
+     "acceptedAnswer": {"@type": "Answer", "text": "Yes. Tap a stone platform to build; the touch targets are made for fingers. It can also be installed on the home screen and played offline."}},
+    {"@type": "Question", "name": "Which peoples can I play?",
+     "acceptedAnswer": {"@type": "Answer", "text": "Elves, dwarves, horsefolk and little folk defend against the orc horde. The orcs defend their bastion against an alliance of the four other peoples."}},
+    {"@type": "Question", "name": "Which languages are available?",
+     "acceptedAnswer": {"@type": "Answer", "text": "English, French, Spanish, German, Italian, Portuguese, Dutch, Polish, Russian, Ukrainian, Turkish, Japanese, Chinese and Korean."}}
+  ]
+}
+</script>
+<style>
+:root { --bg: #14110f; --panel: #211c18; --line: #3a322a; --text: #efe6d6; --muted: #b3a690; --gold: #f2c94c; --green: #3fa860; --red: #c0392b; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+img { max-width: 100%; height: auto; display: block; image-rendering: pixelated; border: 2px solid var(--line); border-radius: 4px; background: #000; }
+a { color: var(--gold); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header { text-align: center; padding: 28px 0 8px; background: linear-gradient(#0c0a09, var(--bg)); }
+h1 { margin: 0 0 6px; font-size: clamp(1.9rem, 6vw, 3rem); letter-spacing: .02em; color: var(--gold); text-shadow: 0 3px 0 #000; }
+.tag { margin: 0 auto 18px; max-width: 34em; color: var(--muted); font-size: 1.1rem; }
+.play { display: inline-block; padding: 14px 40px; background: var(--green); color: #fff; font-weight: 700; font-size: 1.35rem; text-decoration: none; border-radius: 6px; border-bottom: 5px solid #1d5434; letter-spacing: .04em; }
+.play:hover, .play:focus { background: #4cc274; }
+.play.small { font-size: 1.1rem; padding: 10px 28px; }
+.hero { margin: 22px auto 0; max-width: 960px; }
+main section { padding: 28px 0 4px; }
+h2 { margin: 0 0 10px; color: var(--gold); font-size: 1.55rem; }
+h3 { margin: 0 0 4px; font-size: 1.1rem; }
+p { margin: 0 0 12px; }
+.grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+.card p { margin: 0; color: var(--muted); font-size: .95rem; }
+.card h3 span { font-size: .85rem; font-weight: 400; color: var(--muted); }
+.elves { border-top: 4px solid #3fa860; } .dwarves { border-top: 4px solid #4a78a8; } .horsefolk { border-top: 4px solid #c08a30; }
+.littlefolk { border-top: 4px solid #d0704a; } .orcs { border-top: 4px solid #a02a20; }
+figure { margin: 0; } figcaption { color: var(--muted); font-size: .9rem; padding-top: 4px; }
+ul.keys { padding-left: 1.2em; margin: 0; } ul.keys li { margin: 4px 0; }
+kbd { background: #000; border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 4px; padding: 0 6px; font: .9em ui-monospace, Menlo, Consolas, monospace; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; margin: 8px 0; }
+summary { cursor: pointer; font-weight: 600; }
+details p { margin: 8px 0 0; color: var(--muted); }
+.cta { text-align: center; padding: 30px 0; }
+footer { border-top: 1px solid var(--line); margin-top: 24px; padding: 18px 0 32px; color: var(--muted); font-size: .88rem; text-align: center; }
+@media (min-width: 700px) {
+  .grid.two { grid-template-columns: 1fr 1fr; }
+  .grid.three { grid-template-columns: repeat(3, 1fr); }
+  .sides { grid-template-columns: repeat(5, 1fr); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Elfs &amp; Orcs Tower Defense</h1>
+    <p class="tag">Five peoples. One war. Pick your banner, hold your ground, and decide who rules the realm.</p>
+    <a class="play" href="play/">Play now - free</a>
+    <div class="hero"><img src="images/title.png" width="960" height="540" alt="The title screen of Elfs &amp; Orcs Tower Defense: the road, the stone platforms, towers of the elves and the orc horde marching"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="game">
+    <h2>A fantasy tower defense for your browser</h2>
+    <p>Enemies follow the road to your bastion. You build on the stone platforms beside it: towers that shoot, soldiers that hold the road, walls, traps, drums and mines. Every wave is announced, every people has an answer to every threat, and none of them is the same. Call the next wave early for bonus gold, speed the game up to x3, and keep the bastion's lives: three stars for a flawless defense.</p>
+    <p>It runs in the browser on desktop and phone, with mouse, touch, keyboard or gamepad, and it can be installed to play offline.</p>
+    <p><a class="play small" href="play/">Start playing</a></p>
+  </section>
+
+  <section id="peoples">
+    <h2>Choose your people</h2>
+    <p>Each people has four towers, three upgrade levels and two specializations each, its own colours, a hero and a power that you cast where you point. Four of them defend against the orc horde; the orcs defend their own bastion against an alliance of the four free peoples.</p>
+    <div class="grid sides">
+      <div class="card elves"><h3>Elves</h3><p>Range, precision and magic. Archer spire, moon sanctuary, wildwood sentinel, songmage. Hero: Aelwen Moonbow.</p></div>
+      <div class="card dwarves"><h3>Dwarves</h3><p>Heavy blows and deep mines. Heavy crossbow, siege slingshot, runic forge, deep mine. Hero: Borin Stonefist.</p></div>
+      <div class="card horsefolk"><h3>Horsefolk</h3><p>Riders that hold the road. Javelin throwers, stables, war horn, palisade. Hero: Edrith Swiftmane.</p></div>
+      <div class="card littlefolk"><h3>Little folk</h3><p>Cheap, cunning and rich. Slingers, hidden garden, snare traps, cosy inn. Hero: Pip Thistledown.</p></div>
+      <div class="card orcs"><h3>Orcs</h3><p>Masses, fire and fear. Brute catapult, pitch pit, barracks, war drums. Hero: Grukk the Loud.</p></div>
+    </div>
+    <p></p>
+    <figure><img src="images/sides.png" width="960" height="540" loading="lazy" alt="The side selection screen: five cards for elves, dwarves, horsefolk, little folk and orcs, each with its four towers"><figcaption>The side screen: five peoples, five ways to play.</figcaption></figure>
+  </section>
+
+  <section id="maps">
+    <h2>Six maps, hard mode</h2>
+    <p>From Thornvale Pass to The Last Gate: marsh, quarry, burning wood, snowy ridge. A map opens when the one before it is won, and each people has its own campaign with its own stars. Win a map and its hard mode opens: tougher enemies and less gold.</p>
+    <figure><img src="images/maps.png" width="960" height="540" loading="lazy" alt="The campaign screen: six maps with their stars, locked maps and the hard mode switch"><figcaption>The campaign: six maps, stars to earn, hard mode.</figcaption></figure>
+  </section>
+
+  <section id="shots">
+    <h2>In battle</h2>
+    <div class="grid two">
+      <figure><img src="images/battle-thornvale.png" width="960" height="540" loading="lazy" alt="Elves defending Thornvale Pass with archer spires and songmages against the orc horde"><figcaption>Elves on Thornvale Pass.</figcaption></figure>
+      <figure><img src="images/battle-greystone.png" width="960" height="540" loading="lazy" alt="Dwarves with crossbows, a forge and a mine on Greystone Quarry"><figcaption>Dwarves on Greystone Quarry.</figcaption></figure>
+      <figure><img src="images/battle-mistfen.png" width="960" height="540" loading="lazy" alt="Horsefolk with stables, javelin throwers and a palisade on Mistfen Marsh"><figcaption>Horsefolk on Mistfen Marsh.</figcaption></figure>
+      <figure><img src="images/battle-emberwood.png" width="960" height="540" loading="lazy" alt="Little folk with slingers, hidden gardens and an inn in Emberwood"><figcaption>Little folk in Emberwood.</figcaption></figure>
+      <figure><img src="images/battle-frostpeak.png" width="960" height="540" loading="lazy" alt="Orcs with catapults, a pitch pit and barracks on the snowy Frostpeak Ridge, facing the alliance"><figcaption>Orcs on Frostpeak Ridge, against the alliance.</figcaption></figure>
+      <figure><img src="images/battle-lastgate.png" width="960" height="540" loading="lazy" alt="Elves holding The Last Gate with two roads and many towers"><figcaption>The Last Gate: two roads, one bastion.</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="controls">
+    <h2>Controls</h2>
+    <div class="grid two">
+      <div class="card"><h3>Mouse and touch</h3>
+        <ul class="keys">
+          <li>Tap a stone platform: a ring of choices opens around it.</li>
+          <li>Tap a choice to read what it does, tap it again to do it.</li>
+          <li>Round buttons, bottom left: send your hero, cast your power.</li>
+          <li>Top bar: call the next wave early, speed x1 / x2 / x3, pause.</li>
+        </ul></div>
+      <div class="card"><h3>Keyboard and gamepad</h3>
+        <ul class="keys">
+          <li><kbd>Arrows</kbd> jump from platform to platform, <kbd>Enter</kbd> opens the ring and confirms.</li>
+          <li><kbd>N</kbd> next wave, <kbd>F</kbd> speed, <kbd>H</kbd> hero, <kbd>Q</kbd> power, <kbd>Esc</kbd> pause.</li>
+          <li>Gamepad: D-pad / stick, A confirm, B back, X speed, Y next wave, LB hero, RB power, Start pause.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>Questions</h2>
+    <details><summary>Is it free?</summary><p>Yes. It runs in your browser: no download, no account.</p></details>
+    <details><summary>Can I play on my phone?</summary><p>Yes. The platforms and buttons are made for fingers. You can install the game on your home screen and play offline.</p></details>
+    <details><summary>Which peoples can I play?</summary><p>Elves, dwarves, horsefolk and little folk defend against the orc horde. The orcs defend their bastion against an alliance of the four other peoples.</p></details>
+    <details><summary>Which languages?</summary><p>English, French, Spanish, German, Italian, Portuguese, Dutch, Polish, Russian, Ukrainian, Turkish, Japanese, Chinese and Korean. Change it in the options.</p></details>
+  </section>
+
+  <div class="cta"><a class="play" href="play/">Play Elfs &amp; Orcs Tower Defense</a></div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Made with <a href="https://jumphp.net">JumPHP</a>, a framework for retro games written in PHP. Texts use the fonts Press Start 2P (SIL Open Font License) and GNU Unifont (SIL OFL / GPL with font exception).</p>
+    <p>All names, peoples and places are original to this game.</p>
+  </div>
+</footer>
+</body>
+</html>
