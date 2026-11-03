@@ -42,12 +42,10 @@ foreach ($names as $name) {
     save(load("$shots/site-$name.png"), "$images/$name.png");
 }
 
-$title = load("$shots/site-title.png");
-// the picture shared by social networks: 1200 x 630 from the title (x1.25, 630 rows kept)
-$og = crop($title, 0, 17, 960, 504, 1200, 630);
-save($og, "$images/og.png");
-// the directory's picture (16:9) and the page icon (the castle)
-save($title, "$game/assets/thumbnail.png");
-$castleFrame = load("$shots/site-battle-thornvale.png");
-save(crop($castleFrame, 830, 320, 130, 130, 64, 64), "$images/favicon.png");
-save(crop($castleFrame, 830, 320, 130, 130, 256, 256), "$game/assets/icon.png");
+// the picture shared by social networks (1200 x 630: the battle, x1.25, 630 rows kept) and the directory's picture (16:9)
+$battle = load("$shots/site-battle-thornvale.png");
+save(crop($battle, 0, 22, 960, 504, 1200, 630), "$images/og.png");
+save($battle, "$game/assets/thumbnail.png");
+// the page icon: the castle of the side, seen from above (a square cut of the right edge of the picture)
+save(crop($battle, 790, 250, 170, 170, 64, 64), "$images/favicon.png");
+save(crop($battle, 790, 250, 170, 170, 256, 256), "$game/assets/icon.png");

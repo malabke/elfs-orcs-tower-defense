@@ -24,8 +24,23 @@ won: enemies' health x1.5, gold x0.85), a **hero** per side (sent anywhere on th
 itself) and a **side power** with a cooldown (cast where you point), 14 languages. **Milestone 4** is done except
 publishing (only when the user asks): the bot wins all 30 map x side combinations (tests/CampaignTest.php), hard mode
 stays winnable, `site/` (the game's home page) and `assets/thumbnail.png` / `assets/icon.png` exist, the remote build
-(`bin/jumphp build:remote`) was checked in Chrome. The graphics are placeholders: the user wants them redone in 3D or
-semi-3D (not pixel art) after this: keep drawing behind `src/Ui/Sprites.php`.
+(`bin/jumphp build:remote`) was checked in Chrome.
+
+**The battle is drawn in 3D** (the user does not want pixel art): a WebGL layer under the 2D scene (`$engine->gl()`,
+layer 'below', 'native' resolution, key colour magenta). Pure classes in `src/View3d/` (excluded from the container,
+unit-tested by `tests/ViewTest.php`): `Mesh` (boxes, cylinders, balls, quads -> one buffer), `Units` (every creature, 2
+walking frames), `Towers` (20 towers by level / specialization), `Props` (shots, walls, traps, disc / ring / ball),
+`MapModel` (ground, roads, scenery, platforms, castle, one mesh per map and side), `Rig` (the camera: fits every platform
+under the top bar, `screen()` / `world()` project both ways), `FlatView` (the 2D fallback's projection). `src/Ui/World3d.php`
+holds the GL side (one lit shader with fog, a model cache, one draw call per object). `PlayScene` reads and places its 2D
+overlays (ring menu, bars, numbers, HUD) through `$this->cam`; `render3d()` draws the world, `render()` keeps the flat 2D
+drawing when WebGL is missing or the param `view: flat` is given (the long logic tests use it: Mesa's software GL is slow).
+Things to remember: over the 3D (keyed by magenta) 2D overlays must be opaque, or pure black with alpha (it darkens the 3D;
+any other translucent colour is tinted by the key); `crc32()` is signed and products overflow in the browser's 32-bit PHP
+(mask to 16 bits); the 16-bit depth buffer needs a far near plane (`Rig::NEAR`); `bin/jumphp test <game> --filter X` runs
+only phpunit (with OpenGL on Xvfb when the game uses it).
+Still pixel art (to redo): the menus' background maps (`Sprites::drawMap`), the ring menu's tower icons, the hero / power
+buttons, the HUD icons and the font (Press Start 2P).
 
 Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
 `bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the

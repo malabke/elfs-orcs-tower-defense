@@ -85,7 +85,8 @@ final class MapModel
                 if ($char === '.' || isset($blocked["$tx,$tz"]) || $nearRoad($cx, $cz) < 20) {
                     continue;
                 }
-                $h = crc32("s$tx;$tz");
+                // 16 bits: crc32() is signed (and its products overflow) in the browser's 32-bit PHP
+                $h = crc32("s$tx;$tz") & 0xffff;
                 $ox = ($h & 7) - 3.5;
                 $oz = (($h >> 3) & 7) - 3.5;
                 if ($char === 't') {
@@ -153,7 +154,7 @@ final class MapModel
             }
             // pebbles on the road
             for ($d = 6.0; $d < $len; $d += 9.0) {
-                $h = crc32("p$ax,$az,$d");
+                $h = crc32("p$ax,$az,$d") & 0xffff;
                 $off = (($h & 15) / 15 - 0.5) * 2 * (self::ROAD - 3);
                 $m->box([$ax + $dx / $len * $d + $nx * $off, 0.45, $az + $dz / $len * $d + $nz * $off], [1.8, 0.5, 1.3], $road[4], [0.0, ($h >> 4) / 7, 0.0]);
             }
