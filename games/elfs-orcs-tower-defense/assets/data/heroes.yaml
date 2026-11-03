@@ -1,0 +1,96 @@
+# One hero per side: the player sends it anywhere on the road (it stops and fights the enemies on the ground there),
+# it shoots when it has a ranged attack, and its skill (a blast around it) fires by itself when enough enemies are
+# near (or a boss) and it is ready. Fallen, it comes back at the bastion after `respawn` seconds.
+#   hp, damage (per second in melee), speed (pixels per second), respawn
+#   ranged     {damage, rate, range, damage_type, targets, projectile}
+#   skill      {name, desc, damage, radius, damage_type, effects, cooldown, crowd (enemies near it to fire)}
+#   sprite     the picture (enemies' art), scale
+heroes:
+  elves:
+    name: AELWEN MOONBOW
+    sprite: warden
+    scale: 1.2
+    hp: 240
+    damage: 10
+    speed: 52
+    respawn: 12
+    ranged: {damage: 16, rate: 0.8, range: 72, damage_type: pierce, targets: both, projectile: arrow}
+    skill:
+      name: MOONLIGHT BURST
+      desc: MAGIC BLAST THAT SLOWS ALL AROUND
+      damage: 90
+      radius: 42
+      damage_type: magic
+      effects: {slow: {factor: 0.5, time: 3.0}}
+      cooldown: 18
+      crowd: 3
+  dwarves:
+    name: BORIN STONEFIST
+    sprite: thane
+    scale: 1.2
+    hp: 460
+    damage: 24
+    speed: 32
+    respawn: 14
+    skill:
+      name: EARTHSHAKER
+      desc: STUNS ALL AROUND
+      damage: 80
+      radius: 44
+      damage_type: siege
+      effects: {stun: {time: 1.6, chance: 1.0}}
+      cooldown: 20
+      crowd: 3
+  horsefolk:
+    name: EDRITH SWIFTMANE
+    sprite: horselord
+    scale: 1.0
+    hp: 320
+    damage: 18
+    speed: 72
+    respawn: 10
+    ranged: {damage: 12, rate: 1.0, range: 60, damage_type: pierce, targets: both, projectile: javelin}
+    skill:
+      name: TRAMPLE
+      desc: CRUSHES AND SCATTERS FOES
+      damage: 100
+      radius: 38
+      damage_type: physical
+      effects: {fear: {distance: 32, chance: 1.0}}
+      cooldown: 18
+      crowd: 3
+  littlefolk:
+    name: PIP THISTLEDOWN
+    sprite: captain
+    scale: 1.0
+    hp: 180
+    damage: 8
+    speed: 58
+    respawn: 9
+    ranged: {damage: 9, rate: 0.45, range: 66, damage_type: physical, targets: both, projectile: stone}
+    skill:
+      name: SMOKE BOMB
+      desc: FOES ARE LOST IN THE SMOKE
+      damage: 30
+      radius: 52
+      damage_type: physical
+      effects: {slow: {factor: 0.6, time: 3.5}, stun: {time: 0.6, chance: 1.0}}
+      cooldown: 16
+      crowd: 3
+  orcs:
+    name: GRUKK THE LOUD
+    sprite: warlord
+    scale: 1.1
+    hp: 480
+    damage: 22
+    speed: 36
+    respawn: 13
+    skill:
+      name: WAR CRY
+      desc: TERRIFIES ALL AROUND
+      damage: 70
+      radius: 48
+      damage_type: physical
+      effects: {fear: {distance: 36, chance: 1.0}}
+      cooldown: 18
+      crowd: 3

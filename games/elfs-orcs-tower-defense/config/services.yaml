@@ -8,4 +8,5 @@ services:
 
   App\:
     resource: '../src/*'
-    exclude: '../src/Entity'    # entities are created with `new`, not by the container
+    # the game's logic (plain classes created with `new`, no SDL, unit-tested) and helpers made with `new`
+    exclude: '../src/{Td,Ui/MixedFont.php,Ui/Text.php}'

@@ -3,17 +3,34 @@ game:
   id: elfs-orcs-tower-defense                  # lower case, unique: folder of the games portal, network room filter
   title: "Elfs & Orcs Tower Defense"
   version: 0.1.0
-  description: "Five races. One war. Pick your banner."
-  descriptions: {}              # per language, {fr: "...", en: "..."}: the playground (jumphp.net) shows the visitor's
-  width: 320                    # virtual resolution (pixels of the game, scaled to the window)
-  height: 180
-  scale: 3                      # desktop window = 960 x 540
-  background: [16, 16, 32]
+  description: "Five races. One war. Pick your banner: build elven towers on the stone platforms and hold the pass against the orc horde."
+  descriptions:
+    en: "Five races. One war. Build elven towers on the stone platforms and hold the pass against the orc horde."
+    fr: "Cinq peuples. Une guerre. Bâtissez des tours elfiques sur les plateformes de pierre et tenez le col face à la horde orque."
+    es: "Cinco pueblos. Una guerra. Construye torres élficas en las plataformas de piedra y defiende el paso contra la horda orca."
+    de: "Fünf Völker. Ein Krieg. Baue Elfentürme auf den Steinplattformen und halte den Pass gegen die Orkhorde."
+    it: "Cinque popoli. Una guerra. Costruisci torri elfiche sulle piattaforme di pietra e difendi il passo dall'orda degli orchi."
+    pt: "Cinco povos. Uma guerra. Construa torres élficas nas plataformas de pedra e defenda o desfiladeiro contra a horda orc."
+    nl: "Vijf volken. Eén oorlog. Bouw elfentorens op de stenen platforms en houd de pas tegen de orkhorde."
+    pl: "Pięć ludów. Jedna wojna. Buduj elfie wieże na kamiennych platformach i broń przełęczy przed hordą orków."
+    ru: "Пять народов. Одна война. Стройте эльфийские башни на каменных площадках и удержите перевал против орды орков."
+    uk: "П'ять народів. Одна війна. Будуйте ельфійські вежі на кам'яних майданчиках і втримайте перевал проти орди орків."
+    tr: "Beş halk. Tek savaş. Taş platformlara elf kuleleri kur ve geçidi ork sürüsüne karşı savun."
+    ja: "五つの種族、ひとつの戦争。石の台座にエルフの塔を建て、オークの大軍から峠を守り抜け。"
+    zh: "五个种族，一场战争。在石台上建造精灵塔楼，守住山口，抵挡兽人大军。"
+    ko: "다섯 종족, 하나의 전쟁. 돌 받침대에 엘프 탑을 세우고 오크 무리로부터 고개를 지켜라."
+  width: 480                    # virtual resolution (pixels of the game, scaled to the window)
+  height: 270
+  scale: 3                      # desktop window = 1440 x 810
+  background: [10, 10, 16]
   start_scene: App\Scene\TitleScene
+  pause_scene: App\Scene\PauseScene
   lang: en
+  pwa: true
+  controls: "Mouse / touch: click a stone platform to build. Keys: arrows move between platforms, Enter builds, N calls the wave, F speed, Esc pause."
   net_url: ws://localhost:8090/ws   # relay server (bin/jumphp relay up); the page can override with ?net=
   online: false
-  # what `bin/jumphp test` runs headless (no window), 600 frames = 10 s of game time
+  # what `bin/jumphp test` runs headless (no window), 600 frames = 10 s of game time: the bot plays at x3
   smoke:
     scene: App\Scene\PlayScene
-    params: { demo: true }
+    params: { demo: true, map: thornvale, faction: elves }

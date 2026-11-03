@@ -1,0 +1,179 @@
+# Maps: 30 x 15 tiles of 16 px (the play area is 480 x 240 under the top bar), in the order of the campaign
+# (each one opens when the one before is won).
+#   rows       scenery: . grass, t tree, r rock, w water, f flowers (the road, slots and bastion are drawn over it)
+#   scenery    instead of rows: how much of each is scattered at random (the same each time)
+#   theme      meadow | marsh | quarry | autumn | snow | ash: the colours of the ground and the trees
+#   paths      waypoints in tile corners ([x, y]); the road is carved along them, 2 tiles wide.
+#              Ground enemies walk the path; flying ones go straight from its first point to its last.
+#              Groups of a wave without a path take the paths in turn.
+#   slots      building platforms (2 x 2 tiles, [x, y] = top-left tile)
+#   bastion    [x, y] top-left tile of the castle drawn at the end of the road (the last point - [1, 3])
+#   hero       where the hero waits at the start: a share of the first path (0..1)
+maps:
+  thornvale:
+    name: THORNVALE PASS
+    theme: meadow
+    hero: 0.55
+    start_gold: 260
+    lives: 20
+    first_wave: 30
+    paths:
+      - [[-1, 3], [6, 3], [6, 11], [14, 11], [14, 5], [22, 5], [22, 12], [28, 12]]
+    slots:
+      - [2, 5]
+      - [8, 5]
+      - [10, 7]
+      - [3, 9]
+      - [8, 13]
+      - [16, 1]
+      - [16, 7]
+      - [18, 9]
+      - [18, 13]
+      - [24, 2]
+      - [24, 8]
+      - [25, 13]
+    bastion: [27, 9]
+    rows:
+      - "tt..t....tt...........ttt..ttt"
+      - "t.......t.....f.........t...tt"
+      - "..........tt.........f......tt"
+      - ".........ttt.............r...t"
+      - "t...f.......................tt"
+      - "tt........f.......f........t.t"
+      - "t...........r..........f.....t"
+      - "..r.................f........."
+      - "t.....................r......."
+      - "tt..............w.w..........."
+      - "t..........r....www...f......."
+      - "..f.............ww............"
+      - "t.........t..................."
+      - "tt....t...........r..........."
+      - "ttt..tt..t....f......t..tt...."
+
+  mistfen:
+    name: MISTFEN MARSH
+    theme: marsh
+    hero: 0.6
+    start_gold: 280
+    lives: 20
+    first_wave: 30
+    paths:
+      - [[-1, 3], [10, 3], [10, 7], [18, 7], [18, 10], [28, 10]]
+      - [[-1, 12], [10, 12], [10, 7], [18, 7], [18, 10], [28, 10]]
+    slots:
+      - [3, 5]
+      - [6, 5]
+      - [2, 8]
+      - [5, 8]
+      - [12, 3]
+      - [15, 3]
+      - [12, 9]
+      - [20, 6]
+      - [24, 6]
+      - [15, 12]
+      - [21, 12]
+      - [25, 12]
+    bastion: [27, 7]
+    scenery: {t: 0.1, w: 0.08, f: 0.04, r: 0.01}
+
+  greystone:
+    name: GREYSTONE QUARRY
+    theme: quarry
+    hero: 0.5
+    start_gold: 300
+    lives: 20
+    first_wave: 30
+    paths:
+      - [[4, -1], [4, 4], [24, 4], [24, 8], [6, 8], [6, 12], [28, 12]]
+    slots:
+      - [8, 0]
+      - [16, 0]
+      - [1, 7]
+      - [8, 5]
+      - [13, 5]
+      - [18, 5]
+      - [26, 5]
+      - [9, 9]
+      - [15, 9]
+      - [21, 9]
+      - [10, 13]
+      - [19, 13]
+    bastion: [27, 9]
+    scenery: {r: 0.1, t: 0.03, f: 0.01}
+
+  emberwood:
+    name: EMBERWOOD
+    theme: autumn
+    hero: 0.45
+    start_gold: 320
+    lives: 20
+    first_wave: 30
+    paths:
+      - [[-1, 7], [5, 7], [5, 2], [25, 2], [25, 12], [10, 12], [10, 7], [17, 7]]
+    slots:
+      - [1, 3]
+      - [7, 4]
+      - [12, 3]
+      - [21, 4]
+      - [1, 9]
+      - [5, 11]
+      - [13, 9]
+      - [21, 8]
+      - [27, 5]
+      - [27, 10]
+      - [12, 13]
+      - [19, 13]
+    bastion: [16, 4]
+    scenery: {t: 0.16, f: 0.03, r: 0.02}
+
+  frostpeak:
+    name: FROSTPEAK RIDGE
+    theme: snow
+    hero: 0.7
+    start_gold: 400
+    lives: 20
+    first_wave: 30
+    paths:
+      - [[8, -1], [8, 5], [16, 5], [16, 11], [28, 11]]
+      - [[-1, 11], [16, 11], [28, 11]]
+    slots:
+      - [4, 1]
+      - [10, 1]
+      - [18, 2]
+      - [25, 4]
+      - [3, 6]
+      - [11, 7]
+      - [18, 7]
+      - [22, 7]
+      - [5, 13]
+      - [11, 13]
+      - [19, 13]
+      - [24, 13]
+    bastion: [27, 8]
+    scenery: {t: 0.08, r: 0.07}
+
+  lastgate:
+    name: THE LAST GATE
+    theme: ash
+    hero: 0.75
+    start_gold: 420
+    lives: 20
+    first_wave: 30
+    paths:
+      - [[-1, 2], [20, 2], [20, 7], [28, 7]]
+      - [[-1, 12], [10, 12], [10, 7], [20, 7], [28, 7]]
+    slots:
+      - [3, 5]
+      - [6, 5]
+      - [3, 8]
+      - [13, 3]
+      - [16, 3]
+      - [22, 3]
+      - [13, 9]
+      - [17, 9]
+      - [23, 10]
+      - [6, 13]
+      - [14, 13]
+      - [24, 13]
+    bastion: [27, 4]
+    scenery: {r: 0.08, t: 0.04}

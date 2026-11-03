@@ -1,0 +1,48 @@
+# The sides the player can choose (in this order on the side screen).
+#   enemy      the side that attacks this one (waves.yaml)
+#   towers     the towers it builds, in the order of the build menu (up, right, down, left)
+#   colors     main, dark, light: its banners, castle and menus
+#   motto      what sets it apart (shown on the side screen)
+#   power      the side's power, cast where the player points: {name, desc, damage, radius, damage_type, effects, cooldown}
+#   bot        tower types tried in turn by the self-playing demo
+factions:
+  elves:
+    name: ELVES
+    motto: RANGE, PRECISION AND MAGIC
+    enemy: horde
+    towers: [elf_archer, elf_sanctuary, elf_sentinel, elf_songmage]
+    colors: {main: '#3fa860', dark: '#1d5434', light: '#c8f0b0'}
+    power: {name: RAIN OF ARROWS, desc: A HAIL OF ARROWS WHERE YOU POINT, damage: 70, radius: 36, damage_type: pierce, effects: {}, cooldown: 40}
+    bot: [elf_archer, elf_songmage, elf_archer, elf_sanctuary, elf_archer, elf_sentinel, elf_songmage, elf_archer, elf_sanctuary, elf_archer, elf_songmage, elf_archer]
+  dwarves:
+    name: DWARVES
+    motto: HEAVY BLOWS AND DEEP MINES
+    enemy: horde
+    towers: [dwarf_crossbow, dwarf_slingshot, dwarf_forge, dwarf_mine]
+    colors: {main: '#4a78a8', dark: '#1e3450', light: '#c8d8f0'}
+    power: {name: ROCKSLIDE, desc: ROCKS FALL AND STUN, damage: 100, radius: 30, damage_type: siege, effects: {stun: {time: 1.5, chance: 1.0}}, cooldown: 45}
+    bot: [dwarf_crossbow, dwarf_mine, dwarf_crossbow, dwarf_slingshot, dwarf_forge, dwarf_crossbow, dwarf_slingshot, dwarf_crossbow, dwarf_crossbow, dwarf_slingshot, dwarf_crossbow, dwarf_crossbow]
+  horsefolk:
+    name: HORSEFOLK
+    motto: RIDERS THAT HOLD THE ROAD
+    enemy: horde
+    towers: [horse_javelin, horse_stables, horse_horn, horse_palisade]
+    colors: {main: '#c08a30', dark: '#5a3a10', light: '#f0dca0'}
+    power: {name: CAVALRY CHARGE, desc: RIDERS SWEEP THE ROAD AND DRIVE FOES BACK, damage: 80, radius: 38, damage_type: physical, effects: {fear: {distance: 50, chance: 1.0}}, cooldown: 40}
+    bot: [horse_javelin, horse_stables, horse_javelin, horse_palisade, horse_horn, horse_javelin, horse_stables, horse_javelin, horse_javelin, horse_stables, horse_javelin, horse_javelin]
+  littlefolk:
+    name: LITTLE FOLK
+    motto: CHEAP, CUNNING AND RICH
+    enemy: horde
+    towers: [little_slingers, little_garden, little_traps, little_inn]
+    colors: {main: '#d0704a', dark: '#6a2a18', light: '#f8d0b0'}
+    power: {name: HEDGE AMBUSH, desc: HIDDEN FRIENDS SHOOT AND SLOW, damage: 55, radius: 42, damage_type: pierce, effects: {slow: {factor: 0.6, time: 4.0}}, cooldown: 35}
+    bot: [little_slingers, little_inn, little_garden, little_slingers, little_traps, little_garden, little_slingers, little_garden, little_slingers, little_garden, little_slingers, little_garden]
+  orcs:
+    name: ORCS
+    motto: MASSES, FIRE AND FEAR
+    enemy: alliance
+    towers: [orc_catapult, orc_pitch, orc_barracks, orc_drums]
+    colors: {main: '#a02a20', dark: '#3a0c08', light: '#f0a080'}
+    power: {name: FIRE POTS, desc: POTS OF FIRE RAIN DOWN, damage: 40, radius: 38, damage_type: fire, effects: {burn: {dps: 22, time: 4.0}}, cooldown: 40}
+    bot: [orc_pitch, orc_barracks, orc_catapult, orc_pitch, orc_drums, orc_pitch, orc_catapult, orc_barracks, orc_pitch, orc_catapult, orc_pitch, orc_pitch]

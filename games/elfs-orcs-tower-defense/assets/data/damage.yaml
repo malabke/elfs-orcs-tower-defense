@@ -1,0 +1,16 @@
+# Damage multipliers: armor class => damage type => factor (missing = 1.0).
+# Damage types: physical, pierce, magic, fire, siege. Armor classes: light, armored, magic_resist.
+# A "shred" effect moves a factor towards 1.0 (amount 0.5 = half of the resistance is gone).
+armor:
+  light: {}
+  armored:
+    physical: 0.35
+    pierce: 1.0
+    magic: 1.0
+    fire: 0.8
+    siege: 1.25
+  magic_resist:
+    physical: 1.0
+    pierce: 1.0
+    magic: 0.35
+    fire: 0.7

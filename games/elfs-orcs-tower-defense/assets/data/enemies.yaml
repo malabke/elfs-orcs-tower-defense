@@ -1,0 +1,253 @@
+# Enemies.
+#   side       horde (attacks the free peoples) | alliance (attacks the orcs)
+#   hp, speed (pixels per second), armor (light | armored | magic_resist), flying (ignores the road)
+#   gold (when killed), lives (taken from the bastion when it gets through), boss
+#   attack     damage per second to the soldiers / walls that stop it
+#   dodge      chance to avoid an arrow, bolt or stone (not the area damage)
+#   stealth    hidden: only towers near a detecting tower see it (soldiers still stop it)
+#   tunnel     [from, to]: underground between these parts of the road (0..1), out of reach
+#   heal       {amount, radius, every}: heals the enemies around it
+#   scale      drawn bigger
+enemies:
+  # ---- the horde ---------------------------------------------------------------------------------------------
+  grunt:
+    side: horde
+    name: GRUNT
+    sprite: grunt
+    hp: 34
+    speed: 26
+    armor: light
+    attack: 6
+    gold: 4
+    lives: 1
+  goblin_runner:
+    side: horde
+    name: GOBLIN RUNNER
+    sprite: goblin
+    hp: 18
+    speed: 48
+    armor: light
+    attack: 3
+    gold: 3
+    lives: 1
+  iron_orc:
+    side: horde
+    name: IRON ORC
+    sprite: iron_orc
+    hp: 90
+    speed: 19
+    armor: armored
+    attack: 10
+    gold: 8
+    lives: 1
+  warg_rider:
+    side: horde
+    name: WARG RIDER
+    sprite: warg
+    hp: 52
+    speed: 42
+    armor: light
+    attack: 9
+    gold: 6
+    lives: 1
+  giant_bat:
+    side: horde
+    name: GIANT BAT
+    sprite: bat
+    hp: 30
+    speed: 32
+    armor: light
+    flying: true
+    gold: 5
+    lives: 1
+  war_ram:
+    side: horde
+    name: WAR RAM
+    sprite: ram
+    hp: 420
+    speed: 13
+    armor: armored
+    attack: 30
+    gold: 25
+    lives: 2
+  mountain_troll:
+    side: horde
+    name: MOUNTAIN TROLL
+    sprite: troll
+    hp: 1500
+    speed: 13
+    armor: magic_resist
+    attack: 40
+    gold: 80
+    lives: 4
+    boss: true
+  orc_warlord:
+    side: horde
+    name: ORC WARLORD
+    sprite: warlord
+    scale: 1.5
+    hp: 1500
+    speed: 15
+    armor: armored
+    attack: 45
+    gold: 120
+    lives: 5
+    boss: true
+
+  # ---- the alliance of the free peoples -------------------------------------------------------------------
+  elven_skirmisher:
+    side: alliance
+    name: ELVEN SKIRMISHER
+    sprite: elf
+    hp: 28
+    speed: 40
+    armor: light
+    dodge: 0.3
+    attack: 5
+    gold: 4
+    lives: 1
+  blade_dancer:
+    side: alliance
+    name: BLADE DANCER
+    sprite: blade
+    hp: 62
+    speed: 36
+    armor: light
+    dodge: 0.45
+    attack: 12
+    gold: 7
+    lives: 1
+  giant_eagle:
+    side: alliance
+    name: GIANT EAGLE
+    sprite: eagle
+    hp: 55
+    speed: 36
+    armor: light
+    flying: true
+    gold: 6
+    lives: 1
+  iron_shield:
+    side: alliance
+    name: IRON SHIELD
+    sprite: dwarf
+    hp: 150
+    speed: 14
+    armor: armored
+    attack: 8
+    gold: 9
+    lives: 1
+  tunnel_miner:
+    side: alliance
+    name: TUNNEL MINER
+    sprite: miner
+    hp: 60
+    speed: 24
+    armor: light
+    tunnel: [0.15, 0.55]
+    attack: 7
+    gold: 6
+    lives: 1
+  rune_bearer:
+    side: alliance
+    name: RUNE BEARER
+    sprite: runebearer
+    hp: 70
+    speed: 18
+    armor: magic_resist
+    heal: {amount: 12, radius: 34, every: 2.0}
+    attack: 4
+    gold: 8
+    lives: 1
+  swift_rider:
+    side: alliance
+    name: SWIFT RIDER
+    sprite: rider
+    hp: 40
+    speed: 56
+    armor: light
+    attack: 7
+    gold: 5
+    lives: 1
+  mounted_archer:
+    side: alliance
+    name: MOUNTED ARCHER
+    sprite: horsearcher
+    hp: 50
+    speed: 46
+    armor: light
+    dodge: 0.2
+    attack: 6
+    gold: 6
+    lives: 1
+  shadow_scout:
+    side: alliance
+    name: SHADOW SCOUT
+    sprite: scout
+    hp: 32
+    speed: 34
+    armor: light
+    stealth: true
+    attack: 4
+    gold: 5
+    lives: 1
+  barefoot_band:
+    side: alliance
+    name: BAREFOOT BAND
+    sprite: littleman
+    hp: 12
+    speed: 30
+    armor: light
+    attack: 2
+    gold: 1
+    lives: 1
+  burrow_captain:
+    side: alliance
+    name: BURROW CAPTAIN
+    sprite: captain
+    scale: 1.4
+    hp: 500
+    speed: 22
+    armor: light
+    heal: {amount: 20, radius: 40, every: 2.5}
+    attack: 15
+    gold: 40
+    lives: 3
+    boss: true
+  horse_lord:
+    side: alliance
+    name: HORSE LORD
+    sprite: horselord
+    scale: 1.4
+    hp: 900
+    speed: 34
+    armor: light
+    attack: 30
+    gold: 60
+    lives: 4
+    boss: true
+  dwarf_thane:
+    side: alliance
+    name: DWARF THANE
+    sprite: thane
+    scale: 1.5
+    hp: 1500
+    speed: 12
+    armor: armored
+    attack: 40
+    gold: 80
+    lives: 5
+    boss: true
+  high_warden:
+    side: alliance
+    name: HIGH WARDEN
+    sprite: warden
+    scale: 1.5
+    hp: 1300
+    speed: 17
+    armor: magic_resist
+    dodge: 0.2
+    attack: 40
+    gold: 120
+    lives: 5
+    boss: true

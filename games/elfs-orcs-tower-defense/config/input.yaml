@@ -5,4 +5,7 @@
 # Other sources: pad0:a|b|x|y|lb|rb|lt|rt|select|start|ls|rs (gamepad, same names everywhere), pad0:left|right|up|down
 # (d-pad or left stick), pad0:button3 (raw), touch:left|right|up|down|tap, mouse:1
 actions:
-  jump: [Space, Up, W, Z, pad0:a, touch:tap]
+  call_wave: [N, pad0:y]
+  speed: [F, Tab, pad0:x]
+  hero: [H, pad0:lb]
+  power: [Q, pad0:rb]

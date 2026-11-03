@@ -1,0 +1,212 @@
+# Waves per map and per attacking side (horde: the orcs attack; alliance: the free peoples attack the orc player).
+#   bonus      gold when the whole wave is gone
+#   next       seconds between the end of this wave's arrivals and the next wave (calling it early gives early_bonus gold per second left)
+#   groups     enemies sent at once: {enemy, count, every (seconds between two), delay (seconds before the first), path}
+# A map can take another map's waves: {like: map, count: x, hp: x, add: [{wave: n, enemy, count, every, delay}]}
+# (counts and health scaled, groups added to wave n, 1 = the first).
+early_bonus: 1.5
+# hard mode: enemies' health and the starting gold multiplied
+hard: {hp: 1.5, start_gold: 0.85}
+waves:
+  mistfen:
+    horde:
+      like: thornvale
+      count: 1.1
+      hp: 1.1
+      add:
+        - {wave: 3, enemy: giant_bat, count: 6, every: 1.2, delay: 6}
+        - {wave: 6, enemy: giant_bat, count: 8, every: 1.0, delay: 12}
+        - {wave: 9, enemy: giant_bat, count: 10, every: 0.8, delay: 4}
+    alliance:
+      like: thornvale
+      count: 1.1
+      hp: 1.1
+      add:
+        - {wave: 3, enemy: giant_eagle, count: 5, every: 1.4, delay: 6}
+        - {wave: 5, enemy: shadow_scout, count: 6, every: 1.0, delay: 8}
+        - {wave: 9, enemy: giant_eagle, count: 8, every: 1.0, delay: 2}
+  greystone:
+    horde:
+      like: thornvale
+      count: 1.15
+      hp: 1.2
+      add:
+        - {wave: 4, enemy: war_ram, count: 1, every: 1.0, delay: 8}
+        - {wave: 7, enemy: war_ram, count: 2, every: 5.0, delay: 4}
+        - {wave: 8, enemy: iron_orc, count: 6, every: 1.5, delay: 10}
+    alliance:
+      like: thornvale
+      count: 1.15
+      hp: 1.2
+      add:
+        - {wave: 4, enemy: iron_shield, count: 4, every: 2.0, delay: 8}
+        - {wave: 7, enemy: tunnel_miner, count: 8, every: 1.0, delay: 4}
+        - {wave: 8, enemy: rune_bearer, count: 3, every: 3.0, delay: 6}
+  emberwood:
+    horde:
+      like: thornvale
+      count: 1.2
+      hp: 1.3
+      add:
+        - {wave: 2, enemy: warg_rider, count: 4, every: 1.0, delay: 8}
+        - {wave: 6, enemy: warg_rider, count: 8, every: 0.8, delay: 6}
+        - {wave: 9, enemy: goblin_runner, count: 16, every: 0.4, delay: 2}
+    alliance:
+      like: thornvale
+      count: 1.2
+      hp: 1.3
+      add:
+        - {wave: 2, enemy: swift_rider, count: 5, every: 1.0, delay: 8}
+        - {wave: 6, enemy: mounted_archer, count: 8, every: 0.8, delay: 6}
+        - {wave: 9, enemy: blade_dancer, count: 6, every: 1.0, delay: 2}
+  frostpeak:
+    horde:
+      like: thornvale
+      count: 1.1
+      hp: 1.2
+      add:
+        - {wave: 5, enemy: iron_orc, count: 4, every: 1.5, delay: 6}
+        - {wave: 6, enemy: mountain_troll, count: 1, every: 1.0, delay: 10}
+    alliance:
+      like: thornvale
+      count: 1.05
+      hp: 1.1
+      add:
+        - {wave: 5, enemy: iron_shield, count: 4, every: 1.5, delay: 6}
+        - {wave: 6, enemy: dwarf_thane, count: 1, every: 1.0, delay: 10}
+  lastgate:
+    horde:
+      like: thornvale
+      count: 1.15
+      hp: 1.3
+      add:
+        - {wave: 7, enemy: mountain_troll, count: 1, every: 1.0, delay: 8}
+        - {wave: 10, enemy: war_ram, count: 2, every: 4.0, delay: 4}
+    alliance:
+      like: thornvale
+      count: 1.1
+      hp: 1.15
+      add:
+        - {wave: 7, enemy: dwarf_thane, count: 1, every: 1.0, delay: 8}
+        - {wave: 10, enemy: burrow_captain, count: 1, every: 1.0, delay: 4}
+
+  thornvale:
+    horde:
+      - bonus: 20
+        next: 18
+        groups:
+          - {enemy: grunt, count: 8, every: 1.4}
+      - bonus: 25
+        next: 18
+        groups:
+          - {enemy: grunt, count: 10, every: 1.2}
+          - {enemy: goblin_runner, count: 5, every: 1.0, delay: 6}
+      - bonus: 30
+        next: 20
+        groups:
+          - {enemy: grunt, count: 8, every: 1.2}
+          - {enemy: goblin_runner, count: 6, every: 0.8, delay: 4}
+          - {enemy: iron_orc, count: 3, every: 3.0, delay: 8}
+      - bonus: 35
+        next: 20
+        groups:
+          - {enemy: giant_bat, count: 6, every: 1.6}
+          - {enemy: grunt, count: 10, every: 1.0, delay: 3}
+      - bonus: 40
+        next: 22
+        groups:
+          - {enemy: iron_orc, count: 5, every: 2.5}
+          - {enemy: warg_rider, count: 6, every: 1.2, delay: 6}
+          - {enemy: grunt, count: 8, every: 1.0, delay: 2}
+      - bonus: 45
+        next: 22
+        groups:
+          - {enemy: war_ram, count: 1, every: 1.0}
+          - {enemy: goblin_runner, count: 12, every: 0.6, delay: 4}
+          - {enemy: giant_bat, count: 6, every: 1.4, delay: 8}
+      - bonus: 50
+        next: 22
+        groups:
+          - {enemy: iron_orc, count: 8, every: 2.0}
+          - {enemy: warg_rider, count: 8, every: 1.0, delay: 5}
+      - bonus: 55
+        next: 24
+        groups:
+          - {enemy: mountain_troll, count: 1, every: 1.0, delay: 4}
+          - {enemy: giant_bat, count: 10, every: 1.0}
+          - {enemy: grunt, count: 12, every: 0.9, delay: 2}
+      - bonus: 60
+        next: 25
+        groups:
+          - {enemy: warg_rider, count: 10, every: 0.9}
+          - {enemy: iron_orc, count: 10, every: 1.6, delay: 3}
+          - {enemy: war_ram, count: 2, every: 6.0, delay: 6}
+          - {enemy: goblin_runner, count: 10, every: 0.5, delay: 10}
+      - bonus: 100
+        next: 0
+        groups:
+          - {enemy: orc_warlord, count: 1, every: 1.0, delay: 6}
+          - {enemy: iron_orc, count: 6, every: 1.8}
+          - {enemy: grunt, count: 12, every: 0.8, delay: 2}
+          - {enemy: giant_bat, count: 8, every: 1.2, delay: 10}
+
+    alliance:
+      - bonus: 20
+        next: 18
+        groups:
+          - {enemy: barefoot_band, count: 14, every: 0.7}
+          - {enemy: elven_skirmisher, count: 4, every: 2.0, delay: 4}
+      - bonus: 25
+        next: 18
+        groups:
+          - {enemy: swift_rider, count: 8, every: 1.4}
+          - {enemy: barefoot_band, count: 10, every: 0.6, delay: 5}
+      - bonus: 30
+        next: 20
+        groups:
+          - {enemy: iron_shield, count: 4, every: 3.0}
+          - {enemy: elven_skirmisher, count: 8, every: 1.0, delay: 3}
+      - bonus: 35
+        next: 20
+        groups:
+          - {enemy: burrow_captain, count: 1, every: 1.0, delay: 6}
+          - {enemy: barefoot_band, count: 20, every: 0.5}
+          - {enemy: giant_eagle, count: 5, every: 1.8, delay: 4}
+      - bonus: 40
+        next: 22
+        groups:
+          - {enemy: tunnel_miner, count: 6, every: 1.6}
+          - {enemy: iron_shield, count: 4, every: 2.5, delay: 3}
+          - {enemy: rune_bearer, count: 2, every: 4.0, delay: 5}
+      - bonus: 45
+        next: 22
+        groups:
+          - {enemy: horse_lord, count: 1, every: 1.0, delay: 8}
+          - {enemy: shadow_scout, count: 8, every: 1.2}
+          - {enemy: swift_rider, count: 8, every: 0.9, delay: 4}
+      - bonus: 50
+        next: 22
+        groups:
+          - {enemy: blade_dancer, count: 8, every: 1.3}
+          - {enemy: giant_eagle, count: 8, every: 1.2, delay: 3}
+      - bonus: 55
+        next: 24
+        groups:
+          - {enemy: dwarf_thane, count: 1, every: 1.0, delay: 6}
+          - {enemy: iron_shield, count: 8, every: 1.8}
+          - {enemy: rune_bearer, count: 3, every: 3.0, delay: 4}
+          - {enemy: tunnel_miner, count: 6, every: 1.2, delay: 8}
+      - bonus: 60
+        next: 25
+        groups:
+          - {enemy: swift_rider, count: 20, every: 0.4}
+          - {enemy: mounted_archer, count: 10, every: 0.6, delay: 4}
+          - {enemy: shadow_scout, count: 6, every: 1.0, delay: 8}
+      - bonus: 100
+        next: 0
+        groups:
+          - {enemy: high_warden, count: 1, every: 1.0, delay: 6}
+          - {enemy: blade_dancer, count: 6, every: 1.5}
+          - {enemy: iron_shield, count: 6, every: 2.0, delay: 2}
+          - {enemy: giant_eagle, count: 8, every: 1.2, delay: 8}
+          - {enemy: barefoot_band, count: 16, every: 0.4, delay: 12}

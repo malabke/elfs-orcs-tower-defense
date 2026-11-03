@@ -1,0 +1,516 @@
+# Towers. Each level lists what changes from the level before (level 1 = everything).
+# A specialization (level 4) changes the stats of level 3.
+#   cost            gold to build / to reach this level
+#   kind            attack (default) | barracks (soldiers on the road) | barrier (a wall on the road) | trap (on the road)
+#                   | aura (helps the towers in its range) | income (gold over time); an aura / income tower may also attack
+#   damage, rate    damage per hit, seconds between two attacks (a trap: seconds to re-arm)
+#   range           pixels from the centre of the tower
+#   damage_type     physical | pierce | magic | fire | siege
+#   targets         ground | air | both
+#   crit            chance of a critical hit (x crit_mult, default 2)
+#   splash          radius of area damage (pixels)
+#   multishot       targets hit by one attack
+#   spread          an imprecise shot lands up to this many pixels away (no homing)
+#   pulse           the attack hits every enemy in range at once (drums, horns)
+#   ambush          the first hit on each enemy is a critical hit
+#   detect          hidden enemies in range can be seen and shot by every tower
+#   projectile      arrow | orb | root | note | star | bolt | rock | pitch | spark | javelin | stone; speed 0 = instant hit
+#   effects         slow {factor, time} | stun {time, chance} | burn {dps, time} | fear {distance, chance} | shred {amount, time}
+#   soldiers        barracks: {count, hp, damage (per second), respawn (seconds), sprite}
+#   barrier         {hp, respawn, thorns (damage per second to the enemies striking it)}
+#   aura            {damage (x), rate (x, lower = faster)}
+#   income          {gold, every (seconds)}
+towers:
+  # ---- elves: range, precision, magic; expensive ----------------------------------------------------------
+  elf_archer:
+    faction: elves
+    name: ARCHER SPIRE
+    desc: LONG RANGE, CRITICAL HITS
+    sprite: archer
+    levels:
+      - {cost: 70, damage: 9, rate: 0.9, range: 80, damage_type: pierce, targets: both, crit: 0.15, projectile: arrow, speed: 260}
+      - {cost: 70, damage: 14, rate: 0.8, range: 86}
+      - {cost: 110, damage: 21, rate: 0.7, range: 92, crit: 0.2}
+    specs:
+      keen_eye:
+        name: KEEN EYE
+        desc: HUGE RANGE, DEADLY CRITICAL HITS
+        cost: 190
+        damage: 34
+        range: 118
+        crit: 0.35
+        crit_mult: 3
+      storm_of_shafts:
+        name: STORM OF SHAFTS
+        desc: THREE ARROWS AT ONCE
+        cost: 200
+        damage: 20
+        rate: 0.55
+        multishot: 3
+
+  elf_sanctuary:
+    faction: elves
+    name: MOON SANCTUARY
+    desc: MAGIC THAT SLOWS ENEMIES
+    sprite: sanctuary
+    levels:
+      - {cost: 90, damage: 7, rate: 1.1, range: 68, damage_type: magic, targets: both, projectile: orb, speed: 170, effects: {slow: {factor: 0.4, time: 1.5}}}
+      - {cost: 80, damage: 12, effects: {slow: {factor: 0.45, time: 1.8}}}
+      - {cost: 120, damage: 18, range: 74, effects: {slow: {factor: 0.5, time: 2.0}}}
+    specs:
+      frost_moon:
+        name: FROST MOON
+        desc: FREEZES ENEMIES IN PLACE
+        cost: 200
+        damage: 22
+        effects: {slow: {factor: 0.6, time: 2.4}, stun: {time: 0.8, chance: 0.3}}
+      starfall:
+        name: STARFALL
+        desc: STARS FALL ON WHOLE GROUPS
+        cost: 210
+        damage: 26
+        splash: 28
+        projectile: star
+        effects: {slow: {factor: 0.4, time: 1.5}}
+
+  elf_sentinel:
+    faction: elves
+    name: WILDWOOD SENTINEL
+    desc: ROOTS HOLD ENEMIES ON THE GROUND
+    sprite: sentinel
+    levels:
+      - {cost: 80, damage: 6, rate: 2.2, range: 62, damage_type: physical, targets: ground, projectile: root, speed: 0, effects: {stun: {time: 0.9, chance: 1.0}}}
+      - {cost: 70, damage: 10, rate: 2.0, effects: {stun: {time: 1.1, chance: 1.0}}}
+      - {cost: 110, damage: 16, range: 68, effects: {stun: {time: 1.3, chance: 1.0}}}
+    specs:
+      thorn_grove:
+        name: THORN GROVE
+        desc: VENOM THORNS HURT OVER TIME
+        cost: 180
+        damage: 18
+        multishot: 3
+        effects: {stun: {time: 1.2, chance: 1.0}, burn: {dps: 14, time: 3.0}}
+      ancient_oak:
+        name: ANCIENT OAK
+        desc: CRUSHES ARMOR, HOLDS LONGER
+        cost: 190
+        damage: 30
+        effects: {stun: {time: 2.0, chance: 1.0}, shred: {amount: 0.6, time: 4.0}}
+
+  elf_songmage:
+    faction: elves
+    name: SONGMAGE
+    desc: MAGIC BLASTS HIT GROUPS
+    sprite: songmage
+    levels:
+      - {cost: 110, damage: 14, rate: 1.8, range: 66, damage_type: magic, targets: ground, splash: 22, projectile: note, speed: 140}
+      - {cost: 100, damage: 22, rate: 1.7, splash: 24}
+      - {cost: 140, damage: 32, rate: 1.6, range: 72, splash: 26}
+    specs:
+      stormsinger:
+        name: STORMSINGER
+        desc: WIDER, STRONGER BLASTS
+        cost: 230
+        damage: 52
+        splash: 36
+      dirge_of_dread:
+        name: DIRGE OF DREAD
+        desc: FEAR PUSHES ENEMIES BACK
+        cost: 210
+        damage: 36
+        effects: {fear: {distance: 26, chance: 0.5}}
+
+  # ---- dwarves: heavy blows, armor breaking, slow; gold from the mine --------------------------------------
+  dwarf_crossbow:
+    faction: dwarves
+    name: HEAVY CROSSBOW
+    desc: BOLTS THAT PIERCE ARMOR
+    sprite: crossbow
+    levels:
+      - {cost: 80, damage: 16, rate: 1.4, range: 72, damage_type: pierce, targets: both, projectile: bolt, speed: 280, effects: {shred: {amount: 0.3, time: 2.0}}}
+      - {cost: 80, damage: 25, rate: 1.3}
+      - {cost: 120, damage: 37, rate: 1.25, range: 78, effects: {shred: {amount: 0.4, time: 2.5}}}
+    specs:
+      bolt_thrower:
+        name: BOLT THROWER
+        desc: THREE BOLTS AT ONCE
+        cost: 200
+        damage: 38
+        multishot: 3
+      giant_slayer:
+        name: GIANT SLAYER
+        desc: HUGE BOLTS FOR HUGE FOES
+        cost: 210
+        damage: 100
+        rate: 1.6
+        range: 86
+
+  dwarf_slingshot:
+    faction: dwarves
+    name: SIEGE SLINGSHOT
+    desc: BOULDERS CRUSH GROUPS
+    sprite: slingshot
+    levels:
+      - {cost: 110, damage: 20, rate: 2.6, range: 70, damage_type: siege, targets: ground, splash: 26, projectile: rock, speed: 120}
+      - {cost: 100, damage: 32, rate: 2.5}
+      - {cost: 140, damage: 46, rate: 2.4, range: 76, splash: 30}
+    specs:
+      quake_stones:
+        name: QUAKE STONES
+        desc: STUNS WHOLE GROUPS
+        cost: 220
+        damage: 60
+        effects: {stun: {time: 0.8, chance: 0.5}}
+      fire_kegs:
+        name: FIRE KEGS
+        desc: BURNING BARRELS
+        cost: 220
+        damage: 52
+        damage_type: fire
+        effects: {burn: {dps: 12, time: 3.0}}
+
+  dwarf_forge:
+    faction: dwarves
+    name: RUNIC FORGE
+    desc: NEARBY TOWERS HIT HARDER
+    sprite: forge
+    levels:
+      - {cost: 100, kind: aura, range: 62, aura: {damage: 1.2, rate: 1.0}}
+      - {cost: 90, aura: {damage: 1.3, rate: 1.0}}
+      - {cost: 120, range: 68, aura: {damage: 1.4, rate: 1.0}}
+    specs:
+      rune_of_fury:
+        name: RUNE OF FURY
+        desc: NEARBY TOWERS ALSO SHOOT FASTER
+        cost: 200
+        aura: {damage: 1.45, rate: 0.85}
+      spark_anvil:
+        name: SPARK ANVIL
+        desc: THROWS MOLTEN SPARKS TOO
+        cost: 200
+        aura: {damage: 1.4, rate: 1.0}
+        damage: 18
+        rate: 1.0
+        damage_type: fire
+        targets: both
+        projectile: spark
+        speed: 200
+
+  dwarf_mine:
+    faction: dwarves
+    name: DEEP MINE
+    desc: DIGS GOLD OVER TIME
+    sprite: mine
+    levels:
+      - {cost: 120, kind: income, range: 40, income: {gold: 6, every: 5}}
+      - {cost: 100, income: {gold: 9, every: 5}}
+      - {cost: 140, income: {gold: 13, every: 5}}
+    specs:
+      golden_vein:
+        name: GOLDEN VEIN
+        desc: MUCH MORE GOLD
+        cost: 220
+        income: {gold: 22, every: 5}
+      blasting_charges:
+        name: BLASTING CHARGES
+        desc: GOLD, AND BLASTS NEARBY FOES
+        cost: 210
+        income: {gold: 14, every: 5}
+        range: 60
+        damage: 40
+        rate: 3.0
+        damage_type: siege
+        targets: ground
+        splash: 24
+        projectile: rock
+        speed: 0
+
+  # ---- horsefolk: riders that hold the road, speed --------------------------------------------------------
+  horse_stables:
+    faction: horsefolk
+    name: STABLES
+    desc: RIDERS HOLD THE ROAD
+    sprite: stables
+    levels:
+      - {cost: 90, kind: barracks, range: 64, soldiers: {count: 2, hp: 60, damage: 8, respawn: 8, sprite: rider}}
+      - {cost: 80, soldiers: {count: 2, hp: 90, damage: 12, respawn: 8, sprite: rider}}
+      - {cost: 110, soldiers: {count: 3, hp: 120, damage: 16, respawn: 7, sprite: rider}}
+    specs:
+      royal_guard:
+        name: ROYAL GUARD
+        desc: TOUGH ARMORED RIDERS
+        cost: 200
+        soldiers: {count: 3, hp: 260, damage: 22, respawn: 7, sprite: rider}
+      spear_charge:
+        name: SPEAR CHARGE
+        desc: RIDERS STRIKE HARD AND COME BACK FAST
+        cost: 200
+        soldiers: {count: 3, hp: 140, damage: 40, respawn: 4, sprite: rider}
+
+  horse_javelin:
+    faction: horsefolk
+    name: JAVELIN THROWERS
+    desc: FAST SPEARS, GROUND AND AIR
+    sprite: javelin
+    levels:
+      - {cost: 75, damage: 12, rate: 0.95, range: 76, damage_type: pierce, targets: both, projectile: javelin, speed: 230}
+      - {cost: 70, damage: 19, rate: 0.9}
+      - {cost: 110, damage: 29, rate: 0.85, range: 82}
+    specs:
+      twin_spears:
+        name: TWIN SPEARS
+        desc: TWO JAVELINS AT ONCE
+        cost: 190
+        damage: 34
+        multishot: 2
+      barbed_javelins:
+        name: BARBED JAVELINS
+        desc: WOUNDS BLEED, ARMOR TEARS
+        cost: 200
+        damage: 32
+        effects: {burn: {dps: 12, time: 3.0}, shred: {amount: 0.4, time: 3.0}}
+
+  horse_horn:
+    faction: horsefolk
+    name: WAR HORN
+    desc: NEARBY TOWERS ATTACK FASTER
+    sprite: horn
+    levels:
+      - {cost: 90, kind: aura, range: 64, aura: {damage: 1.0, rate: 0.85}}
+      - {cost: 80, aura: {damage: 1.0, rate: 0.8}}
+      - {cost: 110, range: 70, aura: {damage: 1.0, rate: 0.75}}
+    specs:
+      horn_of_dread:
+        name: HORN OF DREAD
+        desc: ITS BLAST DRIVES FOES BACK
+        cost: 200
+        aura: {damage: 1.0, rate: 0.72}
+        damage: 4
+        rate: 4.0
+        damage_type: physical
+        targets: ground
+        pulse: true
+        speed: 0
+        effects: {fear: {distance: 30, chance: 1.0}}
+      horn_of_valor:
+        name: HORN OF VALOR
+        desc: FASTER AND STRONGER NEIGHBORS
+        cost: 210
+        aura: {damage: 1.2, rate: 0.7}
+
+  horse_palisade:
+    faction: horsefolk
+    name: PALISADE
+    desc: A WALL ON THE ROAD STOPS FOES
+    sprite: palisade
+    levels:
+      - {cost: 60, kind: barrier, range: 64, barrier: {hp: 220, respawn: 10, thorns: 0}}
+      - {cost: 60, barrier: {hp: 380, respawn: 10, thorns: 0}}
+      - {cost: 90, barrier: {hp: 600, respawn: 9, thorns: 0}}
+    specs:
+      spiked_palisade:
+        name: SPIKED PALISADE
+        desc: HURTS WHOEVER STRIKES IT
+        cost: 160
+        barrier: {hp: 700, respawn: 9, thorns: 12}
+      stone_rampart:
+        name: STONE RAMPART
+        desc: A VERY STRONG WALL
+        cost: 170
+        barrier: {hp: 1400, respawn: 12, thorns: 0}
+
+  # ---- little folk: cheap, many, cunning, rich ------------------------------------------------------------
+  little_slingers:
+    faction: littlefolk
+    name: SLINGERS
+    desc: MANY QUICK LITTLE STONES
+    sprite: slingers
+    levels:
+      - {cost: 50, damage: 4, rate: 0.35, range: 64, damage_type: physical, targets: both, projectile: stone, speed: 240}
+      - {cost: 50, damage: 6, rate: 0.33}
+      - {cost: 80, damage: 9, rate: 0.3, range: 70}
+    specs:
+      stone_storm:
+        name: STONE STORM
+        desc: TWO STONES AT ONCE
+        cost: 150
+        damage: 10
+        rate: 0.28
+        multishot: 2
+      lucky_stones:
+        name: LUCKY STONES
+        desc: OFTEN A LUCKY HIT
+        cost: 150
+        damage: 12
+        crit: 0.35
+        crit_mult: 3
+
+  little_traps:
+    faction: littlefolk
+    name: SNARE TRAPS
+    desc: TRAPS ON THE ROAD CATCH FOES
+    sprite: traps
+    levels:
+      - {cost: 60, kind: trap, range: 64, damage: 25, rate: 4.0, damage_type: physical, targets: ground, splash: 18, effects: {stun: {time: 1.0, chance: 1.0}}}
+      - {cost: 60, damage: 40, rate: 3.5}
+      - {cost: 90, damage: 60, rate: 3.0}
+    specs:
+      bear_traps:
+        name: BEAR TRAPS
+        desc: HUGE JAWS HOLD FOES LONG
+        cost: 160
+        damage: 140
+        effects: {stun: {time: 2.0, chance: 1.0}}
+      rolling_logs:
+        name: ROLLING LOGS
+        desc: LOGS KNOCK WHOLE GROUPS BACK
+        cost: 170
+        damage: 80
+        splash: 34
+        effects: {fear: {distance: 30, chance: 1.0}}
+
+  little_inn:
+    faction: littlefolk
+    name: COSY INN
+    desc: TRAVELERS PAY GOLD OVER TIME
+    sprite: inn
+    levels:
+      - {cost: 90, kind: income, range: 40, income: {gold: 5, every: 5}}
+      - {cost: 80, income: {gold: 8, every: 5}}
+      - {cost: 110, income: {gold: 11, every: 5}}
+    specs:
+      feast_hall:
+        name: FEAST HALL
+        desc: MUCH MORE GOLD
+        cost: 190
+        income: {gold: 18, every: 5}
+      brewery:
+        name: BREWERY
+        desc: GOLD, AND ALE THAT SLOWS FOES
+        cost: 180
+        income: {gold: 12, every: 5}
+        range: 60
+        damage: 2
+        rate: 3.0
+        damage_type: physical
+        targets: ground
+        pulse: true
+        speed: 0
+        effects: {slow: {factor: 0.45, time: 2.5}}
+
+  little_garden:
+    faction: littlefolk
+    name: HIDDEN GARDEN
+    desc: HIDDEN SHOTS, FIRST HIT CRITICAL
+    sprite: garden
+    levels:
+      - {cost: 80, damage: 14, rate: 1.5, range: 70, damage_type: pierce, targets: both, ambush: true, crit_mult: 3, projectile: arrow, speed: 260}
+      - {cost: 70, damage: 22, rate: 1.45}
+      - {cost: 110, damage: 32, rate: 1.4, range: 76}
+    specs:
+      silent_thorns:
+        name: SILENT THORNS
+        desc: DEADLY FIRST STRIKES
+        cost: 200
+        damage: 52
+        crit_mult: 4
+      garden_of_snares:
+        name: GARDEN OF SNARES
+        desc: TWO TARGETS, BOTH SLOWED
+        cost: 190
+        damage: 34
+        multishot: 2
+        effects: {slow: {factor: 0.5, time: 2.0}}
+
+  # ---- orcs: masses, fire, fear; cheap and imprecise ------------------------------------------------------
+  orc_barracks:
+    faction: orcs
+    name: BARRACKS
+    desc: ORCS HOLD THE ROAD
+    sprite: barracks
+    levels:
+      - {cost: 70, kind: barracks, range: 64, soldiers: {count: 3, hp: 50, damage: 7, respawn: 9, sprite: grunt}}
+      - {cost: 70, soldiers: {count: 3, hp: 75, damage: 10, respawn: 9, sprite: grunt}}
+      - {cost: 100, soldiers: {count: 3, hp: 100, damage: 14, respawn: 8, sprite: grunt}}
+    specs:
+      berserker_pit:
+        name: BERSERKER PIT
+        desc: FURIOUS ORCS STRIKE HARD
+        cost: 180
+        soldiers: {count: 3, hp: 120, damage: 32, respawn: 7, sprite: grunt}
+      iron_wall:
+        name: IRON WALL
+        desc: ARMORED ORCS HOLD LONGER
+        cost: 180
+        soldiers: {count: 3, hp: 280, damage: 14, respawn: 8, sprite: iron_orc}
+
+  orc_catapult:
+    faction: orcs
+    name: BRUTE CATAPULT
+    desc: BIG ROCKS, NOT VERY PRECISE
+    sprite: catapult
+    levels:
+      - {cost: 90, damage: 30, rate: 2.5, range: 78, damage_type: siege, targets: ground, splash: 30, spread: 12, projectile: rock, speed: 110}
+      - {cost: 80, damage: 46, rate: 2.4}
+      - {cost: 120, damage: 66, rate: 2.3, range: 84}
+    specs:
+      bone_crusher:
+        name: BONE CRUSHER
+        desc: ENORMOUS ROCKS
+        cost: 210
+        damage: 115
+        splash: 36
+      scatter_shot:
+        name: SCATTER SHOT
+        desc: THREE ROCKS AT ONCE
+        cost: 200
+        damage: 42
+        multishot: 3
+        spread: 18
+
+  orc_pitch:
+    faction: orcs
+    name: PITCH PIT
+    desc: BURNING PITCH, GROUND AND AIR
+    sprite: pitch
+    levels:
+      - {cost: 80, damage: 8, rate: 1.3, range: 66, damage_type: fire, targets: both, splash: 16, projectile: pitch, speed: 150, effects: {burn: {dps: 10, time: 3.0}}}
+      - {cost: 70, damage: 12, effects: {burn: {dps: 15, time: 3.0}}}
+      - {cost: 110, damage: 16, range: 72, effects: {burn: {dps: 21, time: 3.5}}}
+    specs:
+      inferno:
+        name: INFERNO
+        desc: FIRE THAT SPREADS WIDE
+        cost: 200
+        damage: 16
+        splash: 24
+        effects: {burn: {dps: 32, time: 3.5}}
+      tar_flood:
+        name: TAR FLOOD
+        desc: STICKY TAR SLOWS AND BURNS
+        cost: 190
+        damage: 14
+        splash: 20
+        effects: {burn: {dps: 20, time: 3.5}, slow: {factor: 0.5, time: 2.5}}
+
+  orc_drums:
+    faction: orcs
+    name: WAR DRUMS
+    desc: FEAR, FURY, AND THEY SEE HIDDEN FOES
+    sprite: drums
+    levels:
+      - {cost: 80, kind: aura, range: 62, detect: true, aura: {damage: 1.15, rate: 0.9}, damage: 3, rate: 3.5, damage_type: physical, targets: ground, pulse: true, speed: 0, effects: {fear: {distance: 18, chance: 0.5}}}
+      - {cost: 70, aura: {damage: 1.2, rate: 0.87}}
+      - {cost: 100, range: 68, aura: {damage: 1.25, rate: 0.84}}
+    specs:
+      drums_of_doom:
+        name: DRUMS OF DOOM
+        desc: TERROR DRIVES FOES BACK
+        cost: 190
+        damage: 8
+        effects: {fear: {distance: 34, chance: 0.8}}
+      skull_totem:
+        name: SKULL TOTEM
+        desc: NEARBY TOWERS GO WILD
+        cost: 200
+        aura: {damage: 1.4, rate: 0.8}

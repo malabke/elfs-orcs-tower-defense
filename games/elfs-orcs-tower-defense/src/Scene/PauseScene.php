@@ -2,16 +2,26 @@
 
 namespace App\Scene;
 
-use JumPHP\Ui\MenuScene;
+use App\Ui\GameMenuScene;
+use JumPHP\Util\Lang;
 
 /**
- * Pause menu, pushed over the game: isOverlay() keeps the frozen game visible under it.
+ * Pause menu, pushed over the game (also by the engine when the tab is hidden: game.yaml pause_scene).
+ * isOverlay() keeps the frozen game visible under it.
  */
-final class PauseScene extends MenuScene
+final class PauseScene extends GameMenuScene
 {
     protected string $title = 'PAUSE';
-    protected float $titleScale = 2.0;
-    protected float $menuTop = 0.5;
+    protected int $titlePixels = 16;
+    protected float $menuTop = 0.36;
+    /** the PlayScene's parameters, to restart the same map */
+    private array $restart = [];
+
+    public function enter(array $params = []): void
+    {
+        $this->restart = $params['restart'] ?? $this->restart;
+        parent::enter($params);
+    }
 
     public function isOverlay(): bool
     {
@@ -21,9 +31,19 @@ final class PauseScene extends MenuScene
     protected function items(): array
     {
         return [
-            ['RESUME', null, fn () => $this->scenes()->pop()],
-            ['TITLE SCREEN', null, fn () => $this->scenes()->switchTo(TitleScene::class)],
+            [Lang::t('RESUME'), null, fn () => $this->scenes()->pop()],
+            [Lang::t('RESTART'), null, fn () => $this->scenes()->switchTo(PlayScene::class, $this->restart)],
+            [Lang::t('OPTIONS'), null, fn () => $this->scenes()->push(OptionsScene::class)],
+            [Lang::t('MAPS'), null, fn () => $this->scenes()->switchTo(MapSelectScene::class, $this->restart)],
+            [Lang::t('TITLE SCREEN'), null, fn () => $this->scenes()->switchTo(TitleScene::class)],
         ];
+    }
+
+    public function resume(mixed $result = null): void
+    {
+        $this->fonts->apply($this->engine);
+        $this->refresh();
+        $this->layoutMenu();
     }
 
     protected function back(): void
