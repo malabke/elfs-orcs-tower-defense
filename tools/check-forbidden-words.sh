@@ -4,7 +4,9 @@
 # Add one: echo "word" | tr 'A-Za-z' 'N-ZA-Mn-za-m'  -> append to WORDS.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORDS=(fbavp frtn ebobgavx rttzna xahpxyrf zvzvpung)
+WORDS=(fbavp frtn ebobgavx rttzna xahpxyrf zvzvpung
+  gbyxvra ebuna ebuveevz zbeqbe tbaqbe uboovg fuver hehx anmthy fnheba tnaqnys zvguevy zbevn onyebt
+  vfratneq fnehzna ybguybevra zvexjbbq evatjenvgu)
 status=0
 # in a git repository, only what git would publish: files ignored by .gitignore (.env, var/...) are private
 in_git() { git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; }
