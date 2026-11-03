@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       game:
-        description: 'The game (a folder of games/)'
+        description: 'The game or app (a folder of games/ or apps/)'
         required: true
       package:
         description: 'The app package (io.github.me.my_game)'
@@ -35,10 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Where the project is (games/<id>, else apps/<id>)
+        run: d="$GAME_DIR"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
       - name: The game's vendor/ (composer, the engine from engine/)
         run: |
-          test -d "games/$GAME" || { echo "no games/$GAME"; exit 1; }
-          docker run --rm --user "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer -v "$PWD:/app" -w "/app/games/$GAME" \
+          test -d "$GAME_DIR" || { echo "no $GAME_DIR"; exit 1; }
+          docker run --rm --user "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer -v "$PWD:/app" -w "/app/$GAME_DIR" \
             composer:2.8.12 install --no-dev --no-interaction --no-progress --ignore-platform-reqs
 
       - name: The NDK (the runner's Android SDK)
@@ -73,13 +75,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-${{ inputs.game }}-${{ inputs.version_name }}
-          path: games/${{ inputs.game }}/dist/android-native/
+          path: ${{ env.GAME_DIR }}/dist/android-native/
 
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="android-$GAME-${{ inputs.version_name }}-${{ inputs.version_code }}"
-          gh release create "$tag" games/$GAME/dist/android-native/* -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+          gh release create "$tag" $GAME_DIR/dist/android-native/* -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
             --title "$GAME ${{ inputs.version_name }} (Android, version ${{ inputs.version_code }})" \
             --notes "The native Android app of $GAME: .apk for a phone, .aab for Google Play (docs: JumPHP's docs/android-native.md)."

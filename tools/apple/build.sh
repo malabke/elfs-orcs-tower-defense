@@ -201,8 +201,9 @@ build_php() {
 game_config() {
   php -r '
     require $argv[1] . "/vendor/autoload.php";
-    $c = Symfony\Component\Yaml\Yaml::parseFile($argv[1] . "/config/game.yaml");
-    $g = $c["game"] ?? $c;
+    $f = $argv[1] . "/config/project.yaml";
+    $c = Symfony\Component\Yaml\Yaml::parseFile(is_file($f) ? $f : $argv[1] . "/config/game.yaml");
+    $g = $c["project"] ?? $c["game"] ?? $c;
     $bg = $g["pwa"]["background_color"] ?? $g["background"] ?? [0, 0, 0];
     $bg = is_string($bg) ? $bg : vsprintf("#%02x%02x%02x", array_slice(array_map("intval", $bg), 0, 3));
     $name = $g["pwa"]["short_name"] ?? $g["title"] ?? $argv[2];

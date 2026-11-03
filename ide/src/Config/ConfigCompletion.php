@@ -42,7 +42,7 @@ final class ConfigCompletion
         $schema = match (true) {
             str_contains(basename($path), 'input') => self::input(),
             str_contains(basename($path), 'services') => self::services(),
-            default => self::game(),
+            default => self::project(),
         };
         $lines = preg_split('/\R/', $text) ?: [];
         $current = $lines[$line - 1] ?? '';
@@ -387,6 +387,15 @@ final class ConfigCompletion
         return ['keys' => [
             'actions' => ['doc' => 'The game\'s actions => their bindings: jump: [Space, pad0:a, touch:tap]', 'keys' => $actions, 'any' => $binding],
         ]];
+    }
+
+    /** @return array<string, mixed> config/project.yaml (under project:) or the older config/game.yaml (under game:) */
+    private static function project(): array
+    {
+        $game = self::game();
+        $section = $game['keys']['game'];
+        $section['doc'] = 'The project (every key optional)';
+        return ['keys' => ['project' => $section] + $game['keys']] + $game;
     }
 
     /** @return array<string, mixed> config/game.yaml (JumPHP\Kernel\GameConfig, AGENTS.md section 4) */

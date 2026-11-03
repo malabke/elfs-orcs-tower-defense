@@ -41,7 +41,8 @@ if (!class_exists(Yaml::class) && is_file(__DIR__ . '/../engine/vendor/autoload.
 }
 class_exists(Yaml::class) || $fail('symfony/yaml is missing (bin/jumphp php engine composer install)');
 
-$config = Yaml::parseFile("$dir/config/game.yaml")['game'] ?? [];
+$config = Yaml::parseFile(is_file("$dir/config/project.yaml") ? "$dir/config/project.yaml" : "$dir/config/game.yaml");
+$config = $config['project'] ?? $config['game'] ?? [];
 $id = (string)($config['id'] ?? basename($dir));
 $title = trim((string)($config['title'] ?? $id)) ?: $id;
 // a CLI app (kind: cli): a console program, no shortcut; macOS: its two executables (no .app), the one of the Mac installed

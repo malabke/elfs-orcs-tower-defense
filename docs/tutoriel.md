@@ -120,7 +120,7 @@ Un jeu, c'est :
 
 | Fichier | Contenu |
 |---|---|
-| `config/game.yaml` | titre, résolution, première scène, démo jouée par `test` |
+| `config/project.yaml` | titre, résolution, première scène, démo jouée par `test` |
 | `config/input.yaml` | les actions (`jump`, `fire`...) associées aux touches, à la manette et au tactile |
 | `config/lang.yaml` | les traductions |
 | `src/Scene/*.php` | les écrans : titre, partie, pause, fin de partie |

@@ -5,7 +5,7 @@ namespace JumPHP\Kernel;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * config/game.yaml of the game (the `game:` key), with defaults. Read-only once booted.
+ * config/project.yaml of the project (the `project:` key; older projects: config/game.yaml, `game:`), with defaults. Read-only once booted.
  */
 final class GameConfig
 {
@@ -49,9 +49,15 @@ final class GameConfig
 
     public static function load(string $root): self
     {
-        $file = $root . '/config/game.yaml';
+        $file = self::yamlFile($root);
         $data = is_file($file) ? (Yaml::parseFile($file) ?? []) : [];
-        return new self($data['game'] ?? [], $root);
+        return new self($data['project'] ?? $data['game'] ?? [], $root);
+    }
+
+    /** config/project.yaml (under project:), else the older config/game.yaml (under game:): both are read. */
+    public static function yamlFile(string $root): string
+    {
+        return is_file($root . '/config/project.yaml') ? $root . '/config/project.yaml' : $root . '/config/game.yaml';
     }
 
     public function get(string $key, mixed $default = null): mixed

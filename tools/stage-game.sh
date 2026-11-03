@@ -7,6 +7,8 @@
 # + cacert.pem: the CA certificates of HTTPS (Debian's, from the build image), for the phones and computers whose own
 # are not where PHP's OpenSSL looks (the package points SSL_CERT_FILE at it). Prints the build: a hash of the files.
 set -euo pipefail
+# config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
 src="$1"
 dest="$2"
 [ -f "$src/vendor/autoload.php" ] || { echo "$src has no vendor/ (bin/jumphp install)" >&2; exit 1; }
@@ -20,7 +22,7 @@ rm -rf "$dest" && mkdir -p "$dest"
   | tar -x -C "$dest"
 mkdir -p "$dest/var"
 # desktop apps and hybrid games: JumPHP's own Tauri pages (the embedded game's), from the web/ left out above
-if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?(hybrid|webview)' "$src/config/game.yaml" 2>/dev/null \
+if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?(hybrid|webview)' "$(project_yaml "$src")" 2>/dev/null \
     && [ -d "$src/vendor/jumphp/engine/web/tauri" ]; then
   mkdir -p "$dest/vendor/jumphp/engine/web"
   cp -RL "$src/vendor/jumphp/engine/web/tauri" "$dest/vendor/jumphp/engine/web/"

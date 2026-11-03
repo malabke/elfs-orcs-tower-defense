@@ -119,7 +119,7 @@ A game is made of:
 
 | File | What it holds |
 |---|---|
-| `config/game.yaml` | title, resolution, first scene, the demo that `test` plays |
+| `config/project.yaml` | title, resolution, first scene, the demo that `test` plays |
 | `config/input.yaml` | the actions (`jump`, `fire`...) mapped to keys, gamepad and touch |
 | `config/lang.yaml` | the translations |
 | `src/Scene/*.php` | the screens: title, game, pause, game over |

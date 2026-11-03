@@ -29,7 +29,7 @@ system's (Debian / Ubuntu / Arch, Fedora / openSUSE), else the game's own `cacer
 
 ### The game's own php.ini settings
 
-`game.yaml` `php_ini: "my.setting=1\nother=2"` (one line, `\n` between settings) adds them to the executable's php.ini
+`project.yaml` `php_ini: "my.setting=1\nother=2"` (one line, `\n` between settings) adds them to the executable's php.ini
 section: `get_cfg_var('my.setting')` reads them. A tool can rewrite that section of a copy of the executable later
 (jumphp2installer writes a server's address there); to keep every offset in place (Windows), rewrite it at the same
 size, from room reserved by such a setting.
@@ -44,7 +44,7 @@ in a folder of its own version; later launches start at once. A new version of t
 | the game, unpacked | `~/.cache/jumphp/<id>-<build>` (`$XDG_CACHE_HOME`) | `%LOCALAPPDATA%\JumPHP\<id>-<build>` |
 | saves and options | `~/.local/share/<id>` (`$XDG_DATA_HOME`) | `%APPDATA%\<id>` |
 
-`<id>` is game.yaml's `id`, `<build>` a hash of the game's files. `JUMPHP_STANDALONE_DIR` unpacks elsewhere,
+`<id>` is project.yaml's `id`, `<build>` a hash of the game's files. `JUMPHP_STANDALONE_DIR` unpacks elsewhere,
 `JUMPHP_VAR` puts the saves elsewhere (`tools/standalone-stub.php`).
 
 ## The micro binaries

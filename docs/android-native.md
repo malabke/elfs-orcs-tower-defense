@@ -39,13 +39,13 @@ On a phone: `adb install games/<game>/dist/android-native/<game>-1.0.apk` (or se
 | SDL2 (its Java activity, OpenGL ES, touch, sound), SDL2_image / _mixer / _ttf, OpenAL Soft (OpenSL ES) | SDL's Android project, `tools/android/project` (Gradle, CMake) |
 | `libmain.so`: unpacks the game on its first launch (each new version once, from the APK into the private storage), runs it | `tools/android/project/app/jni/src/main.c` |
 | the game: `assets/game.tar` (as `export:standalone` packs it: `tools/stage-game.sh`) | |
-| name, icon (the PWA's: `assets/icon.png`), orientation (the game's shape) | game.yaml |
+| name, icon (the PWA's: `assets/icon.png`), orientation (the game's shape) | project.yaml |
 
 The saves and options are in the app's private storage (`JUMPHP_VAR`), kept across updates. PHP's output and errors
 go to logcat: `adb logcat -s JumPHP`. Android's back button is Escape.
 
 The engine knows it is on a phone: `JUMPHP_MOBILE` (Platform::isMobile()), `JUMPHP_ANDROID`, and the on-screen
-controls are on (`JUMPHP_TOUCH_CONTROLS`; game.yaml `touch:` as in the browser: `pad: stick`, `a`, `b`, `start`,
+controls are on (`JUMPHP_TOUCH_CONTROLS`; project.yaml `touch:` as in the browser: `pad: stick`, `a`, `b`, `start`,
 `select`, `labels`). On the desktop, `JUMPHP_TOUCH_CONTROLS=1 bin/jumphp run <game>` shows them (with the mouse).
 
 HTTPS (`$engine->http()`, online play over `wss://`): PHP's openssl (OpenSSL 3, built with the NDK) with the game's CA

@@ -14,10 +14,10 @@ You develop a plugin like any JumPHP project: one folder, `bin/jumphp test` to t
 plugin without a window. Example: `games/hello-plugin` (TODO Finder).
 
 ```bash
-bin/jumphp plugin:new todo-finder "TODO Finder"   # games/todo-finder from skeleton-plugin/
+bin/jumphp plugin:new todo-finder "TODO Finder"   # apps/todo-finder from skeleton-plugin/
 bin/jumphp install todo-finder
 bin/jumphp test todo-finder         # php -l, phpstan, the plugin loads in the IDE's core, its tests
-bin/jumphp plugin:pack todo-finder  # games/todo-finder/dist/todo-finder-0.1.0.zip
+bin/jumphp plugin:pack todo-finder  # apps/todo-finder/dist/todo-finder-0.1.0.zip
 ```
 
 Try it in the IDE: **Tools > Plugins…** (also in File and Find Action). The window lists the installed plugins
@@ -37,9 +37,9 @@ would run on the server.
 ## A plugin's folder
 
 ```
-games/todo-finder/
+apps/todo-finder/
   composer.json      what the IDE reads (below)
-  config/game.yaml   kind: plugin (so bin/jumphp and the IDE know this folder)
+  config/project.yaml   kind: plugin (so bin/jumphp and the IDE know this folder)
   src/TodoPlugin.php the plugin's class
   tests/             PluginTestCase tests
   phpstan.neon

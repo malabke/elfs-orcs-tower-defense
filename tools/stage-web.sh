@@ -4,6 +4,8 @@
 # container, and the web page (index.html, game.json) in .build/<game>.web.
 # Step 2 is tools/package-web.sh (emscripten image).
 set -eu
+# config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
 GAME_DIR="$1"                       # /workspace/games/<game>
 GAME_ID="$(basename "$GAME_DIR")"
 STAGE="/workspace/.build/$GAME_ID"  # two levels under /workspace, like games/<game>: ../../engine still resolves
@@ -27,6 +29,6 @@ rm -rf vendor/jumphp/engine/vendor vendor/jumphp/engine/tests vendor/jumphp/engi
        vendor/jumphp/engine/composer.lock vendor/jumphp/engine/phpstan.neon vendor/jumphp/engine/phpunit.xml*
 
 # desktop apps (ui: webview) have no service container
-grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$STAGE/config/game.yaml" || php /workspace/tools/dump-container.php "$STAGE"
+grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$(project_yaml "$STAGE")" || php /workspace/tools/dump-container.php "$STAGE"
 php /workspace/tools/render-web.php "$STAGE" "$WEB" /workspace/engine/web /workspace/build/engine
 echo "staged: $STAGE"

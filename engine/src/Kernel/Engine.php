@@ -129,7 +129,7 @@ class Engine extends EventEmitter
         $hot = HotReload::pending();
         [$scene, $params] = $hot ?? $this->startScene();
         if ($scene === null) {
-            throw new \RuntimeException('No first scene: set game.start_scene in config/game.yaml');
+            throw new \RuntimeException('No first scene: set start_scene in config/project.yaml (or config/game.yaml)');
         }
         $this->scenes->switchTo($scene, $params, false);
         if ($hot !== null) {

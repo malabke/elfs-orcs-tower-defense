@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       app:
-        description: 'The app (games/<app>, ui: webview)'
+        description: 'The app (apps/<app> or games/<app>, ui: webview)'
         default: hello-desktop
 
 jobs:
@@ -16,17 +16,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Where the project is (games/<id>, else apps/<id>)
+        run: d="games/${{ inputs.app }}"; [ -d "$d" ] || d="apps/${{ inputs.app }}"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
       - name: bin/jumphp app:export --linux --macos
         env:
           JUMPHP_GAME: ${{ inputs.app }}
         run: |
           bin/jumphp install "${{ inputs.app }}"
           bin/jumphp app:export "${{ inputs.app }}" --linux --macos
-          ls -la "games/${{ inputs.app }}/dist/standalone"
+          ls -la "$GAME_DIR/dist/standalone"
       - uses: actions/upload-artifact@v4
         with:
           name: exported
-          path: games/${{ inputs.app }}/dist/standalone/
+          path: ${{ env.GAME_DIR }}/dist/standalone/
 
   macos:
     needs: export

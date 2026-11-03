@@ -7,12 +7,12 @@ content is **HTML / CSS / JavaScript**, shown by the system's own WebView, and w
 the WebView, the dialogs and the notifications come from [Tauri 2](https://tauri.app); the program is PHP.
 
 ```bash
-bin/jumphp app:new notes "Notes"      # games/notes from skeleton-app/
+bin/jumphp app:new notes "Notes"      # apps/notes from skeleton-app/
 bin/jumphp install notes
 bin/jumphp app:run notes              # a window on your screen
 bin/jumphp app:test notes             # php -l + phpstan + phpunit (no window) + the app on a virtual screen
-bin/jumphp app:shot notes             # games/notes/var/screenshots/app.png
-bin/jumphp app:export notes           # games/notes/dist/standalone/notes-linux-x86_64: one file to give
+bin/jumphp app:shot notes             # apps/notes/var/screenshots/app.png
+bin/jumphp app:export notes           # apps/notes/dist/standalone/notes-linux-x86_64: one file to give
 ```
 
 The example: [`games/hello-desktop`](../games/hello-desktop) (a notepad: open / save with the system's dialogs, a
@@ -98,10 +98,10 @@ You never need them directly: `JumPHP\Tauri\App` and `Window` send them.
 ## An app
 
 ```
-games/notes/
+apps/notes/
   app.php                 exit(JumPHP\Tauri\App::boot(__DIR__)->run());
   composer.json           requires jumphp/engine, autoload App\ -> src/
-  config/game.yaml        ui: webview, main: App\Main, app: {...}
+  config/project.yaml        ui: webview, main: App\Main, app: {...}
   src/Main.php            implements JumPHP\Tauri\AppMain: commands, listeners, timers
   ui/                     the pages: index.html, CSS, JS, pictures (any front-end tool's build output works too)
   assets/icon.png         the window's icon
@@ -109,10 +109,10 @@ games/notes/
   var/                    the user's files when run from the project (exported apps: ~/.local/share/<id>)
 ```
 
-### config/game.yaml
+### config/project.yaml
 
 ```yaml
-game:
+project:
   id: notes                     # identifier net.jumphp.notes, data folder, executable name
   title: "Notes"                # window title, product name
   version: 0.1.0
@@ -212,7 +212,7 @@ outside the pages' folder. A window can also show an `https://` page (`url`), wi
 
 ### Built-in native commands
 
-Without PHP code of its own, a page can ask (they go through PHP, `JumPHP\Tauri\NativeCommands`; game.yaml
+Without PHP code of its own, a page can ask (they go through PHP, `JumPHP\Tauri\NativeCommands`; project.yaml
 `app.native_commands: false` removes them):
 
 ```js
@@ -244,7 +244,7 @@ $start->startedAtLogin();                     // true when the computer started 
 - macOS: `~/Library/LaunchAgents/<identifier>.plist` (RunAtLoad) that runs `open -a <the .app> --args --autostart`;
 - Linux: `~/.config/autostart/<id>.desktop` (GNOME, KDE, Xfce...).
 
-game.yaml `app.autostart`: `default: true` turns it on at the first start of the exported app (once: then the user
+project.yaml `app.autostart`: `default: true` turns it on at the first start of the exported app (once: then the user
 decides, e.g. a check box of the app's menu or settings); `hidden: true` starts the main window hidden when the
 computer started it, for an app that lives in the tray (`$app->tray()`: its menu shows the window). A page asks with
 `native.autostart`. `games/hello-desktop` has View > Start with the computer.
@@ -332,14 +332,14 @@ PHP extensions.
 
 ## Hybrid games (SDL + Tauri)
 
-A game can drive Tauri too: `ui: hybrid` in its `config/game.yaml`. It stays an SDL game (scenes, entities, its
+A game can drive Tauri too: `ui: hybrid` in its `config/project.yaml`. It stays an SDL game (scenes, entities, its
 SDL window, sound; `app.php` unchanged), and gets the desktop apps' native side: `JumPHP\Native` (file choosers,
 dialogs, notifications, clipboard), a tray icon, global shortcuts, and HTML windows beside its own (a control
 panel, an editor, a launcher...). Example: [`games/hello-hybrid`](../games/hello-hybrid) (balls bouncing in SDL, an
 HTML control panel, "save a picture" through the system's file chooser, a tray menu, Ctrl+Shift+P anywhere).
 
 ```yaml
-game:
+project:
   start_scene: App\Scene\BallsScene
   ui: hybrid
   main: App\Desktop                # optional: an AppMain (commands for the HTML windows, tray icon, shortcuts)
@@ -365,7 +365,7 @@ It runs as a **plain game** (no Tauri) in headless runs (`bin/jumphp test` / `sh
 the browser, in the phone apps, and on a desktop without FFI or without the runtime (a line on stderr says so).
 `bin/jumphp run <game>` runs a hybrid game in the Tauri image; `export:standalone <game>` makes it with a micro that
 has SDL **and** FFI (`tools/hybrid-extensions.txt`, built once) and the runtime library inside. Test the native
-side with `AppTestCase` (it boots the `main` class and the `app.window` of game.yaml), the game with `GameTestCase`.
+side with `AppTestCase` (it boots the `main` class and the `app.window` of project.yaml), the game with `GameTestCase`.
 
 ### One window: the game inside the Tauri window
 
@@ -373,7 +373,7 @@ side with `AppTestCase` (it boots the `main` class and the `app.window` of game.
 (`JumPHP\Tauri\EmbeddedGame`):
 
 ```yaml
-game:
+project:
   ui: hybrid
   app:
     embed: true
@@ -428,7 +428,7 @@ default 240). `bin/jumphp app:shot <app> [frames] [out.png]` saves the main wind
 
 ## Exporting: one executable
 
-`bin/jumphp app:export <app>` makes `games/<app>/dist/standalone/<app>-linux-x86_64`: one file, nothing to
+`bin/jumphp app:export <app>` makes `apps/<app>/dist/standalone/<app>-linux-x86_64`: one file, nothing to
 install but WebKitGTK (as every Tauri app on Linux); `--windows` makes `<app>-windows-x86_64.exe` (Windows 10 / 11
 have WebView2; its micro and library come from JumPHP's GitHub releases, see [Platforms](#platforms)). It reuses
 `export:standalone` ([standalone.md](standalone.md)):
@@ -437,7 +437,7 @@ have WebView2; its micro and library come from JumPHP's GitHub releases, see [Pl
 |---|---|
 | PHP | StaticPHP's micro with `tools/app-extensions.txt` (FFI, OpenSSL, mbstring, sockets, pcntl...; no SDL): its own micro, built once in `~/.jumphp/standalone/spc-app` (~10 min), kept |
 | php.ini | `ffi.enable=1`, injected in the executable (micro's ini section) |
-| the app | `games/<app>` + its vendor/, as a PHAR, unpacked on the first launch into `~/.cache/jumphp/<id>-<build>` |
+| the app | `apps/<app>` + its vendor/, as a PHAR, unpacked on the first launch into `~/.cache/jumphp/<id>-<build>` |
 | the runtime | `build/tauri/linux-x86_64/libjumphp_tauri.so`, unpacked with it into `native/linux-x86_64/` |
 | the user's files | `~/.local/share/<id>` (saves, options, the WebView's storage in `webview/`) |
 
@@ -458,7 +458,7 @@ before (same key).
 
 `bin/jumphp app:export <app> --macos` (from Linux, in Docker) makes `dist/standalone/<app>-macos.zip`: `<Title>.app`
 with two executables (Apple silicon, Intel: micro + the app), a launcher that starts the Mac's own, `Info.plist`
-(game.yaml `title`, `version`, `app.identifier`) and the icon (`assets/icon.png` as `.icns`); the universal library
+(project.yaml `title`, `version`, `app.identifier`) and the icon (`assets/icon.png` as `.icns`); the universal library
 inside. macOS 12 or newer. The app's cache and data go to `~/Library/Caches/JumPHP` and
 `~/Library/Application Support/<id>`. It is not signed (Apple's developer account): the first time, right click on
 the app > Open. The workflow `app-export` (Actions > app-export) exports an app and opens it for real on an Apple
@@ -486,7 +486,7 @@ The same app also runs in a web page: `bin/jumphp build <app>` makes `dist/web/`
 | tray icon, system-wide shortcuts, opening paths | nothing (shortcuts work while the page has the focus) |
 
 The app's own files (`$app->storage`, options) live in the browser (IndexedDB), as games' saves. Phones: the page
-works there as it is; as an Android app, `bin/jumphp twa <app> --url <its page online>` (game.yaml `pwa: true`); on an
+works there as it is; as an Android app, `bin/jumphp twa <app> --url <its page online>` (project.yaml `pwa: true`); on an
 iPhone, Safari's "Add to Home Screen" (PWA). Tried in headless Chrome with `games/hello-desktop`: the greeting from
 PHP, the View menu's check item, the confirm dialog, "Save as" downloading the note PHP wrote, no error.
 A native Tauri app on Android / iOS (the phone's own WebView driving PHP inside the app) is not done: Tauri's mobile
@@ -499,16 +499,16 @@ replaced by the newer one.
 
 ```bash
 bin/jumphp app:release notes --url https://example.com/notes --notes "Faster saving." --linux --windows --macos
-# then upload games/notes/dist/standalone/ (the executables + update.json) to https://example.com/notes
+# then upload apps/notes/dist/standalone/ (the executables + update.json) to https://example.com/notes
 ```
 
 - The first time, it makes the app's signing key (ECDSA P-256) in `~/.jumphp/keys/<id>-update.pem` (never in the
   project; **keep a copy**: without it the apps already given can not be updated) and writes its public half to
   `config/update.pub` (commit it: the app checks what it downloads with it).
-- `update.json`: the app's id, its `version` (game.yaml: bump it for each release), the notes, and for each system
+- `update.json`: the app's id, its `version` (project.yaml: bump it for each release), the notes, and for each system
   just exported (`linux-x86_64`, `windows-x86_64`, `macos-arm64`, `macos-x86_64`) the executable's address, size and
   SHA-256, all signed.
-- The app knows where to look: game.yaml `app: {update: {url: https://example.com/notes/update.json}}`
+- The app knows where to look: project.yaml `app: {update: {url: https://example.com/notes/update.json}}`
   (`JUMPHP_UPDATE_URL` tries another one).
 
 ```php
@@ -531,7 +531,7 @@ Help > Check for updates (tried for real: 0.1.0 found 0.1.1, installed it and re
 
 | Command | |
 |---|---|
-| `app:new <app> [title]` | `games/<app>` from `skeleton-app/` |
+| `app:new <app> [title]` | `apps/<app>` from `skeleton-app/` |
 | `app:run <app>` | the app on your screen (X11, else Wayland; the session bus for notifications; the GPU) |
 | `app:test <app>` | php -l, phpstan, phpunit, then the app for real on Xvfb |
 | `app:shot <app> [frames] [out.png]` | the main window after N frames (default 120) |

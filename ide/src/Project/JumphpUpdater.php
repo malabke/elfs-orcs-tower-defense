@@ -27,7 +27,7 @@ final class JumphpUpdater
     public const ROOT_COMMIT = 'ffefc796f8ca1d3b4ff674305598b3cb51a9e52b';
 
     /** top-level entries of the repository that are the project's own, never JumPHP's to replace */
-    private const OWN = ['games', 'README.md', '.jumphp', '.git', '.env'];
+    private const OWN = ['games', 'apps', 'README.md', '.jumphp', '.git', '.env'];
 
     private string $cache;
 

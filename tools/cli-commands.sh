@@ -4,18 +4,18 @@
 # export:standalone on a CLI app's folder come here.
 
 is_cli() {
-  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*kind:[[:space:]]*["'"'"']?cli' "$ROOT/games/$1/config/game.yaml" 2>/dev/null
+  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*kind:[[:space:]]*["'"'"']?cli' "$(project_yaml "$ROOT/$(project_path "$1")")" 2>/dev/null
 }
 
 cmd_cli_new() {
   local name="${1:-}" title="${2:-}"
   [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "app name: lower case letters, digits and dashes (e.g. todo)"
-  [ -e "games/$name" ] && die "games/$name already exists"
+  [ -z "$(project_path "$name")" ] || die "$(project_path "$name") already exists"
   [ -n "$title" ] || title="$(echo "$name" | tr '-' ' ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2)} 1')"
-  mkdir -p games
-  cp -r skeleton-cli "games/$name"
-  php_run "games/$name" -- php /workspace/tools/new-app.php "$name" "$title"
-  say "games/$name created. Next: bin/jumphp install $name && bin/jumphp run $name"
+  mkdir -p apps
+  cp -r skeleton-cli "apps/$name"
+  php_run "apps/$name" -- php /workspace/tools/new-app.php "$name" "$title"
+  say "apps/$name created. Next: bin/jumphp install $name && bin/jumphp run $name"
 }
 
 # bin/jumphp run <app> [arguments...]: the app in this terminal (its arguments: a command and its options)

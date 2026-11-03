@@ -56,7 +56,7 @@ bin/jumphp android my-game                                    # or the native ap
   number, which is harmless). `--same-version` (web app) rebuilds without changing it.
 - Commit the version file at once: `games/<game>/android/twa-manifest.json` (web app) or
   `games/<game>/android/app.json` (native app). Never commit `dist/`.
-- The name under the icon: game.yaml `pwa: {short_name: ...}` (12 characters show whole on most phones). The icon:
+- The name under the icon: project.yaml `pwa: {short_name: ...}` (12 characters show whole on most phones). The icon:
   `assets/icon.png`.
 
 ## 3. The web app only: the site vouches for the app

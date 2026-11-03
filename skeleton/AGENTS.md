@@ -19,6 +19,6 @@ Started from the JumPHP skeleton (a small platformer). Update this section as th
 - **Scenes**: `TitleScene` (menu) → `PlayScene` (level) ; overlays `PauseScene` ; `OptionsScene` (pushed).
 - **Entities**: `Player` (Sprite + Gravity + TileCollision), `Coin`.
 - **Controls** (`config/input.yaml`): arrows / WASD move, Space jumps, Escape pauses.
-- **Smoke test** (`config/game.yaml` smoke): `PlayScene` with `demo: true` (a bot runs and jumps).
+- **Smoke test** (`config/project.yaml` smoke): `PlayScene` with `demo: true` (a bot runs and jumps).
 - **Non-obvious**: the tileset is drawn with GD in `PlayScene::makeTileset()`; replace it with a PNG
   (`assets/tiles/`) or a Tiled map (`TiledJsonLoader`).

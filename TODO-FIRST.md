@@ -20,6 +20,15 @@ Measured on 2026-11-03, the places that assume `games/`:
 | `engine/src` | 1 |
 | jumphp-playground `src/` (it publishes only `games/<id>/` of a repository) | 37 |
 
+Done (2026-11-03, not committed / released yet): `bin/jumphp` finds a project in `games/` then `apps/` (`project_path`,
+`game_dir`, `default_game`, the Docker mounts of linked projects), `app:new` / `gui:new` / `cli:new` / `plugin:new` create
+in `apps/`, `bin/jumphp update` and the IDE's updater leave `apps/` alone, `JUMPHP_APP` (JUMPHP_GAME still read), the
+standalone / twa / android / apple scripts and workflows, the IDE (modules, stubs, New Project of a plugin), jumphp.net
+(applications made in `apps/<id>` when the JumPHP has `project_path`, publishing finds `apps/<id>`), docs. Tried: a CLI, a
+gui and a plugin project in `apps/`: install, test, run (inside the folder), shot, build + webshot, export:standalone
+--linux, plugin:pack; games/pong and games/hello-cli still pass. Not tried: app:new (Tauri) export, installer, apple /
+android workflows, deploy / pages, the IDE opened on a project with `apps/`.
+
 Plan (agreed):
 - one function in `bin/jumphp` finds `<id>` in `games/` then `apps/`; every command and every tools/ script goes through
   it (no more `games/$id` written by hand); the Docker mounts (`WS`, the linked games mounted at `/workspace/games/<id>`)
@@ -41,6 +50,9 @@ the Terminal, External Libraries, debugger), publishing on jumphp.net (a test pr
 apps. Then a JumPHP release (VERSION, runtime, Packagist) and an IDE release.
 
 ## Same work: names that say "game" for every kind of project, backward compatible
+
+Counted (2026-11-03, JumPHP + jumphp.net): `game.yaml` 266 hits in 118 files, `GameConfig` 57 / 31, `GameTestCase` 43 / 23,
+`JUMPHP_GAME` 54 / 20 (`JUMPHP_APP` now read first), `game.json` 15 / 9. Waiting for David's choices.
 
 Asked by David (2026-11-03) with the above: what is named after games but holds any project gets a neutral name, the old
 one still read (nothing breaks):

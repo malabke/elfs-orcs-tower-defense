@@ -146,7 +146,7 @@ class App {
     this.updateRunWidget();
     this.restoreTabs();
     this.docker();   // in the background: Docker Desktop started if needed, before the first run asks for it
-    this.updateJumphp();   // the project's JumPHP as new as the IDE (bin/jumphp, engine...; games/ never touched)
+    this.updateJumphp();   // the project's JumPHP as new as the IDE (bin/jumphp, engine...; games/ and apps/ never touched)
     // a project made before New Project created repositories: its own GitHub repository, then jumphp.net
     if (backend.kind === 'native' && info.needsRepository) {
       notify('This project has no GitHub repository of its own: commits cannot be pushed and it cannot be published on jumphp.net.', 'warning',
@@ -419,7 +419,7 @@ class App {
       const list = plan.changed.slice(0, 12).join('\n') + (plan.changed.length > 12 ? `\n… and ${plan.changed.length - 12} more` : '');
       const text = (why ? why + '\n\n' : '') + (plan.known
         ? `A newer JumPHP is out. ${plan.changed.length} of its file(s) were changed in this project: update them too (your version is replaced), or keep them (the others are updated)?`
-        : `A newer JumPHP is out. This project does not say which JumPHP it came from: ${plan.changed.length} file(s) of JumPHP differ here (bin/jumphp, the engine…). Update them? Your games (games/) are never touched.`);
+        : `A newer JumPHP is out. This project does not say which JumPHP it came from: ${plan.changed.length} file(s) of JumPHP differ here (bin/jumphp, the engine…). Update them? Your projects (games/, apps/) are never touched.`);
       return new Promise((resolve) => {
         dialog({ title: 'Update JumPHP in this project', body: el('div', {}, el('p', { style: { whiteSpace: 'pre-wrap' } }, text), el('pre.console', { style: { maxHeight: '180px', overflow: 'auto' } }, list)),
           buttons: [

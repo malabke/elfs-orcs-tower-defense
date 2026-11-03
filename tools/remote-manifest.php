@@ -5,7 +5,7 @@
 // shared engine folder). A games site does the same with its own code: the format is in docs/remote.md.
 //   php tools/remote-manifest.php <game dir> <out dir> [engine url = engine/] [runtime dir = build/runtime]
 [, $game, $out, $engineUrl, $runtime] = $argv + [null, null, null, 'engine/', __DIR__ . '/../build/runtime'];
-if (!$game || !$out || !is_file("$game/config/game.yaml")) {
+if (!$game || !$out || !is_file("$game/config/game.yaml") && !is_file("$game/config/project.yaml")) {
     fwrite(STDERR, "usage: php tools/remote-manifest.php <game dir> <out dir> [engine url] [runtime dir]\n");
     exit(1);
 }

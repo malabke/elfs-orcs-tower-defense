@@ -7,7 +7,7 @@ Fabien Potencier's terminal UI component. The same commands as games: run, test,
 Example: `games/hello-cli` (a task list).
 
 ```bash
-bin/jumphp cli:new todo "Todo"           # games/todo from skeleton-cli/ (config/game.yaml: kind: cli)
+bin/jumphp cli:new todo "Todo"           # apps/todo from skeleton-cli/ (config/project.yaml: kind: cli)
 bin/jumphp install todo
 bin/jumphp run todo                      # the full-screen screen (in this terminal)
 bin/jumphp run todo add "Buy milk"       # a command and its arguments
@@ -19,9 +19,9 @@ bin/jumphp export:standalone todo --linux --windows --macos
 ## The project
 
 ```
-games/todo/
+apps/todo/
   app.php                 require vendor/autoload.php; exit(App\Main::boot(__DIR__)->run());
-  config/game.yaml        id, title, version, description, kind: cli
+  config/project.yaml        id, title, version, description, kind: cli
   src/Main.php            the Console application: its commands, the default one, the data folder
   src/Command/*.php       one command per class (#[AsCommand('add', 'Adds a task')])
   src/Ui/*.php            full-screen screens (symfony/tui)

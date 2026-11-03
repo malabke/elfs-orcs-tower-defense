@@ -11,7 +11,7 @@ foreach ([$arm, $intel] as $file) {
     is_file($file) || exit(fwrite(STDERR, "no $file\n") ? 1 : 1);
 }
 
-$yaml = (string)file_get_contents("$dir/config/game.yaml");
+$yaml = (string)file_get_contents(is_file("$dir/config/project.yaml") ? "$dir/config/project.yaml" : "$dir/config/game.yaml");
 $value = static function (string $key, string $default) use ($yaml): string {
     // the first "<key>: value" of game.yaml (plain values only; quotes removed)
     return preg_match('/^\s*' . preg_quote($key, '/') . ':\s*["\']?([^"\'#\n]*?)["\']?\s*(#.*)?$/m', $yaml, $m) && $m[1] !== ''

@@ -62,11 +62,11 @@ final class Main
         return (string)(self::config()['version'] ?? '0.1.0');
     }
 
-    /** @return array<string, mixed> config/game.yaml's id, title and version (read without a YAML parser) */
+    /** @return array<string, mixed> config/project.yaml's (or game.yaml's) id, title and version (read without a YAML parser) */
     private static function config(): array
     {
         $out = [];
-        $yaml = (string)@file_get_contents(dirname(__DIR__) . '/config/game.yaml');
+        $yaml = (string)@file_get_contents(dirname(__DIR__) . '/config/project.yaml') ?: (string)@file_get_contents(dirname(__DIR__) . '/config/game.yaml');
         foreach (['id', 'title', 'version'] as $key) {
             if (preg_match('/^\s+' . $key . ':\s*"?([^"#\n]*?)"?\s*(?:#.*)?$/m', $yaml, $m)) {
                 $out[$key] = trim($m[1]);

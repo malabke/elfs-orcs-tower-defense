@@ -228,7 +228,7 @@ final class Intelligence
     {
         $workspace = $this->index->workspace();
         $dir = str_replace('\\', '/', dirname($path));
-        while (!$workspace->exists(($dir === '.' || $dir === '' ? '' : "$dir/") . 'config/game.yaml')) {
+        while (!$workspace->exists(($p = $dir === '.' || $dir === '' ? '' : "$dir/") . 'config/game.yaml') && !$workspace->exists($p . 'config/project.yaml')) {
             if ($dir === '.' || $dir === '' || $dir === '/' || dirname($dir) === $dir) {
                 return [];
             }

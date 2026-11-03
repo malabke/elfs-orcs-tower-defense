@@ -74,7 +74,8 @@ final class Creator
                             $this->main->saveProjectSettings($path, array_filter(['dsk' => (string)$p['dsk'], 'roms' => (string)($p['roms'] ?? '')]));
                         }
                         $this->noPushToJumphp($path);
-                        $yaml = $path . '/' . trim((string)($project['gameDir'] ?? 'games/' . $project['slug']), '/') . '/config/game.yaml';
+                        $yaml = $path . '/' . trim((string)($project['gameDir'] ?? 'games/' . $project['slug']), '/') . '/config/project.yaml';
+                        $yaml = is_file($yaml) ? $yaml : dirname($yaml) . '/game.yaml';
                         if ($kind !== 'hybrid' || !$this->makeHybrid($yaml)) {
                             return $this->main->openProject($path);
                         }
@@ -132,7 +133,7 @@ final class Creator
                 // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
                 exec('rm -rf ' . escapeshellarg("$root/.git"));
                 // one project, one plugin: not JumPHP's examples (the playground's projects start the same way)
-                foreach (glob("$root/games/*", GLOB_ONLYDIR) ?: [] as $example) {
+                foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: [])] as $example) {
                     exec('rm -rf ' . escapeshellarg($example));
                 }
                 return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
@@ -145,7 +146,7 @@ final class Creator
             })
             ->then(function () use ($root, $id, $p) {
                 $brief = trim((string)($p['brief'] ?? ''));
-                file_put_contents("$root/games/$id/BRIEF.md", "# " . ($p['title'] ?? $id) . "\n\n" . ($p['description'] ?? '') . "\n\n" . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
+                file_put_contents("$root/apps/$id/BRIEF.md", "# " . ($p['title'] ?? $id) . "\n\n" . ($p['description'] ?? '') . "\n\n" . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
                 $this->progress('Creating your GitHub repository…');
                 return $this->git($root)->then(fn (Git $git) => $this->createRepository($git, $id, (string)($p['description'] ?? ''))
                     ->then(fn (array $repo) => $git->run(['remote', 'add', 'origin', (string)$repo['clone_url']])->then(fn () => $repo))

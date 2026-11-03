@@ -78,14 +78,14 @@ PHP game: the code runs inside the app and ships with it (guideline 2.5.2); noth
 | SDL2 (UIKit on iOS, Cocoa on macOS), SDL2_image / _mixer / _ttf, OpenAL Soft (CoreAudio) | static, `tools/apple/project/CMakeLists.txt` |
 | the launcher: finds the game in the bundle, runs it | `tools/apple/project/main.c` |
 | the game, as the desktop runs it (`tools/stage-game.sh`) | `<Game>.app/Contents/Resources/game` (macOS), `<Game>.app/game` (iOS) |
-| name, icon (`assets/icon.png`, else the title's initial), orientation (the game's shape), version | game.yaml, `games/<game>/apple/app.json` |
+| name, icon (`assets/icon.png`, else the title's initial), orientation (the game's shape), version | project.yaml, `games/<game>/apple/app.json` |
 
 The saves and options are in the app's Application Support folder (`JUMPHP_VAR`), kept across updates. PHP's output
 and errors go to stdout / stderr: Xcode's console, `xcrun simctl launch --console booted <bundle id>`, or the terminal
 (`"/Applications/<Game>.app/Contents/MacOS/<game>"`).
 
 The engine knows where it runs: `JUMPHP_IOS` (Platform::isPhoneApp(): full screen, the game's orientation),
-`JUMPHP_MOBILE` and the on-screen controls (`JUMPHP_TOUCH_CONTROLS`, game.yaml `touch:` as in the browser) on iOS;
+`JUMPHP_MOBILE` and the on-screen controls (`JUMPHP_TOUCH_CONTROLS`, project.yaml `touch:` as in the browser) on iOS;
 `JUMPHP_MACOS` on the Mac. SDL draws with OpenGL ES 2 on iOS (as on Android) and OpenGL on macOS (as on Linux), so a
 game's own GL (`gl()`, `opengl()`) shares SDL's context; macOS' OpenGL takes GLSL 1.20, not GLSL ES 1.00: the engine
 turns the games' shaders into it (OpenGl::versioned()).

@@ -17,7 +17,7 @@ if (is_file("$site/index.html") && !$force) {
 }
 
 // what the game says about itself
-$yaml = (string)@file_get_contents("$game/config/game.yaml");
+$yaml = (string)@file_get_contents(is_file("$game/config/project.yaml") ? "$game/config/project.yaml" : "$game/config/game.yaml");
 $get = static function (string $key) use ($yaml): ?string {
     return preg_match('/^\s{2,4}' . $key . ':\s*(?:"((?:[^"\\\\]|\\\\.)*)"|\'((?:[^\']|\'\')*)\'|([^#\n]*?))\s*(?:#.*)?$/m', $yaml, $m)
         ? trim(stripcslashes($m[1] ?? '') . str_replace("''", "'", $m[2] ?? '') . ($m[3] ?? '')) : null;

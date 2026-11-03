@@ -15,6 +15,8 @@
 #   JUMPHP_STANDALONE_INI         php.ini lines injected in the executable (StaticPHP's micro ini section), plus
 #                                 game.yaml php_ini: "a=1\nb=2" (the game's own settings)
 set -euo pipefail
+# config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
 
 say() { printf '\033[1;36m==> %s\033[0m\n' "$*" >&2; }
 die() { printf '\033[1;31m[x] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -24,7 +26,7 @@ PHP_VERSION="${JUMPHP_STANDALONE_PHP:-8.5}"
 EXTENSIONS="/workspace/${JUMPHP_STANDALONE_EXTENSIONS:-tools/standalone-extensions.txt}"
 SPC="/cache/${JUMPHP_STANDALONE_SPC:-spc}"
 BOOT="${JUMPHP_STANDALONE_BOOT:-JumPHP\\Kernel\\Application}"
-GAME_DIR="/workspace/games/$GAME"
+GAME_DIR="/workspace/games/$GAME"; [ -d "$GAME_DIR" ] || GAME_DIR="/workspace/apps/$GAME"
 OUT="$GAME_DIR/dist/standalone"
 case "$TARGET" in
   linux-x86_64) FILE="$GAME-$TARGET" ;;
@@ -62,7 +64,7 @@ fi
 # 2. the game, as the desktop runs it (tools/stage-game.sh)
 say "the game: $GAME"
 stage=/tmp/stage/game
-build="$(bash /workspace/tools/stage-game.sh "$GAME_DIR" "$stage")" || die "games/$GAME has no vendor/ (bin/jumphp install $GAME)"
+build="$(bash /workspace/tools/stage-game.sh "$GAME_DIR" "$stage")" || die "${GAME_DIR#/workspace/} has no vendor/ (bin/jumphp install $GAME)"
 if [ -n "${JUMPHP_STANDALONE_NATIVE:-}" ]; then
   # the native library of a desktop app (Tauri), unpacked with it: JumPHP\Tauri\TauriRuntime finds it there
   native="$stage/native/${JUMPHP_STANDALONE_NATIVE_DIR:-$TARGET}"
@@ -70,7 +72,7 @@ if [ -n "${JUMPHP_STANDALONE_NATIVE:-}" ]; then
   cp "/workspace/$JUMPHP_STANDALONE_NATIVE" "$native/"
   build="$(cd "$stage" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
 fi
-id="$(sed -nE 's/^ *id: *["'\'']?([a-z0-9-]+).*/\1/p' "$GAME_DIR/config/game.yaml" | head -1)"
+id="$(sed -nE 's/^ *id: *["'\'']?([a-z0-9-]+).*/\1/p' "$(project_yaml "$GAME_DIR")" | head -1)"
 id="${id:-$GAME}"
 
 php -d phar.readonly=0 -r '
@@ -94,7 +96,7 @@ mkdir -p "$OUT"
 # + game.yaml `php_ini: "a=1\nb=2"` (one line, \n between settings): the game's own (get_cfg_var() reads them)
 ini=/tmp/stage/ini.part
 : > "$ini"
-INI_EXTRA="$(php -r 'if (preg_match("/^[ \t]*php_ini:[ \t]*\"((?:[^\"\\\\]|\\\\.)*)\"/m", (string)@file_get_contents($argv[1]), $m)) echo stripcslashes($m[1]);' "$GAME_DIR/config/game.yaml")"
+INI_EXTRA="$(php -r 'if (preg_match("/^[ \t]*php_ini:[ \t]*\"((?:[^\"\\\\]|\\\\.)*)\"/m", (string)@file_get_contents($argv[1]), $m)) echo stripcslashes($m[1]);' "$(project_yaml "$GAME_DIR")")"
 INI="${JUMPHP_STANDALONE_INI:-}${INI_EXTRA:+${JUMPHP_STANDALONE_INI:+
 }$INI_EXTRA}"
 if [ -n "$INI" ]; then

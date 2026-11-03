@@ -202,3 +202,12 @@ Seen 2026-11-02: two downloads of the installers out of six stopped half way thr
 Tried again the same evening: three downloads whole (Linux 5.4 MB/s, macOS 1 MB/s, Windows 0.4 MB/s). Likely
 transient (David). The executables stay behind Cloudflare. If it comes back: a cache rule on /installers/download/
 (the download counted another way), FrankenPHP's file server instead of PHP streaming them, Range requests.
+
+## Projects: progress, branches, sharing
+
+- done (2026-11-03, not released yet): a project's progress set by its owner (`stage`: dev / beta / done; jumphp.net
+  Studio, `update_project stage`, the IDE's Publish > Settings); "ready" is now shown as "published"
+- done (2026-11-03, not released yet): `/rc` (or `/remote-control`) in the IDE's Claude pane: the conversation goes on
+  in the Terminal as `claude --remote-control --resume <session>`
+- the IDE: branches and merges (create, switch, merge, conflicts)
+- a project shared with several users, each with read or read + write rights (jumphp.net and the IDE)

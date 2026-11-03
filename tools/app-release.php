@@ -13,7 +13,7 @@ $fail = static function (string $message): never {
 };
 $base === '' && $fail('usage: app-release.php <app dir> <key file> <base url> [notes]');
 
-$yaml = (string)file_get_contents("$dir/config/game.yaml");
+$yaml = (string)file_get_contents(is_file("$dir/config/project.yaml") ? "$dir/config/project.yaml" : "$dir/config/game.yaml");
 $value = static fn (string $key, string $default): string =>
     preg_match('/^\s*' . preg_quote($key, '/') . ':\s*["\']?([^"\'#\n]*?)["\']?\s*(#.*)?$/m', $yaml, $m) && $m[1] !== '' ? $m[1] : $default;
 $id = $value('id', basename($dir));

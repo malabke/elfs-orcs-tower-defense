@@ -9,7 +9,7 @@ widgets, move them, set them in the inspector, and **double click a widget to wr
 as in the visual tools of old.
 
 ```bash
-bin/jumphp gui:new contacts "Contacts"            # a desktop app (games/contacts, from skeleton-gui/)
+bin/jumphp gui:new contacts "Contacts"            # a desktop app (apps/contacts, from skeleton-gui/)
 bin/jumphp gui:new notes "Notes" --mobile         # a phone app (portrait window, installable)
 bin/jumphp install contacts
 bin/jumphp run contacts                           # the window
@@ -23,8 +23,8 @@ bin/jumphp android contacts / bin/jumphp apple contacts   # phone apps (docs/and
 ## An app
 
 ```
-games/contacts/
-  config/game.yaml            kind: gui, view: window (the view is the window: forms lay themselves out in it), touch: false
+apps/contacts/
+  config/project.yaml            kind: gui, view: window (the view is the window: forms lay themselves out in it), touch: false
   forms/MainForm.form.yaml    the window: its widgets (written by the visual editor; plain YAML by hand too)
   src/Form/MainForm.php       the code behind it: a class extending JumPHP\Gui\Form (a scene)
   assets/fonts/ui.ttf         the text font (Lato, OFL; ui-bold.ttf for bold): replace them to change the look

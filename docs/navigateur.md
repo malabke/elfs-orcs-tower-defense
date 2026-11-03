@@ -12,7 +12,7 @@ Le même PHP tourne dans le navigateur, avec ces différences :
 | Textures | largeur ≤ 4064 px (WebGL) | `Sdl::loadTexture` découpe seul ; `getTextures()` rend les tranches |
 | Blend modes | absents du binding SDL | `fillRect` avec alpha (texture 1×1 translucide), PNG avec alpha, images pré-teintées |
 | Shaders, 3D | pas d'OpenGL dans le binding | `$engine->gl()` (WebGL, navigateur seulement : [api-web.md](api-web.md)) |
-| Onglet masqué | plus de frames (`requestAnimationFrame` s'arrête) | `lifecycle()->on('hide')` est appelé tout de suite ; `pause_scene` dans game.yaml |
+| Onglet masqué | plus de frames (`requestAnimationFrame` s'arrête) | `lifecycle()->on('hide')` est appelé tout de suite ; `pause_scene` dans project.yaml |
 | Son | démarre après un geste de l'utilisateur | la page affiche « CLICK / TAP TO PLAY » une fois chargée |
 | Quitter | une page ne se ferme pas | `Engine::quit()` → `?back=URL` ou « THANKS FOR PLAYING » |
 | Performances | ~2-4× plus lent que le natif | peu d'objets créés par frame, textures en cache, `FixedStep` raisonnable |

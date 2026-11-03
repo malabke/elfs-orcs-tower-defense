@@ -60,6 +60,8 @@ tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C li
 ide/                    JumPHP IDE: package jumphp/ide, PHP core (JumPHP\Ide\) + HTML interface, shared by games/ide
                         (the desktop app) and jumphp.net/ide (docs/ide.md)
 games/<id>/             the games (games/pong = the reference game: read it)
+apps/<id>/              the other projects: apps, CLI apps, IDE plugins (made by app:new / gui:new / cli:new /
+                        plugin:new; older projects keep them in games/, every command finds both)
 docker/                 engine-wasm (WebAssembly build), desktop (runtime), desktop-async (PHP 8.6 ZTS + TrueAsync),
                         relay (network server), web (FrankenPHP), ext (php-opengl.patch, jumphp-xvfb: shared by them),
                         server (bin/jumphp deploy: FrankenPHP alone / Traefik + FrankenPHP / existing Traefik)
@@ -73,7 +75,7 @@ A game folder:
 games/<id>/
   app.php               desktop entry point (do not change)
   composer.json         namespace App\ -> src/, requires jumphp/engine (path ../../engine)
-  config/game.yaml      id, title, resolution, first scene, smoke test...
+  config/project.yaml      id, title, resolution, first scene, smoke test...  (older projects: config/game.yaml under game:, still read)
   config/services.yaml  dependency injection (every class of src/ is autowired, except src/Entity)
   config/input.yaml     actions -> keys / pad / touch
   config/lang.yaml      translations
@@ -112,7 +114,7 @@ games/<id>/
    alpha to `Renderer::fillRect()` (handled), or use PNGs with alpha. Tinting: pre-coloured images (or
    `createTextureFromPixels` with another palette). Textures ≤ 4064 px wide (Sdl slices wider images itself).
 7. **Draw only in `render()`, change state only in `update()`.** Coordinates are virtual pixels
-   (`game.yaml` width × height); the engine scales to the window.
+   (`project.yaml` width × height); the engine scales to the window.
 8. **Scenes are reused** (one instance per class, from the container): reset ALL state in `enter()`.
 9. **No `declare(strict_types=1)`** required, PHP 8.2 syntax max (the desktop runs 8.5, the browser 8.5).
    Code, identifiers and comments in English. Follow the style of `games/pong`.
@@ -134,7 +136,7 @@ games/<id>/
 | `bin/jumphp new <id> ["Title"]` | creates `games/<id>` from `skeleton/` (id: `a-z0-9-`) |
 | `bin/jumphp install <id>` | composer install of the game |
 | `bin/jumphp composer <id> require vendor/pkg` | composer (pure-PHP packages only: no extension exists in the browser) |
-| `bin/jumphp run <id>` | plays on the desktop (window + sound). Needs a display; not usable by an agent without a screen. Without `<id>`: the folder of `games/` it is typed in, else `JUMPHP_GAME` (.env), else the only game |
+| `bin/jumphp run <id>` | plays on the desktop (window + sound). Needs a display; not usable by an agent without a screen. Without `<id>`: the folder of `games/` or `apps/` it is typed in, else `JUMPHP_APP` (or the older `JUMPHP_GAME`, .env), else the only project |
 | `bin/jumphp test <id>` | `php -l`, phpstan (level 5, if `phpstan.neon` and `bin/jumphp test engine` ran once), phpunit (`tests/` if any, game tests included), **headless smoke test** (600 frames, any PHP warning = failure) |
 | `bin/jumphp shot <id> [frames] [out.png]` | **headless screenshot**: runs N frames (default 120) and saves a PNG in `games/<id>/var/screenshots/` — open it to SEE the game |
 | `bin/jumphp build <id>` | browser build → `games/<id>/dist/web/` (static files) |
@@ -223,7 +225,7 @@ bin/jumphp shot breakout 60       # look at games/breakout/var/screenshots/shot.
 The skeleton is a tiny platformer (title menu, options, a level with slopes, a player, coins, a pause menu).
 Replace its scenes and entities with your game:
 
-1. **`config/game.yaml`** (all keys under `game:`; every one is optional):
+1. **`config/project.yaml`** (all keys under `project:`; every one is optional):
 
    | Key | Default | |
    |---|---|---|
@@ -256,7 +258,7 @@ Replace its scenes and entities with your game:
    `assets/fonts/`, `assets/icon.png` (page icon), `assets/thumbnail.png` (games portal). **No asset is
    required**: draw with rectangles, `createTextureFromPixels()` (pixel art in code), GD, the built-in
    `BitmapFont`, and `Synth` sounds.
-6. Replace the skeleton leftovers: `description` in game.yaml, `README.md`, `AGENTS.md`, unused `lang.yaml`
+6. Replace the skeleton leftovers: `description` in project.yaml, `README.md`, `AGENTS.md`, unused `lang.yaml`
    entries, `src/Entity/Coin.php`...
 7. **Game tests as you go** (§10 "Game tests"): each mechanic you write gets a test that plays it, run at once
    with `bin/jumphp test <id>` (the user watches them play); `bin/jumphp shot <id>`; iterate.
@@ -361,7 +363,7 @@ Hide `QUIT` in the browser: `if (Platform::isDesktop())`.
 **Hot reload** (the playground's online editor and sandbox, ⚡ Live): a file saved goes into the running game
 without reloading the page (`engine/src/Debug/HotReload.php`). Pictures, sounds, `lang.yaml`, `input.yaml`:
 replaced in place. Another data file: the current scene is entered again with its parameters. PHP code,
-`game.yaml`, `services.yaml`, `composer.json`: PHP restarts in the same WebAssembly engine and boots straight
+`project.yaml`, `services.yaml`, `composer.json`: PHP restarts in the same WebAssembly engine and boots straight
 into the scene that was playing. Its fields are then fresh; a scene whose state is worth keeping while one
 tunes the game (the room, the score, the player's position) implements `JumPHP\Scene\HotReloadable`:
 
@@ -578,7 +580,7 @@ applied; `lx ly rx ry`, triggers `lt rt` 0..1), `isButtonHeld(0, 'a')`, `count()
 Desktop: SDL joystick events with an Xbox / PlayStation table (no hat events in the binding: a d-pad seen as
 a hat is invisible there, the left stick works).
 In the browser, phones get an on-screen pad (arrows + A/B/START buttons; set their keys in
-`game.yaml touch: {a: Space, b: Escape, start: Return}`).
+`project.yaml touch: {a: Space, b: Escape, start: Return}`).
 
 **Sound** (`$this->sound()`, `SoundManager`): `loadSfx('jump', 'assets/sfx/jump.wav')`,
 `synth('jump', Synth::sweep(300, 900, 0.15))` (generated: `Synth::tone($hz, $s, 'square'|'triangle'|'sine'|'saw')`,
@@ -600,7 +602,7 @@ Prefer counting `$dt` in the scene (timers keep running when the scene changes: 
 `$this->scenes()->current() === $this` in the callback).
 
 **Network** (online multiplayer, same code desktop and browser):
-1. `bin/jumphp relay up` (server on `ws://localhost:8090/ws`; `game.yaml net_url`, or `?net=wss://host/ws` in the page URL, or env `JUMPHP_NET_URL`).
+1. `bin/jumphp relay up` (server on `ws://localhost:8090/ws`; `project.yaml net_url`, or `?net=wss://host/ws` in the page URL, or env `JUMPHP_NET_URL`).
 2. Lobby: `$this->scenes()->switchTo(LobbyScene::class, ['next' => PlayScene::class, 'nextParams' => ['mode' => 'online'], 'back' => TitleScene::class, 'players' => 2])`.
    It creates / joins (4-letter code) / quick-matches a room, then switches to `next` with
    `['online' => true, 'net' => NetSession, 'host' => bool, 'peer' => int] + nextParams`.
@@ -627,7 +629,7 @@ Prefer counting `$dt` in the scene (timers keep running when the scene changes: 
 procedural pictures) off the main thread, so the frame never waits.
 
 - One API, three backends (`Tasks::backend()`):
-  - `'threads'`: desktop with the **async runtime** (`runtime: async` in `game.yaml`: `bin/jumphp` runs the
+  - `'threads'`: desktop with the **async runtime** (`runtime: async` in `project.yaml`: `bin/jumphp` runs the
     game on PHP 8.6 ZTS + [TrueAsync](https://true-async.github.io), `docker/desktop-async`);
   - `'workers'`: **the browser**: a pool of Web Workers, each running its own PHP engine with the game's
     files (`engine/web/jumphp-worker.js`; cores - 1, at most 4; `?workers=N` in the page URL, 0 = none);
@@ -677,7 +679,7 @@ procedural pictures) off the main thread, so the frame never waits.
 hidden, app in background / window minimized), `blur` / `focus`, `online` / `offline`, `resize` (w, h),
 `orientation` ('landscape'|'portrait'), `fullscreen` (bool), `close` (page closing / game quitting: save NOW).
 `hide` and `close` run at once in the browser, between frames, and var/ is written to IndexedDB right after.
-Getters `isVisible()`, `hasFocus()`, `isOnline()`, `orientation()`, `size()`. game.yaml `pause_scene` pushes
+Getters `isVisible()`, `hasFocus()`, `isOnline()`, `orientation()`, `size()`. project.yaml `pause_scene` pushes
 your pause menu automatically; the sound is muted while hidden.
 
 **Phone features** (`$this->engine->device()`; what a device lacks does nothing): `vibrate(40)` / `vibrate([30,
@@ -722,7 +724,7 @@ desktop OpenAL Soft, browser Web Audio): `load('engine', 'assets/sfx/engine.wav'
 `setPitch()`, `isPlaying()`, `stop()`, `setDistance($reference, $rolloff, $max)`. Volume / mute follow SoundManager.
 Music and plain sound effects stay in SoundManager. Raw `openal_*` functions: `engine/stubs/openal.stub.php`.
 
-**PWA** (`$this->engine->pwa()`, game.yaml `pwa: true`): the build adds manifest, icons (from
+**PWA** (`$this->engine->pwa()`, project.yaml `pwa: true`): the build adds manifest, icons (from
 `assets/icon.png`, else the title's initial) and a service worker caching the whole build: installable, plays
 offline (https or localhost). `canInstall()` / `install()` (Task: true when accepted; put it in a menu),
 `isInstalled()`, `isOfflineReady()`, `updateReady()` / `applyUpdate()` (reloads into the newer build), events
@@ -807,7 +809,7 @@ passes and its frames show it.
 | Raw gl* calls break the 2D (wrong textures, black screen) | gl* only between `opengl()->begin()` and `end()` (or inside `program()` / `buffer()`...): SDL's GL state is saved / restored there |
 | A post shader is black in parts on some GPUs | mediump: big arguments to sin / cos lose all precision; `sin(3.14159 * fract(x))` |
 | `HttpError ... network error or CORS` in the browser only | the server must send `Access-Control-Allow-Origin` (fetch from a web page) |
-| PWA not installable / not offline | game.yaml `pwa`, https (or localhost), rebuild; the first visit fills the cache (`isOfflineReady()`) |
+| PWA not installable / not offline | project.yaml `pwa`, https (or localhost), rebuild; the first visit fills the cache (`isOfflineReady()`) |
 | `Class "App\..." not found` inside a thread | the thread only has the autoloader: use `JumPHP\Async` (it loads `vendor/autoload.php` there), not raw `Async\spawn_thread` without a bootloader |
 | `LogicException ... must be a static closure` | write `static fn () => ...` (or a static method) for work sent to `thread()` / `submit()` |
 | `ThreadTransferException`, `Cannot transfer a resource between threads` | a reference, a resource or an object with dynamic properties was sent to a thread (as an argument or a captured `use` variable): plain values only |
@@ -957,7 +959,7 @@ Then:
 - the site must vouch for the app, or it opens with an address bar: on the playground, `update_project` with
   `android_package` and `android_fingerprints`; on one's own server, `dist/android/assetlinks.json` served at
   `https://<domain>/.well-known/assetlinks.json` (`bin/jumphp deploy` serves `site/.well-known/` if you copy it there);
-- the name under the icon: game.yaml `pwa: {short_name: ...}` (12 characters show whole on most phones);
+- the name under the icon: project.yaml `pwa: {short_name: ...}` (12 characters show whole on most phones);
 - the Play Console is the user's (their developer account): list the steps (create the app with the same
   package, internal testing with the .aab, then **add Google Play's app signing fingerprint** with
   `update_project` too, store listing with `bin/jumphp shot` screenshots);
@@ -1032,7 +1034,7 @@ WebView), whose logic is PHP. Linux, Windows, macOS, and the same app in the bro
 When the user wants "an app", "a desktop application", "a tool with a window", "an HTML interface" (not a game):
 
 ```bash
-bin/jumphp app:new notes "Notes"     # games/notes from skeleton-app/ (config/game.yaml: ui: webview, main: App\Main)
+bin/jumphp app:new notes "Notes"     # apps/notes from skeleton-app/ (config/project.yaml: ui: webview, main: App\Main)
 bin/jumphp install notes
 bin/jumphp app:test notes            # php -l + phpstan + phpunit (AppTestCase) + the app for real on Xvfb: must pass
 bin/jumphp app:shot notes            # var/screenshots/app.png: OPEN IT and look
@@ -1049,7 +1051,7 @@ bin/jumphp build notes               # dist/web/: the same app in a web page (we
   `$app->on('page:event', fn ($payload, $window) => ...)`, `$app->window()->on('close-requested', fn (NativeEvent $e)
   => $e->preventDefault())`, timers with `$app->gameLoop->addPeriodicTimer()`, `$app->storage` / `options` / `http()` /
   `tasks()` as in games.
-- **Pages** in `ui/` (game.yaml `app.pages`): plain HTML / CSS / JS. `window.jumphp` is injected:
+- **Pages** in `ui/` (project.yaml `app.pages`): plain HTML / CSS / JS. `window.jumphp` is injected:
   `await jumphp.invoke('name', payload)`, `jumphp.send('event', payload)`, `jumphp.on('event', fn)`, and the built-in
   `jumphp.invoke('native.open' | 'native.save' | 'native.message' | 'native.confirm' | 'native.notify' | 'native.openUrl', {...})`.
 - **Native features from PHP** (any target, `JumPHP\Native`): `Dialog::message()`, `Dialog::confirm()`,
@@ -1061,16 +1063,16 @@ bin/jumphp build notes               # dist/web/: the same app in a web page (we
 - Also for apps (and hybrid games): `Clipboard::copy()` / `paste()`, `$app->tray($id, ['menu' => [...]])->on('menu', ...)`,
   `$app->globalShortcut('CmdOrCtrl+Shift+K', fn () => ...)`. `JUMPHP_TAURI_TRACE=1` prints every native command / event.
 - **Starting with the computer** (an exported app): `$app->autostart()->set(true)` / `isEnabled()` / `startedAtLogin()`;
-  game.yaml `app: {autostart: {default: true, hidden: true}}` (on at the first start; window hidden at login: a tray app).
+  project.yaml `app: {autostart: {default: true, hidden: true}}` (on at the first start; window hidden at login: a tray app).
 - **Menus**: `$app->window()->setMenu([['text' => 'File', 'items' => [['id' => 'open', 'text' => 'Open...',
   'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]], ...])` (check items: `'checked' => true`; roles: quit
   copy cut paste undo redo select_all...), `$app->window()->on('menu', fn (string $item, ?bool $checked) => ...)`,
   `setMenuItem()`; `$app->setMenu()` for the whole app. Test: `$this->menu('open')` in an AppTestCase.
 - **Updates** of an exported app: `bin/jumphp app:release <app> --url <base> [--linux] [--windows] [--macos]` (signed
-  update.json; the key stays in `~/.jumphp/keys`, `config/update.pub` is committed), game.yaml
+  update.json; the key stays in `~/.jumphp/keys`, `config/update.pub` is committed), project.yaml
   `app: {update: {url: <base>/update.json}}`, `$app->updater()->check()->then(fn (?Update $u) => $u?->install()
-  ->then(fn () => $app->updater()->relaunch()))`. Bump game.yaml `version` for each release.
-- **Hybrid games** (`ui: hybrid` in a game's game.yaml, `main: App\Desktop` optional, `app.window` optional): an SDL
+  ->then(fn () => $app->updater()->relaunch()))`. Bump project.yaml `version` for each release.
+- **Hybrid games** (`ui: hybrid` in a game's project.yaml, `main: App\Desktop` optional, `app.window` optional): an SDL
   game that also gets all this and HTML windows beside its own (`games/hello-hybrid`). Headless / browser / phones:
   a plain game, so scenes must check `Native::supports()` and use `App::current()?->send(...)`. `app: {embed: true}`:
   the game drawn **inside** the Tauri window (one window, `JumPHP\Tauri\EmbeddedGame`; not for OpenGL games).
@@ -1091,7 +1093,7 @@ Full guide: `docs/gui.md`. Example: `games/hello-gui`.
   (`final class <Name> extends JumPHP\Gui\Form`, a scene: `loaded($params)`, event methods named in the form file
   `events: {click: onSaveClick}`, `tick($dt)`). Widgets by id: `$this->save`; keep one `@property Button $save` line
   per widget id in the class docblock (the visual editor does it; do it when you edit the YAML by hand).
-- game.yaml: `kind: gui`, `view: window` (the view follows the window, pixel for pixel; sizes in forms are dp),
+- project.yaml: `kind: gui`, `view: window` (the view follows the window, pixel for pixel; sizes in forms are dp),
   `touch: false`, `start_scene: App\Form\MainForm`.
 - Layout like a web page without HTML: `column` / `row` / `grid` (12 columns, `span: {xs: 12, md: 6}` per screen
   width: xs < 600 dp, sm < 900, md < 1200, lg) / `stack` / `panel`; `gap`, `padding`, `items`, `justify`; children
@@ -1107,7 +1109,7 @@ Full guide: `docs/gui.md`. Example: `games/hello-gui`.
 ## 18. CLI apps: applications in the terminal
 
 When the user wants a command-line tool, "a CLI", "a TUI", a program "in the terminal": `bin/jumphp cli:new <id>
-"Title"` (`skeleton-cli/`, `config/game.yaml kind: cli`). Full guide: `docs/cli.md`. Example: `games/hello-cli`.
+"Title"` (`skeleton-cli/`, `config/project.yaml kind: cli`). Full guide: `docs/cli.md`. Example: `games/hello-cli`.
 
 - Commands: Symfony Console, one class per command in `src/Command/` (`#[AsCommand]`), registered in `src/Main.php`.
 - Full-screen screens: symfony/tui in `src/Ui/` (`Tui`, widgets, `onInput` / `onSelect` / `onSubmit`, `run()` /
@@ -1129,7 +1131,7 @@ When the user wants a command-line tool, "a CLI", "a TUI", a program "in the ter
 ## 19. Plugins of the JumPHP IDE (PHP)
 
 When the user wants to extend the JumPHP IDE (a tool window, an action, completion, checks of their files, a run
-configuration): `bin/jumphp plugin:new <id> "Title"` (`skeleton-plugin/`, `config/game.yaml kind: plugin`). Full
+configuration): `bin/jumphp plugin:new <id> "Title"` (`skeleton-plugin/`, `config/project.yaml kind: plugin`). Full
 guide: `docs/ide-plugins.md`. Example: `games/hello-plugin`.
 
 - `composer.json` `extra.jumphp-ide` (id, name, version, class) + `autoload` psr-4 in a namespace of its own

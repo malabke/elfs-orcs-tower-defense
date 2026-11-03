@@ -108,8 +108,8 @@ ensure_tauri_lib() {
 
 app_dir() {
   local dir; dir="$(game_dir "${1:-}")"
-  grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$ROOT/$dir/config/game.yaml" 2>/dev/null \
-    || die "$dir is not a desktop app (config/game.yaml: ui: webview). A game: bin/jumphp run / test / shot"
+  grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$(project_yaml "$ROOT/$dir")" 2>/dev/null \
+    || die "$dir is not a desktop app (config/project.yaml: ui: webview). A game: bin/jumphp run / test / shot"
   echo "$dir"
 }
 
@@ -143,12 +143,12 @@ app_display_flags() {
 cmd_app_new() {
   local name="${1:-}" title="${2:-}"
   [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "app name: lower case letters, digits and dashes (e.g. notes)"
-  [ -e "games/$name" ] && die "games/$name already exists"
+  [ -z "$(project_path "$name")" ] || die "$(project_path "$name") already exists"
   [ -n "$title" ] || title="$(echo "$name" | tr '-' ' ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2)} 1')"
-  mkdir -p games
-  cp -r skeleton-app "games/$name"
-  php_run "games/$name" -- php /workspace/tools/new-app.php "$name" "$title"
-  say "games/$name created. Next: bin/jumphp install $name && bin/jumphp app:run $name"
+  mkdir -p apps
+  cp -r skeleton-app "apps/$name"
+  php_run "apps/$name" -- php /workspace/tools/new-app.php "$name" "$title"
+  say "apps/$name created. Next: bin/jumphp install $name && bin/jumphp app:run $name"
 }
 
 cmd_app_run() {
@@ -239,9 +239,9 @@ app_export_macos() {
     JUMPHP_STANDALONE_INI=$'ffi.enable=1\nmemory_limit=512M' \
       cmd_export_standalone "$app" "--macos-$arch"
   done
-  local out="games/$app/dist/standalone"
+  local out="$(game_dir "$app")/dist/standalone"
   docker run --rm --user "$(id -u):$(id -g)" "${WS[@]}" -w /workspace "$DESKTOP_IMAGE" \
-    php tools/macos-app.php "games/$app" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
+    php tools/macos-app.php "$(game_dir "$app")" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
     || die "the .app was not made (see above)"
   # the two executables stay beside it: app:release offers them as updates of the .app (each Mac replaces its own)
   say "done: $out/$app-macos.zip ($(du -h "$ROOT/$out/$app-macos.zip" | cut -f1)): the .app inside, Apple silicon + Intel"
@@ -264,7 +264,7 @@ cmd_app_release() {
   done
   [ -n "$base" ] || die "where the files will be: bin/jumphp app:release $app --url https://example.com/$app"
   local keys="${JUMPHP_HOME:-$HOME/.jumphp}/keys" id
-  id="$(sed -nE 's/^ *id: *["'"'"']?([a-z0-9-]+).*/\1/p' "$ROOT/$dir/config/game.yaml" | head -1)"
+  id="$(sed -nE 's/^ *id: *["'"'"']?([a-z0-9-]+).*/\1/p' "$(project_yaml "$ROOT/$dir")" | head -1)"
   id="${id:-$app}"
   mkdir -p "$keys"; chmod 700 "$keys"
   # the public key first (the executables carry it: a first run of the tool makes the key, then stops for want
@@ -289,18 +289,18 @@ cmd_app_release() {
   docker run --rm --user "$(id -u):$(id -g)" "${WS[@]}" -v "$keys:/keys" -w /workspace "$DESKTOP_IMAGE" \
     php tools/app-release.php "$dir" "/keys/$id-update.pem" "$base" "$notes" "${platforms#,}" || die "update.json not written"
   say "done: $dir/dist/standalone/update.json: upload dist/standalone/ to $base"
-  echo "  The app checks it when game.yaml has  app: {update: {url: $base/update.json}}  (\$app->updater()->check())." >&2
+  echo "  The app checks it when project.yaml has  app: {update: {url: $base/update.json}}  (\$app->updater()->check())." >&2
   echo "  The signing key: $keys/$id-update.pem: keep a copy (without it, the apps already given can not be updated)." >&2
 }
 
 # run / test / shot of a desktop app's folder: the app:* commands (a game's folder: nothing changes)
 is_app() {
-  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$ROOT/games/$1/config/game.yaml" 2>/dev/null
+  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$(project_yaml "$ROOT/$(project_path "$1")")" 2>/dev/null
 }
 
 # a game with ui: hybrid (SDL + Tauri: native dialogs, tray, HTML windows; docs/tauri.md "Hybrid games")
 is_hybrid() {
-  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?hybrid' "$ROOT/games/$1/config/game.yaml" 2>/dev/null
+  [ -n "${1:-}" ] && grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?hybrid' "$(project_yaml "$ROOT/$(project_path "$1")")" 2>/dev/null
 }
 
 # run_game_hybrid <dir> <docker flags...>: what bin/jumphp run does for a hybrid game (its flags + the Tauri image)

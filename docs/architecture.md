@@ -57,7 +57,7 @@ partagés (un par scène). Pour le navigateur, `tools/dump-container.php` préco
 
 ## Configuration et paramètres
 
-`config/game.yaml` (`GameConfig::DEFAULTS` liste les clés). Le bureau lit aussi des variables
+`config/project.yaml` (`GameConfig::DEFAULTS` liste les clés). Le bureau lit aussi des variables
 d'environnement, le navigateur des constantes définies par la page (`Platform::setting()`) :
 `JUMPHP_WASM`, `JUMPHP_NET_URL` (`?net=`), `JUMPHP_ROOM` (`?room=`), `JUMPHP_LANG` (`?lang=`),
 `JUMPHP_DEBUG` (`?debug=1`), `JUMPHP_MOBILE`, et pour les tests `JUMPHP_SMOKE`, `JUMPHP_SCREENSHOT`,

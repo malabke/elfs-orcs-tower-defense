@@ -96,7 +96,7 @@ captures).
 toutes les 6 heures, il lit `games/ide/installer/update.json` sur main, vérifie sa signature, télécharge la version plus
 récente, vérifie son SHA-256 et remplace son exécutable en arrière-plan ; une notification propose alors *Restart Now*
 (sinon le prochain démarrage la lance). Aide > Check for Updates…, Aide > Update Automatically (activé par défaut).
-Publier une version : augmenter `version` dans game.yaml, puis `games/ide/tools/release.sh "Les nouveautés."` (export
+Publier une version : augmenter `version` dans project.yaml, puis `games/ide/tools/release.sh "Les nouveautés."` (export
 Linux, Windows, macOS, `update.json` signé avec `~/.jumphp/keys/ide-update.pem` — **gardez une copie de cette clé** —,
 release GitHub `ide-v<version>`, puis `update.json` et `version.json` poussés sur main). Les IDE plus anciens que la 0.1.3
 n'ont pas cette mise à jour : à réinstaller une fois.

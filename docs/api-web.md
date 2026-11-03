@@ -48,7 +48,7 @@ puis éventuellement un shader de post-traitement sur toute l'image :
   cette couleur et on dessine le HUD par-dessus. Une teinte plus sombre de la clé assombrit la 3D, ce qui
   fait marcher les fondus et les menus translucides ;
 - couche `above` : la 3D se dessine sur la 2D (alpha) ;
-- résolution `view` (la taille de game.yaml, gros pixels rétro) ou `native` (pixels de l'écran) ;
+- résolution `view` (la taille de project.yaml, gros pixels rétro) ou `native` (pixels de l'écran) ;
 - `setSupersample(2)` : la couche est dessinée deux fois plus grande puis lissée (bords sans escalier),
   dans la limite de 2560 pixels de large.
 
@@ -148,7 +148,7 @@ simples restent dans SoundManager. Sans périphérique (tests), le moteur prend 
 | `fullscreen` (bool) | plein écran | — |
 | `close` | la page se ferme (sauvegarder maintenant) | le jeu quitte |
 
-Options de game.yaml : `pause_scene: App\Scene\PauseScene` (empilée automatiquement quand le jeu est masqué ou
+Options de project.yaml : `pause_scene: App\Scene\PauseScene` (empilée automatiquement quand le jeu est masqué ou
 perd le focus, sauf au-dessus d'un menu ; `pause_on_blur: false` pour la limiter à `hide`) et
 `mute_when_hidden: true` (valeur par défaut).
 
@@ -181,7 +181,7 @@ donne une `HttpError` (réseau, délai dépassé, CORS).
 
 ## PWA (jeu installable, hors ligne) — `$this->engine->pwa()`
 
-`pwa: true` dans game.yaml, ou bien
+`pwa: true` dans project.yaml, ou bien
 `pwa: {name, short_name, display: fullscreen, orientation, theme_color, background_color}`.
 
 `bin/jumphp build` ajoute alors au jeu :

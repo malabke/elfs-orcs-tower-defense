@@ -1,5 +1,5 @@
 # A graphic PHP app (forms drawn by JumPHP\Gui, no HTML). Every key is optional (defaults: JumPHP\Kernel\GameConfig).
-game:
+project:
   id: skeleton-gui              # lower case, unique: also the app's data folder
   title: "JumPHP Forms"
   version: 0.1.0

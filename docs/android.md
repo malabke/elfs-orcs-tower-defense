@@ -1,7 +1,7 @@
 # The game on Google Play (Android app)
 
 `bin/jumphp twa <game> --url https://<where the game is online>` turns a game that is installable in the browser
-(a PWA: on the JumPHP playground every game is; on one's own server, game.yaml `pwa: true`) into an Android app
+(a PWA: on the JumPHP playground every game is; on one's own server, project.yaml `pwa: true`) into an Android app
 for Google Play: a **Trusted Web Activity**, the game's page in Chrome, full screen, no address bar, with its
 icon and name. The game itself stays on the web: an update of the game is in the app at once.
 

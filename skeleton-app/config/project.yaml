@@ -1,5 +1,5 @@
 # A desktop app (ui: webview). Every key is optional (docs/tauri.md).
-game:
+project:
   id: skeleton-app              # lower case, unique: also the app's identifier and its data folder
   title: "JumPHP App"
   version: 0.1.0

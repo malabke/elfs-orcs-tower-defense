@@ -16,7 +16,7 @@ CMDLINE_SHA1=e025545c62a8e64c7559119566a569fb1dec5f60
 BUILD_TOOLS=36.1.0
 PLATFORM=android-36
 SDK=/opt/android-sdk
-GAME_DIR="/workspace/games/$GAME"
+GAME_DIR="/workspace/games/$GAME"; [ -d "$GAME_DIR" ] || GAME_DIR="/workspace/apps/$GAME"
 TWA_JSON="$GAME_DIR/android/twa-manifest.json"
 PROJECT="/workspace/build/android/$GAME"
 OUT="$GAME_DIR/dist/android"

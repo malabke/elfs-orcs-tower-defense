@@ -1,5 +1,5 @@
 # The game. Every key is optional (defaults: JumPHP\Kernel\GameConfig::DEFAULTS).
-game:
+project:
   id: skeleton                  # lower case, unique: folder of the games portal, network room filter
   title: "JumPHP Skeleton"
   version: 0.1.0

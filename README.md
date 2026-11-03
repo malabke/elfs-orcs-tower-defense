@@ -100,7 +100,7 @@ bin/jumphp run mon-jeu
 ```
 
 Un jeu = des **scènes** (`src/Scene` : écran titre, partie, pause...) et des **entités** (`src/Entity`),
-plus trois fichiers de configuration (`config/game.yaml`, `input.yaml`, `lang.yaml`). Aucun asset n'est
+plus trois fichiers de configuration (`config/project.yaml`, `input.yaml`, `lang.yaml`). Aucun asset n'est
 obligatoire : police bitmap intégrée, pixel art dans le code, sons synthétisés.
 
 **Avec une IA** : [AGENTS.md](AGENTS.md) contient tout ce qu'il faut pour qu'un agent (Claude Code, etc.)
@@ -165,7 +165,7 @@ casse-briques `games/breakout` a été écrit ainsi, par une IA qui n'avait lu q
   dans le navigateur (WebSocket / WebRTC), avec son serveur relais.
 - **Serveur web** : [FrankenPHP](https://frankenphp.dev) (Caddy + PHP). Les jeux sont statiques ; FrankenPHP
   est là pour accueillir plus tard la partie PHP du portail de jeux (comptes, scores...).
-- **Threads** (optionnel) : `runtime: async` dans `game.yaml` fait tourner le jeu sur PHP 8.6 ZTS +
+- **Threads** (optionnel) : `runtime: async` dans `project.yaml` fait tourner le jeu sur PHP 8.6 ZTS +
   [TrueAsync](https://true-async.github.io) : `$this->engine->tasks()` envoie le travail lourd dans de vrais
   threads, la frame n'attend jamais. Dans le navigateur, la même API passe par un pool de Web Workers (un
   moteur PHP WebAssembly chacun) ; sur le runtime par défaut, elle répartit le travail entre les frames. Voir [docs/async.md](docs/async.md) et `games/hello-threads`.
@@ -299,7 +299,7 @@ bin/jumphp run my-game
 ```
 
 A game = **scenes** (`src/Scene`: title, play, pause...) and **entities** (`src/Entity`), plus three config
-files (`config/game.yaml`, `input.yaml`, `lang.yaml`). No asset is required: built-in bitmap font, pixel art
+files (`config/project.yaml`, `input.yaml`, `lang.yaml`). No asset is required: built-in bitmap font, pixel art
 in code, synthesized sounds.
 
 **With an AI**: [AGENTS.md](AGENTS.md) holds everything an agent (Claude Code, etc.) needs to build a game
@@ -364,7 +364,7 @@ breaker was written that way, by an AI that had only read this file.
   in the browser (WebSocket / WebRTC), with its relay server.
 - **Web server**: [FrankenPHP](https://frankenphp.dev) (Caddy + PHP). Games are static; FrankenPHP is there
   to host the PHP side of the future games portal (accounts, scores...).
-- **Threads** (optional): `runtime: async` in `game.yaml` runs the game on PHP 8.6 ZTS +
+- **Threads** (optional): `runtime: async` in `project.yaml` runs the game on PHP 8.6 ZTS +
   [TrueAsync](https://true-async.github.io): `$this->engine->tasks()` sends heavy work to real threads, the
   frame never waits. In the browser the same API uses a pool of Web Workers (one PHP WebAssembly engine
   each); on the default runtime it spreads the work over the frames.

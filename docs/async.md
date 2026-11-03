@@ -17,10 +17,10 @@ threads.
 | `JumPHP\Async` | sans threads : travail réparti entre les frames | vrais threads (pool, un thread par tâche) |
 | Navigateur | moteur WebAssembly PHP 8.5 ; `JumPHP\Async` passe par des **Web Workers** (voir plus bas) | idem |
 
-Un jeu choisit son runtime dans `config/game.yaml` :
+Un jeu choisit son runtime dans `config/project.yaml` :
 
 ```yaml
-game:
+project:
   runtime: async
 ```
 

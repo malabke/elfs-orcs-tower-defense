@@ -8,12 +8,12 @@ logique est en **PHP**. La fenêtre, la WebView, les boîtes de dialogue et les 
 [Tauri 2](https://tauri.app) ; le programme, c'est PHP.
 
 ```bash
-bin/jumphp app:new notes "Notes"      # games/notes à partir de skeleton-app/
+bin/jumphp app:new notes "Notes"      # apps/notes à partir de skeleton-app/
 bin/jumphp install notes
 bin/jumphp app:run notes              # une fenêtre sur ton écran
 bin/jumphp app:test notes             # php -l + phpstan + phpunit (sans fenêtre) + l'app pour de vrai sur un écran virtuel
-bin/jumphp app:shot notes             # games/notes/var/screenshots/app.png
-bin/jumphp app:export notes           # games/notes/dist/standalone/notes-linux-x86_64 : un seul fichier à donner
+bin/jumphp app:shot notes             # apps/notes/var/screenshots/app.png
+bin/jumphp app:export notes           # apps/notes/dist/standalone/notes-linux-x86_64 : un seul fichier à donner
 ```
 
 L'exemple : [`games/hello-desktop`](../games/hello-desktop), un bloc-notes (ouvrir / enregistrer avec les boîtes
@@ -49,19 +49,19 @@ Une seule bibliothèque pour toutes les apps : les pages sont servies depuis le 
 ## Une app
 
 ```
-games/notes/
+apps/notes/
   app.php                 exit(JumPHP\Tauri\App::boot(__DIR__)->run());
-  config/game.yaml        ui: webview, main: App\Main, app: {...}
+  config/project.yaml        ui: webview, main: App\Main, app: {...}
   src/Main.php            implémente JumPHP\Tauri\AppMain : commandes, listeners, timers
   ui/                     les pages : index.html, CSS, JS, images
   assets/icon.png         l'icône de la fenêtre
   tests/MainTest.php      étend JumPHP\Testing\AppTestCase
 ```
 
-`config/game.yaml` :
+`config/project.yaml` :
 
 ```yaml
-game:
+project:
   id: notes
   title: "Notes"
   version: 0.1.0
@@ -152,14 +152,14 @@ le **FFI** de PHP (n'importe quelle bibliothèque C du système) et les extensio
 
 ## Jeux hybrides (SDL + Tauri)
 
-Un jeu peut aussi piloter Tauri : `ui: hybrid` dans son `config/game.yaml`. Il reste un jeu SDL (scènes, fenêtre
+Un jeu peut aussi piloter Tauri : `ui: hybrid` dans son `config/project.yaml`. Il reste un jeu SDL (scènes, fenêtre
 SDL, son ; `app.php` inchangé) et gagne le côté natif des apps : `JumPHP\Native`, icône de zone de notification,
 raccourcis globaux, et des fenêtres HTML à côté de la sienne (panneau de contrôle, éditeur, lanceur…). Exemple :
 [`games/hello-hybrid`](../games/hello-hybrid) (des balles en SDL, un panneau de contrôle en HTML, « enregistrer une
 image » par le sélecteur de fichiers du système, un menu dans la zone de notification, Ctrl+Maj+P partout).
 
 ```yaml
-game:
+project:
   ui: hybrid
   main: App\Desktop                # facultatif : un AppMain (commandes des fenêtres HTML, icône, raccourcis)
   app:
@@ -204,7 +204,7 @@ micro qu'avant (même clé).
 
 | Commande | |
 |---|---|
-| `app:new <app> [titre]` | `games/<app>` depuis `skeleton-app/` |
+| `app:new <app> [titre]` | `apps/<app>` depuis `skeleton-app/` |
 | `app:run <app>` | l'app sur ton écran (X11, sinon Wayland ; bus de session pour les notifications ; GPU) |
 | `app:test <app>` | php -l, phpstan, phpunit, puis l'app pour de vrai sur Xvfb |
 | `app:shot <app> [frames] [out.png]` | la fenêtre principale après N frames |
@@ -253,7 +253,7 @@ Applications où la glisser).
 Une app exportée se met à jour elle-même (`$app->updater()`) : `bin/jumphp app:release <app> --url <adresse>
 [--notes "..."] [--linux] [--windows] [--macos]` exporte l'app et écrit un `update.json` **signé** (clé ECDSA dans
 `~/.jumphp/keys/<id>-update.pem`, à garder précieusement ; sa moitié publique dans `config/update.pub`, à commiter) ;
-on dépose `dist/standalone/` à cette adresse, et game.yaml `app: {update: {url: <adresse>/update.json}}`.
+on dépose `dist/standalone/` à cette adresse, et project.yaml `app: {update: {url: <adresse>/update.json}}`.
 `check()` vérifie la signature et la version, `install()` télécharge, vérifie le SHA-256 et remplace l'exécutable,
 `relaunch()` relance. `games/hello-desktop` a Aide > Check for updates (essayé pour de vrai : la 0.1.0 a trouvé,
 installé et relancé la 0.1.1). Détails : [tauri.md](tauri.md#updates).
@@ -265,7 +265,7 @@ Une app exportée peut se lancer quand l'utilisateur ouvre sa session (sans droi
 Windows, macOS ou Linux, pas `php app.php`), `isEnabled()`, `startedAtLogin()` (lancée par l'ordinateur : le drapeau
 `--autostart`). Windows : la valeur `<id>` de `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` ; macOS : un
 LaunchAgent `~/Library/LaunchAgents/<identifier>.plist` qui ouvre la `.app` ; Linux : `~/.config/autostart/<id>.desktop`.
-game.yaml `app: {autostart: {default: true, hidden: true}}` : activé au premier lancement (une fois, ensuite
+project.yaml `app: {autostart: {default: true, hidden: true}}` : activé au premier lancement (une fois, ensuite
 l'utilisateur décide), fenêtre principale cachée quand l'ordinateur l'a lancée (une app de la zone de notification).
 Une page demande avec `jumphp.invoke('native.autostart', {on: true})`. Exemple : `games/hello-desktop`, View > Start
 with the computer.

@@ -34,14 +34,15 @@ final class ProjectInfo
         $modules = [];
         $files = $this->workspace->files();
         foreach ($files as $path => $meta) {
-            if (preg_match('#^games/([a-z0-9][a-z0-9-]*)/config/game\.yaml$#', $path, $m)) {
-                $modules[] = $this->module($m[1], "games/{$m[1]}");
+            if (preg_match('#^(games|apps)/([a-z0-9][a-z0-9-]*)/config/(?:project|game)\.yaml$#', $path, $m) && !in_array("{$m[1]}/{$m[2]}", array_column($modules, 'dir'), true)) {
+                $modules[] = $this->module($m[2], "{$m[1]}/{$m[2]}");
             }
         }
-        $linked = !$jumphp && $this->workspace->exists('config/game.yaml');
+        $yamlFile = $this->workspace->exists('config/project.yaml') ? 'config/project.yaml' : 'config/game.yaml';
+        $linked = !$jumphp && $this->workspace->exists($yamlFile);
         if ($linked) {
             // a game in its own repository (composer.json -> ../../engine): run through the IDE's copy of JumPHP
-            $id = preg_match('/^\s*id:\s*["\']?([a-z0-9][a-z0-9-]*)/m', $this->workspace->read('config/game.yaml'), $m) ? $m[1]
+            $id = preg_match('/^\s*id:\s*["\']?([a-z0-9][a-z0-9-]*)/m', $this->workspace->read($yamlFile), $m) ? $m[1]
                 : (trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($this->workspace->name())), '-') ?: 'game');
             $modules[] = $this->module($id, '');
         }
@@ -62,7 +63,7 @@ final class ProjectInfo
     private function module(string $id, string $dir): array
     {
         $prefix = $dir === '' ? '' : "$dir/";
-        $yaml = $this->workspace->read($prefix . 'config/game.yaml');
+        $yaml = $this->workspace->read($prefix . ($this->workspace->exists($prefix . 'config/project.yaml') ? 'config/project.yaml' : 'config/game.yaml'));
         $get = fn (string $key) => preg_match('/^\s*' . $key . ':\s*["\']?([^"\'#\n]*?)["\']?\s*(?:#.*)?$/m', $yaml, $m) ? trim($m[1]) : null;
         $ui = $get('ui');
         $kind = $ui === 'webview' ? 'app' : ($ui === 'hybrid' ? 'hybrid' : (in_array($get('kind'), ['gui', 'cli', 'plugin'], true) ? $get('kind') : 'game'));

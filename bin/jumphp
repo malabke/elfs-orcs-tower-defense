@@ -4,9 +4,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CALLER_DIR="$PWD"     # where the command was typed (run inside games/<id>: that one)
+CALLER_DIR="$PWD"     # where the command was typed (run inside games/<id> or apps/<id>: that one)
 cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
+# JUMPHP_APP is the new name of JUMPHP_GAME (both read; the project a command means when none is named)
+JUMPHP_GAME="${JUMPHP_APP:-${JUMPHP_GAME:-}}"
 
 DESKTOP_IMAGE="${JUMPHP_DESKTOP_IMAGE:-jumphp/desktop:dev}"
 XDEBUG_IMAGE="${JUMPHP_XDEBUG_IMAGE:-jumphp/desktop-xdebug:dev}"
@@ -21,19 +23,22 @@ REPO_URL="${JUMPHP_REPO:-https://github.com/davidnurdin/jumPhp.git}"
 ENGINE_DIR="$ROOT/build/engine"
 BUILDER="${JUMPHP_BUILDER:-jumphp-builder}"
 TTY_FLAGS=$([ -t 0 ] && [ -t 1 ] && echo "-it" || echo "-i")
-# the project in the containers: /workspace. A game of games/ may be a symbolic link to a folder elsewhere (a game
-# kept in its own repository, its composer.json pointing at ../../engine: the JumPHP IDE links it into its copy of
-# JumPHP): then games/ is an empty folder in the container, each game mounted at /workspace/games/<id>.
+# the project in the containers: /workspace. Games are in games/<id>, the other projects (apps, CLI apps, IDE plugins)
+# in apps/<id> (older projects keep them in games/). A project folder may be a symbolic link to a folder elsewhere (a
+# project kept in its own repository, its composer.json pointing at ../../engine: the JumPHP IDE links it into its
+# copy of JumPHP): then that parent is an empty folder in the container, each project mounted at /workspace/<parent>/<id>.
 WS=(-v "$ROOT:/workspace")
-for _g in "$ROOT"/games/*; do
-  if [ -L "$_g" ] && [ -d "$_g" ]; then
-    # composer copies the engine into their vendor/ (a link to ../../engine would be broken outside the containers)
-    WS+=(--mount type=tmpfs,dst=/workspace/games -e COMPOSER_MIRROR_PATH_REPOS=1)
-    for _g in "$ROOT"/games/*; do [ -d "$_g" ] && WS+=(-v "$(cd "$_g" && pwd -P):/workspace/games/$(basename "$_g")"); done
-    break
-  fi
+for _p in games apps; do
+  for _g in "$ROOT/$_p"/*; do
+    if [ -L "$_g" ] && [ -d "$_g" ]; then
+      # composer copies the engine into their vendor/ (a link to ../../engine would be broken outside the containers)
+      WS+=(--mount "type=tmpfs,dst=/workspace/$_p" -e COMPOSER_MIRROR_PATH_REPOS=1)
+      for _g in "$ROOT/$_p"/*; do [ -d "$_g" ] && WS+=(-v "$(cd "$_g" && pwd -P):/workspace/$_p/$(basename "$_g")"); done
+      break
+    fi
+  done
 done
-unset _g
+unset _g _p
 
 say()  { printf '\033[1;36m==> %s\033[0m\n' "$*" >&2; }
 warn() { printf '\033[1;33m[!] %s\033[0m\n' "$*" >&2; }
@@ -82,13 +87,13 @@ Games (<game> = a folder of games/, e.g. pong)
   video <app> <file.mp4> [name] [fps]  a film as frames for the Video widget: assets/videos/<name>/ (+ audio.ogg)
   install <game>            composer install (engine linked from engine/)
   composer <game> <args>    any composer command in the game
-  run [game] [args...]      play on desktop (window + sound); no game: the folder of games/ you are in, else
-                            JUMPHP_GAME (.env), else the only game of games/
+  run [game] [args...]      play on desktop (window + sound); no id: the folder of games/ or apps/ you are in,
+                            else JUMPHP_APP (.env), else the only project
   test <game> [tests/X.php]  lint + phpstan (if configured) + phpunit (if tests/) + headless smoke test; a test file: only its tests
   shot <game> [frames] [out.png]   headless screenshot after N frames (default 120) -> var/screenshots/
   build <game>              browser build -> games/<game>/dist/web (static files)
   build:remote <game>       the game as a remote game (shared engine, files one by one) -> dist/remote
-  site:new <game> [--force] a first web site for the game in games/<game>/site/ (from game.yaml + screenshots of its demo)
+  site:new <game> [--force] a first web site for the game in games/<game>/site/ (from project.yaml + screenshots of its demo)
   build:site <game>         the game's web site (site/) + the game in play/ -> dist/site (what deploy sends)
   siteshot <game>           headless Chrome on dist/site: desktop + phone screenshots, broken images, JS errors
   serve <game> [port]       serve the browser build on http://localhost:<port> (default 8080)
@@ -130,16 +135,16 @@ Games (<game> = a folder of games/, e.g. pong)
                             branch of the git remote (GitHub Pages; the branch is replaced each time)
 
 CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; docs/cli.md)
-  cli:new <app> [title]     create games/<app> from skeleton-cli/ (config/game.yaml: kind: cli)
-  plugin:new <id> [title]   a plugin of the JumPHP IDE, in PHP: games/<id> from skeleton-plugin/ (docs/ide-plugins.md)
-  plugin:pack <id>          the plugin as games/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
+  cli:new <app> [title]     create apps/<app> from skeleton-cli/ (config/project.yaml: kind: cli)
+  plugin:new <id> [title]   a plugin of the JumPHP IDE, in PHP: apps/<id> from skeleton-plugin/ (docs/ide-plugins.md)
+  plugin:pack <id>          the plugin as apps/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
   debug                     the IDE's debugger for Claude Code in a terminal (MCP on stdin / stdout):
                             claude mcp add jumphp-debug -- bin/jumphp debug; then JUMPHP_XDEBUG=9003 bin/jumphp test <game>
                             then run <app> [command...] / test <app> / shot <app> (the screen as text: JUMPHP_KEYS)
                             / export:standalone <app> [--linux] [--windows] [--macos] (one executable, console kept)
 
 Desktop apps (Tauri: native windows with HTML / CSS / JS pages, driven by PHP; native only, docs/tauri.md)
-  app:new <app> [title]     create games/<app> from skeleton-app/ (config/game.yaml: ui: webview)
+  app:new <app> [title]     create apps/<app> from skeleton-app/ (config/project.yaml: ui: webview)
   app:run <app>             open the app on your screen
   app:test <app>            php -l + phpstan + phpunit (AppTestCase, no window) + the app on a virtual screen
   app:shot <app> [frames] [out.png]  the app's window after N frames (default 120) -> var/screenshots/app.png
@@ -169,28 +174,50 @@ Environment (headless runs): JUMPHP_SCENE, JUMPHP_SCENE_PARAMS, JUMPHP_INPUT, JU
 EOF
 }
 
-# the game / app a command means when none is named: the folder of games/ it is typed in, else JUMPHP_GAME (.env),
-# else the only one of games/ (none of these: empty)
+# the folder of a project, relative to the root: games/<id>, else apps/<id> (empty when neither exists)
+project_path() {
+  local id="${1:-}" p
+  [ -n "$id" ] || return 0
+  for p in games apps; do [ -d "$ROOT/$p/$id" ] && { echo "$p/$id"; return; }; done
+  return 0
+}
+
+# a project folder's settings: config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
+
+# the ids of every project (games/ then apps/) that has a composer.json
+all_projects() {
+  local g
+  for g in "$ROOT"/games/*/ "$ROOT"/apps/*/; do [ -f "$g/composer.json" ] && basename "$g"; done
+  return 0
+}
+
+# the project a command means when none is named: the folder of games/ or apps/ it is typed in, else JUMPHP_APP /
+# JUMPHP_GAME (.env), else the only project (none of these: empty)
 default_game() {
-  case "$CALLER_DIR/" in "$ROOT/games/"*/*) local rest="${CALLER_DIR#"$ROOT/games/"}"; echo "${rest%%/*}"; return ;; esac
-  if [ -n "${JUMPHP_GAME:-}" ] && [ -d "$ROOT/games/$JUMPHP_GAME" ]; then echo "$JUMPHP_GAME"; return; fi
-  local all=() g
-  for g in "$ROOT"/games/*/; do [ -f "$g/composer.json" ] && all+=("$(basename "$g")"); done
+  local p rest
+  for p in games apps; do
+    case "$CALLER_DIR/" in "$ROOT/$p/"*/*) rest="${CALLER_DIR#"$ROOT/$p/"}"; echo "${rest%%/*}"; return ;; esac
+  done
+  if [ -n "$JUMPHP_GAME" ] && [ -n "$(project_path "$JUMPHP_GAME")" ]; then echo "$JUMPHP_GAME"; return; fi
+  local all=()
+  mapfile -t all < <(all_projects)
   [ ${#all[@]} -eq 1 ] && echo "${all[0]}"
   return 0
 }
 
 game_dir() {
-  local g="${1:-}"
-  [ -n "$g" ] || die "missing <game> (a folder of games/)"
-  [ -d "$ROOT/games/$g" ] || die "games/$g does not exist (bin/jumphp new $g)"
-  echo "games/$g"
+  local g="${1:-}" d
+  [ -n "$g" ] || die "missing <project> (a folder of games/ or apps/)"
+  d="$(project_path "$g")"
+  [ -n "$d" ] || die "no games/$g nor apps/$g (bin/jumphp new $g, or cli:new / gui:new / app:new / plugin:new)"
+  echo "$d"
 }
 
 # runtime of a game folder: JUMPHP_RUNTIME, else `runtime:` in its config/game.yaml, else "default"
 game_runtime() {
   if [ -n "${JUMPHP_RUNTIME:-}" ]; then echo "$JUMPHP_RUNTIME"; return; fi
-  local yaml="$ROOT/$1/config/game.yaml"
+  local yaml; yaml="$(project_yaml "$ROOT/$1")"
   if [ -f "$yaml" ] && grep -qE '^[[:space:]]*runtime:[[:space:]]*["'"'"']?async' "$yaml"; then echo async; else echo default; fi
 }
 
@@ -384,13 +411,13 @@ cmd_update() {
   git -C "$ROOT" fetch -q "$remote" main || die "cannot fetch JumPHP ($remote)"
   if ! git -C "$ROOT" rev-parse -q --verify HEAD >/dev/null || ! git -C "$ROOT" merge-base HEAD FETCH_HEAD >/dev/null 2>&1; then
     # a project with its own history (made by the IDE or composer create-project): JumPHP's files are brought to the
-    # newest (bin, engine, tools, docker...), the project's own (games/, README.md, .env) never touched
+    # newest (bin, engine, tools, docker...), the project's own (games/, apps/, README.md, .env) never touched
     local latest; latest="$(git -C "$ROOT" rev-parse FETCH_HEAD)"
     local entries=(); local e
     while IFS= read -r e; do
-      case "$e" in games|README.md|.jumphp|.env|.git) ;; *) entries+=("$e") ;; esac
+      case "$e" in games|apps|README.md|.jumphp|.env|.git) ;; *) entries+=("$e") ;; esac
     done < <(git -C "$ROOT" ls-tree --name-only FETCH_HEAD)
-    say "bringing JumPHP's files to ${latest:0:12} (${entries[*]}); games/ untouched"
+    say "bringing JumPHP's files to ${latest:0:12} (${entries[*]}); games/ and apps/ untouched"
     git -C "$ROOT" restore --source=FETCH_HEAD --worktree -- "${entries[@]}" || die "JumPHP's files not updated"
     mkdir -p "$ROOT/.jumphp"
     printf '{\n    "repository": "%s",\n    "commit": "%s",\n    "updated": "%s"\n}\n' "$REPO_URL" "$latest" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ROOT/.jumphp/jumphp.json"
@@ -406,7 +433,7 @@ cmd_update() {
 cmd_new() {
   local name="${1:-}" title="${2:-}"
   [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "game name: lower case letters, digits and dashes (e.g. space-race)"
-  [ -e "games/$name" ] && die "games/$name already exists"
+  [ -z "$(project_path "$name")" ] || die "$(project_path "$name") already exists"
   [ -n "$title" ] || title="$(echo "$name" | tr '-' ' ' | tr '[:lower:]' '[:upper:]')"
   mkdir -p games
   cp -r skeleton "games/$name"
@@ -424,12 +451,12 @@ cmd_gui_new() {
     esac
   done
   [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] || die "app name: lower case letters, digits and dashes (e.g. contacts)"
-  [ -e "games/$name" ] && die "games/$name already exists"
+  [ -z "$(project_path "$name")" ] || die "$(project_path "$name") already exists"
   [ -n "$title" ] || title="$(echo "$name" | tr '-' ' ' | awk '{for (i = 1; i <= NF; i++) $i = toupper(substr($i, 1, 1)) substr($i, 2)} 1')"
-  mkdir -p games
-  cp -r skeleton-gui "games/$name"
-  php_run "games/$name" -- php /workspace/tools/new-gui.php "$name" "$title" "$mobile"
-  say "games/$name created. Next: bin/jumphp install $name && bin/jumphp run $name (forms/*.form.yaml: the IDE's visual editor)"
+  mkdir -p apps
+  cp -r skeleton-gui "apps/$name"
+  php_run "apps/$name" -- php /workspace/tools/new-gui.php "$name" "$title" "$mobile"
+  say "apps/$name created. Next: bin/jumphp install $name && bin/jumphp run $name (forms/*.form.yaml: the IDE's visual editor)"
 }
 
 # a film -> numbered pictures + its sound, for JumPHP\Gui\Video (SDL's binding decodes no video)
@@ -871,7 +898,7 @@ cmd_installer() {
     compgen -G "$ROOT/$dir/dist/apple/*-macos.zip" >/dev/null || compgen -G "$ROOT/$dir/dist/standalone/*-macos.zip" >/dev/null \
       || { is_cli "$game" && compgen -G "$ROOT/$dir/dist/standalone/*-macos-arm64" >/dev/null; } && platforms+=(macos)
   fi
-  [ -n "$version" ] || version="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*["'"'"']?([^"'"'"' #]+).*/\1/p' "$ROOT/$dir/config/game.yaml" | head -1)"
+  [ -n "$version" ] || version="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*["'"'"']?([^"'"'"' #]+).*/\1/p' "$(project_yaml "$ROOT/$dir")" | head -1)"
   [ -n "$version" ] || version=1.0
   local repo=""
   if [ "$target" = github ]; then
@@ -971,9 +998,9 @@ cmd_cli_uninstall() {
 
 cmd_run() {
   # `bin/jumphp run` alone, or followed by the program's own arguments (a CLI app's command): the default game
-  if [ -z "${1:-}" ] || [ ! -d "$ROOT/games/$1" ]; then
+  if [ -z "${1:-}" ] || [ -z "$(project_path "$1")" ]; then
     local g; g="$(default_game)"
-    [ -n "$g" ] || die "which game? bin/jumphp run <game> (or run it inside games/<game>/, or set JUMPHP_GAME in .env)"
+    [ -n "$g" ] || die "which project? bin/jumphp run <id> (or run it inside games/<id>/ or apps/<id>/, or set JUMPHP_APP in .env)"
     set -- "$g" "$@"
   fi
   if is_app "${1:-}"; then cmd_app_run "$@"; return; fi
@@ -1105,10 +1132,10 @@ cmd_build() {
 # The game's own web site (games/<id>/site/, AGENTS.md "A web site for the game") at the root of <out>, the
 # browser build in <out>/play/; {{DOMAIN}} replaced in its text files (canonical links, sitemap, og:image).
 assemble_site() {
-  local game="$1" out="$2" domain="$3" pages="$ROOT/games/$1/site"
+  local game="$1" out="$2" domain="$3" pages="$ROOT/$(project_path "$1")/site"
   mkdir -p "$out"
   cp -r "$pages/." "$out/"
-  rm -rf "$out/play" && cp -r "$ROOT/games/$game/dist/web" "$out/play"
+  rm -rf "$out/play" && cp -r "$ROOT/$(project_path "$game")/dist/web" "$out/play"
   (cd "$pages" && find . -type f \( -name '*.html' -o -name '*.xml' -o -name '*.txt' -o -name '*.json' -o -name '*.webmanifest' \)) |
     while read -r file; do
       sed "s#{{DOMAIN}}#$domain#g" "$pages/$file" > "$out/$file"
@@ -1232,13 +1259,13 @@ cmd_server_deploy() {
   local out="$ROOT/.build/server"
   rm -rf "$out" && mkdir -p "$out/site"
   for game in "${games[@]}"; do game_dir "$game" >/dev/null; cmd_build "$game"; done
-  local pages="$ROOT/games/${games[0]}/site"
+  local pages="$ROOT/$(project_path "${games[0]}")/site"
   if [ ${#games[@]} -eq 1 ] && [ -f "$pages/index.html" ]; then
     assemble_site "${games[0]}" "$out/site" "$JUMPHP_DOMAIN"
   elif [ ${#games[@]} -eq 1 ]; then
-    cp -r "$ROOT/games/${games[0]}/dist/web/." "$out/site/"
+    cp -r "$ROOT/$(project_path "${games[0]}")/dist/web/." "$out/site/"
   else
-    for game in "${games[@]}"; do cp -r "$ROOT/games/$game/dist/web" "$out/site/$game"; done
+    for game in "${games[@]}"; do cp -r "$ROOT/$(project_path "$game")/dist/web" "$out/site/$game"; done
     php_run . -- php tools/pages-index.php .build/server/site "" "${games[@]}"
   fi
   cp "$ROOT/docker/server/$mode/compose.yaml" "$out/compose.yaml"
@@ -1354,7 +1381,7 @@ cmd_pages() {
   local games=("$@")
   if [ ${#games[@]} -eq 0 ]; then
     # desktop apps (ui: webview) have no browser build: not published
-    for d in "$ROOT"/games/*/; do [ -f "$d/config/game.yaml" ] && ! is_app "$(basename "$d")" && ! is_cli "$(basename "$d")" && ! is_plugin "$(basename "$d")" && games+=("$(basename "$d")"); done
+    for d in "$ROOT"/games/*/ "$ROOT"/apps/*/; do [ -f "$(project_yaml "$d")" ] && ! is_app "$(basename "$d")" && ! is_cli "$(basename "$d")" && ! is_plugin "$(basename "$d")" && games+=("$(basename "$d")"); done
   fi
   [ ${#games[@]} -gt 0 ] || die "no game to publish"
 
@@ -1363,7 +1390,7 @@ cmd_pages() {
   for game in "${games[@]}"; do
     game_dir "$game" >/dev/null
     cmd_build "$game"
-    cp -r "$ROOT/games/$game/dist/web" "$site/$game"
+    cp -r "$ROOT/$(project_path "$game")/dist/web" "$site/$game"
   done
   touch "$site/.nojekyll"   # serve files as they are (no Jekyll processing)
 
