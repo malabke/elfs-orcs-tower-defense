@@ -437,7 +437,8 @@ with two executables (Apple silicon, Intel: micro + the app), a launcher that st
 inside. macOS 12 or newer. The app's cache and data go to `~/Library/Caches/JumPHP` and
 `~/Library/Application Support/<id>`. It is not signed (Apple's developer account): the first time, right click on
 the app > Open. The workflow `app-export` (Actions > app-export) exports an app and opens it for real on an Apple
-silicon Mac and an Intel Mac (and on Ubuntu).
+silicon Mac and an Intel Mac (and on Ubuntu), then makes its **.dmg** (`hdiutil` only exists on a Mac): the
+artifact `dmg` of the run, `<app>-macos.dmg` (the .app and a link to Applications to drag it onto).
 
 ## In the browser, on phones
 

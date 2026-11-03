@@ -1,6 +1,7 @@
 # A desktop app exported as players get it (bin/jumphp app:export, docs/tauri.md), then started for real on each
 # system with nothing of JumPHP installed: the .app on an Apple silicon Mac and on an Intel Mac, the Linux executable
-# on Ubuntu (+ WebKitGTK). Its page must load and call PHP (JUMPHP_SMOKE). Run by hand (Actions > app-export).
+# on Ubuntu (+ WebKitGTK). Its page must load and call PHP (JUMPHP_SMOKE). Also makes the .dmg of the .app (artifact
+# "dmg": <app>-macos.dmg). Run by hand (Actions > app-export).
 name: app-export
 
 on:
@@ -49,6 +50,22 @@ jobs:
           exe="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")"
           "$exe" 2>&1 | tee run.log
           grep -q 'smoke test OK' run.log
+      # the .dmg players expect on a Mac (hdiutil only exists on macOS): the .app and a link to /Applications to
+      # drag it onto; made from a fresh copy of the zip (the run above may have written next to the app)
+      - name: The .dmg
+        if: matrix.os == 'macos-15'
+        run: |
+          mkdir dmg && ditto -x -k "${{ inputs.app }}-macos.zip" dmg
+          ln -s /Applications dmg/Applications
+          name="$(basename "$(ls -d dmg/*.app)" .app)"
+          hdiutil create -volname "$name" -srcfolder dmg -ov -format UDZO "${{ inputs.app }}-macos.dmg"
+          hdiutil verify "${{ inputs.app }}-macos.dmg"
+          ls -la "${{ inputs.app }}-macos.dmg"
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-15'
+        with:
+          name: dmg
+          path: ${{ inputs.app }}-macos.dmg
 
   linux:
     needs: export

@@ -11,7 +11,6 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
   Tauri's mobile loop is driven by the activity / UIKit, so PHP has to be embedded in the app (the PHP builds of
   `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
 - signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
-- a .dmg for macOS (the zip of the .app works; `hdiutil` only exists on a Mac: the workflow could make it)
 - native apps that start with the computer: `app: {autostart: true}` (or `$app->autostart(true)`, a setting the user
   turns on): Windows (Run registry key / Startup folder), macOS (a LaunchAgent / SMAppService login item), Linux
   (~/.config/autostart/*.desktop); often with the tray and no window at start (`--hidden`); the installers

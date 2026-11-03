@@ -246,7 +246,9 @@ sur Debian 13, Ubuntu 24.04, Fedora 42 et Arch nus. Windows (WebView2) et macOS 
 `bin/jumphp app:export <app> --macos` (depuis Linux, dans Docker) produit `dist/standalone/<app>-macos.zip` : une
 `<Titre>.app` avec deux exécutables (Apple silicon, Intel), un lanceur qui démarre celui du Mac, `Info.plist` et
 l'icône ; macOS 12 ou plus ; non signée (compte développeur Apple) : la première fois, clic droit > Ouvrir. Le
-workflow `app-export` l'exporte et l'ouvre pour de vrai sur un Mac Apple silicon et un Mac Intel.
+workflow `app-export` l'exporte, l'ouvre pour de vrai sur un Mac Apple silicon et un Mac Intel, puis fabrique son
+**.dmg** (`hdiutil` n'existe que sur Mac) : l'artefact `dmg` du run, `<app>-macos.dmg` (l'app et un lien vers
+Applications où la glisser).
 
 Une app exportée se met à jour elle-même (`$app->updater()`) : `bin/jumphp app:release <app> --url <adresse>
 [--notes "..."] [--linux] [--windows] [--macos]` exporte l'app et écrit un `update.json` **signé** (clé ECDSA dans
