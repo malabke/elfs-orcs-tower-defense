@@ -21,8 +21,15 @@ sides** (elves, dwarves, horsefolk, little folk: against the Horde; orcs: agains
 10 waves per attacking side, 4 towers per side with 3 levels and 2 specializations each, a **campaign of 6 maps**
 (each opens when the one before is won, per side; stars saved per side and map), **hard mode** (opens once a map is
 won: enemies' health x1.5, gold x0.85), a **hero** per side (sent anywhere on the road, fights, skill fires by
-itself) and a **side power** with a cooldown (cast where you point), 14 languages. Milestone 4 (balance, site,
-thumbnail, publication) is not.
+itself) and a **side power** with a cooldown (cast where you point), 14 languages. **Milestone 4** is done except
+publishing (only when the user asks): the bot wins all 30 map x side combinations (tests/CampaignTest.php), hard mode
+stays winnable, `site/` (the game's home page) and `assets/thumbnail.png` / `assets/icon.png` exist, the remote build
+(`bin/jumphp build:remote`) was checked in Chrome. The graphics are placeholders: the user wants them redone in 3D or
+semi-3D (not pixel art) after this: keep drawing behind `src/Ui/Sprites.php`.
+
+Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
+`bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the
+icon. Re-run both after any change of look, then `bin/jumphp build:site <id>` and `bin/jumphp siteshot <id>`.
 
 Maps 2-6 take thornvale's waves (`like:` in waves.yaml) scaled and with groups added; their scenery is scattered
 from `scenery:` shares with a colour `theme`. Hero / power controls: round buttons bottom left of the map (tap, then
