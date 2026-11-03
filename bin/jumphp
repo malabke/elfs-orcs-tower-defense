@@ -116,6 +116,8 @@ CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; doc
   cli:new <app> [title]     create games/<app> from skeleton-cli/ (config/game.yaml: kind: cli)
   plugin:new <id> [title]   a plugin of the JumPHP IDE, in PHP: games/<id> from skeleton-plugin/ (docs/ide-plugins.md)
   plugin:pack <id>          the plugin as games/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
+  debug                     the IDE's debugger for Claude Code in a terminal (MCP on stdin / stdout):
+                            claude mcp add jumphp-debug -- bin/jumphp debug; then JUMPHP_XDEBUG=9003 bin/jumphp test <game>
                             then run <app> [command...] / test <app> / shot <app> (the screen as text: JUMPHP_KEYS)
                             / export:standalone <app> [--linux] [--windows] [--macos] (one executable, console kept)
 
@@ -217,6 +219,19 @@ php_run() {
     ${JUMPHP_LIVE:+-e JUMPHP_LIVE=/workspace/var/live/frame.png -e JUMPHP_LIVE_EVERY=${JUMPHP_LIVE_EVERY:-10}} \
     ${JUMPHP_REALTIME:+-e JUMPHP_REALTIME=1} \
     ${flags[@]+"${flags[@]}"} "$image" "$@"
+}
+
+# the IDE's debugger as an MCP server on stdin / stdout, for Claude Code in a terminal (tools/debug-mcp.php):
+#   claude mcp add jumphp-debug -- bin/jumphp debug
+# it waits for Xdebug on JUMPHP_DEBUG_PORT (9003): Claude runs JUMPHP_XDEBUG=9003 bin/jumphp test <game>, then debug_wait
+cmd_debug() {
+  local port="${JUMPHP_DEBUG_PORT:-9003}" net=()
+  ensure_desktop_image >&2      # stdout is the MCP channel: nothing else may be written there
+  case "$(uname -s)" in
+    Linux) net=(--network host) ;;
+    *) net=(-p "$port:$port" -e JUMPHP_DEBUG_HOST=0.0.0.0) ;;     # Xdebug comes from host.docker.internal
+  esac
+  JUMPHP_XDEBUG= php_run . "${net[@]}" -e "JUMPHP_DEBUG_PORT=$port" -- php /workspace/tools/debug-mcp.php
 }
 
 # headless OpenGL: JUMPHP_GL=1|0, else on when the game's code uses the engine's gl() / opengl().
@@ -1448,6 +1463,7 @@ main() {
     cli:new) cmd_cli_new "$@" ;;
     plugin:new) cmd_plugin_new "$@" ;;
     plugin:pack) cmd_plugin_pack "$@" ;;
+    debug) cmd_debug "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;
     app:shot) cmd_app_shot "$@" ;;

@@ -158,6 +158,7 @@ games/<id>/
 | `bin/jumphp cli:install` / `cli:uninstall` | the `jumphp` command for the whole system (`~/.local/bin/jumphp`, `tools/jumphp-cli`): `jumphp <command>` from any folder of a project, `jumphp new <folder>`, and once a day a question when Packagist has a newer JumPHP (`bin/jumphp update` on a yes) |
 | `bin/jumphp twa <id> --url <page>` | the game as an Android app for Google Play (§14, "Android app") |
 | `bin/jumphp pages [id...]` | builds the games (default: all) + a home page from their `game.json`, force-pushes them as the `gh-pages` branch of the git remote (GitHub Pages: `https://<owner>.github.io/<repo>/`). Publishing: only when asked |
+| `bin/jumphp debug` | the IDE's debugger as an MCP server for Claude Code in a terminal (`claude mcp add jumphp-debug -- bin/jumphp debug`): breakpoints / exceptions, then run the program yourself with `JUMPHP_XDEBUG=9003`, then `debug_wait`, `debug_step`, `debug_eval`, `debug_set_value`... |
 | `bin/jumphp test engine` | engine unit tests + phpstan |
 | `bin/jumphp lint` | php -l everywhere + forbidden words |
 | `bin/jumphp php <dir> <args>` | php in the runtime image (from a repo-relative dir) |

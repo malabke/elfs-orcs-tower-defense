@@ -27,7 +27,7 @@ games/ide/             the desktop app (Tauri, docs/tauri.md): Main (session, pr
 | **Navigation** | Search Everywhere (Double Shift: classes, files, symbols, actions, `:line`), Run Anything (Ctrl twice: a `bin/jumphp` command, its commands and the project's games completed, Enter runs it), go to file / class / symbol, recent files, find / replace in files (case, words, regex, file masks), back / forward |
 | **Git** | Commit tool window (changes, unversioned files, check boxes, amend), diff with HEAD, commit and push, update (pull), branches (checkout, new, merge, delete), stash, log with the files of each commit and their diff, annotate (blame), rollback |
 | **Run** | the run configurations of the project (`bin/jumphp run / test / shot / build / webshot / serve / export / lint`, per game or app, plus `.jumphp/run.json`), Run tool window with live output, clickable `file:line`, test results (PHPUnit testdox) as a tree, screenshots opened in a tab |
-| **Debugger** (desktop) | Xdebug: click in the gutter left of a line of PHP for a breakpoint (right click: a condition, `Ctrl+F8` at the caret), **Debug** (`Shift+F9`, the bug beside Run) runs the selected configuration with `JUMPHP_XDEBUG=<port>` (`bin/jumphp` then starts PHP in the desktop image with Xdebug, which connects back to the IDE; phpstan, `php -l` and composer run without it). Where it stops: the line marked, the **Debug** tool window with the stack (click a frame), the variables as a tree (read lazily), watches, an expression evaluated there; Resume `F9`, Step Over `F8`, Into `F7`, Out `Shift+F8`, Stop. Breakpoints are kept per project and follow their lines as you edit. Best with headless runs (`shot`, `test`): a game stopped in a window freezes until you resume |
+| **Debugger** (desktop) | Xdebug: click in the gutter left of a line of PHP for a breakpoint (right click: a condition, `Ctrl+F8` at the caret), **Debug** (`Shift+F9`, the bug beside Run) runs the selected configuration with `JUMPHP_XDEBUG=<port>` (`bin/jumphp` then starts PHP in the desktop image with Xdebug, which connects back to the IDE; phpstan, `php -l` and composer run without it). Where it stops: the line marked, the **Debug** tool window with the stack (click a frame), the variables as a tree (read lazily), watches, an expression evaluated there, a variable given a new value (double click or `F2`: a PHP expression); Resume `F9`, Step Over `F8`, Into `F7`, Out `Shift+F8`, **Run to Cursor** `Alt+F9`, Stop. **Stop at Exceptions…** (the ⚠ of the Debug window): `*` or class names, it stops where one is thrown, caught or not, and says which with its message. Breakpoints are kept per project and follow their lines as you edit. Best with headless runs (`shot`, `test`): a game stopped in a window freezes until you resume |
 | **Visual HTML / CSS editor** | `.html` files: Code / Split / Design. Components (drag and drop), layers, inspector (attributes, classes, inline styles), the CSS rules of the linked stylesheets (edited in place), devices (desktop, tablet, phone), undo / redo; the HTML is kept as written (scripts, head, comments). For desktop apps' pages (`games/<app>/ui/`) and game sites (`games/<id>/site/`) |
 | **Play** | green Play in the editor's and the Project view's context menus (`Ctrl+Shift+F10`): a `src/Scene/*.php` starts the game in that scene, a `tests/*Test.php` runs only its tests (results as a tree in Run), else the whole game. Web: the **Game** window (right or bottom) with ⚡ Live reload and the game's console |
 | **Hierarchy, libraries** | Hierarchy tool window (`Ctrl+H`): the class's ancestors as a tree, the classes under it; External Libraries in the Project view (the engine, vendor packages), read only |
@@ -110,6 +110,9 @@ claude ──HTTP JSON-RPC──▶ McpServer (ide/src/Agent) ──agent.call {
 | `debug_state` {frame} / `debug_variables` {name, frame} | where it stopped, a frame's variables, the children of one (`$this->player`) |
 | `debug_step` {action} | step_over, step_into, step_out, run, stop: waits for the next stop |
 | `debug_eval` {expression} | PHP evaluated where it stopped (shown in the Debug window too) |
+| `debug_run_to` {path, line} | runs to that line (Run to Cursor) |
+| `debug_set_value` {name, value, frame} | a variable given a new value (a PHP expression) |
+| `debug_exceptions` {classes} | exceptions that stop it where thrown (`*`: all; `[]`: none) |
 
 Add one: its definition in `AgentTools::all()` (name, description, JSON schema, timeout), its `tool_<name>(args)` in
 `AgentTools` of `agent.js`. Tests: `ide/tests/AgentTest.php` (the protocol over a real socket). The web IDE (Claude of
@@ -163,7 +166,20 @@ A project's IDE settings: `.jumphp/ide.json` (its jumphp.net project, a CPC disc
 See the playground's README ("Le JumPHP IDE"): `bin/ide-install --from ../JumPHP` copies `ide/src` and `ide/ui` into it;
 routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Bearer `jpi_…`) and `/api/ide/<slug>/invoke`.
 
+## Debugging from a terminal's Claude Code
+
+`bin/jumphp debug` is the same debugger as an MCP server (stdin / stdout, in Docker), for Claude Code run in a terminal:
+
+```bash
+claude mcp add jumphp-debug -- bin/jumphp debug
+```
+
+It waits for Xdebug on port 9003 (`JUMPHP_DEBUG_PORT`). Claude sets breakpoints (`debug_breakpoints`) or exceptions
+(`debug_exceptions`), starts the program itself in the background with `JUMPHP_XDEBUG=9003` (`JUMPHP_XDEBUG=9003
+bin/jumphp test pong`, `shot`, `php`...), then `debug_wait` (where it stopped, the stack, the variables), `debug_step`,
+`debug_run_to`, `debug_eval`, `debug_variables`, `debug_set_value`. Paths are relative to the project.
+
 ## Roadmap
 
-The debugger for remote / browser games and from a terminal's Claude Code (a `bin/jumphp debug` MCP server), terminal tool window, PHP formatting, local history, more refactorings (extract
+The debugger for remote / browser games, terminal tool window, PHP formatting, local history, more refactorings (extract
 method / variable, move class), a tile map editor for games, multiple projects in one window, signed macOS / Windows executables.

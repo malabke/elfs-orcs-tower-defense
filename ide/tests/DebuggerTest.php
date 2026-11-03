@@ -136,4 +136,75 @@ final class DebuggerTest extends TestCase
         $this->debugger->resume($paused['session'], 'run');
         $this->until(fn () => $this->event('debug.ended') !== null, 'the end');
     }
+
+    private function start(int $port, string $script = 'src/game.php'): array
+    {
+        return $this->processes->start(['php', '-d', 'xdebug.mode=debug', '-d', 'xdebug.start_with_request=yes', '-d', 'xdebug.client_host=127.0.0.1',
+            '-d', "xdebug.client_port=$port", $script], $this->dir, ['XDEBUG_MODE' => 'debug']);
+    }
+
+    public function testRunToCursorStopsOnceAtThatLine(): void
+    {
+        $port = $this->debugger->listen();
+        $this->debugger->setBreakpoints('src/game.php', [4]);       // $sum = 0;
+        $run = $this->start($port);
+        $this->until(fn () => $this->event('debug.paused') !== null, 'the breakpoint');
+        $session = $this->event('debug.paused')['session'];
+        $at = $this->settle($this->debugger->runTo($session, 'src/game.php', 12));     // echo "points..."
+        self::assertSame(12, $at['line'], 'ran to the cursor');
+        $points = array_column($this->settle($this->debugger->variables($session)), null, 'name');
+        self::assertSame('42', $points['$points']['value']);
+        // the temporary breakpoint is gone: it runs to the end
+        $this->debugger->resume($session, 'run');
+        $this->until(fn () => $this->event('debug.ended') !== null, 'the end');
+        self::assertSame("points 42\n", $this->settle($run['done'])['stdout']);
+    }
+
+    public function testAVariableGetsANewValueAndTheProgramUsesIt(): void
+    {
+        $port = $this->debugger->listen();
+        $this->debugger->setBreakpoints('src/game.php', [8]);       // return $sum;
+        $run = $this->start($port);
+        $this->until(fn () => $this->event('debug.paused') !== null, 'the breakpoint');
+        $session = $this->event('debug.paused')['session'];
+        $sum = $this->settle($this->debugger->setValue($session, '$sum', '1000 + 1'));
+        self::assertSame('1001', $sum['value']);
+        $up = $this->settle($this->debugger->setValue($session, '$hero[\'lives\']', '9', 1));     // a frame further up
+        self::assertSame('9', $up['value']);
+        $this->debugger->resume($session, 'run');
+        $this->until(fn () => $this->event('debug.ended') !== null, 'the end');
+        self::assertSame("points 1001\n", $this->settle($run['done'])['stdout']);
+    }
+
+    public function testItStopsWhereAnExceptionIsThrown(): void
+    {
+        file_put_contents("$this->dir/src/boom.php", <<<'PHP'
+            <?php
+            function load(string $level): array
+            {
+                if ($level === '') {
+                    throw new InvalidArgumentException('no level name');
+                }
+                return [];
+            }
+            try {
+                load('');
+            } catch (InvalidArgumentException $e) {
+                echo "caught\n";
+            }
+            PHP);
+        $port = $this->debugger->listen();
+        self::assertSame(['InvalidArgumentException'], $this->debugger->setExceptionBreakpoints(['\\InvalidArgumentException', '']));
+        $run = $this->start($port, 'src/boom.php');
+        $this->until(fn () => $this->event('debug.paused') !== null, 'the exception');
+        $paused = $this->event('debug.paused');
+        self::assertSame(5, $paused['line'], 'where it is thrown, even though it is caught');
+        self::assertSame('InvalidArgumentException', $paused['exception']['class']);
+        self::assertSame('no level name', $paused['exception']['message']);
+        self::assertSame('load', $paused['stack'][0]['where']);
+        $this->debugger->setExceptionBreakpoints([]);
+        $this->debugger->resume($paused['session'], 'run');
+        $this->until(fn () => $this->event('debug.ended') !== null, 'the end');
+        self::assertSame("caught\n", $this->settle($run['done'])['stdout']);
+    }
 }

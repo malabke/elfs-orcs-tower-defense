@@ -264,6 +264,9 @@ final class Ide
         $this->register('debug.variables', fn (array $p) => $debugger->variables($session($p), (int)($p['depth'] ?? 0), (int)($p['context'] ?? 0)));
         $this->register('debug.children', fn (array $p) => $debugger->children($session($p), (string)($p['fullname'] ?? ''), (int)($p['depth'] ?? 0), (int)($p['page'] ?? 0)));
         $this->register('debug.eval', fn (array $p) => $debugger->evaluate($session($p), (string)($p['expression'] ?? '')));
+        $this->register('debug.runTo', fn (array $p) => $debugger->runTo($session($p), (string)($p['path'] ?? ''), (int)($p['line'] ?? 0)));
+        $this->register('debug.set', fn (array $p) => $debugger->setValue($session($p), (string)($p['fullname'] ?? ''), (string)($p['expression'] ?? ''), (int)($p['depth'] ?? 0)));
+        $this->register('debug.exceptions', fn (array $p) => $debugger->setExceptionBreakpoints(array_map('strval', (array)($p['classes'] ?? []))));
         $this->register('debug.close', function () use ($debugger) {
             $debugger->close();
             return true;

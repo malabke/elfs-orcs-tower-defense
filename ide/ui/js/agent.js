@@ -448,6 +448,32 @@ export class AgentTools {
     return { type: r.type, value: r.value, items: (r.items || []).slice(0, 80).map((v) => ({ name: v.name, type: v.type, value: v.value })) };
   }
 
+  async tool_debug_run_to(args) {
+    const d = this.debugger();
+    if (!d.paused) throw new Error('the program is not stopped: debug_run with a breakpoint first');
+    const path = this.path(args);
+    const wait = this.waitDebug(Number(args.timeout) || 60, null, true);
+    d.runTo(path, Number(args.line));
+    const what = await wait;
+    if (what === 'paused') return this.debugState();
+    return { status: what === 'ended' ? 'the program ended before that line' : 'running (that line not reached yet)' };
+  }
+
+  async tool_debug_set_value(args) {
+    const d = this.debugger();
+    if (!d.paused) throw new Error('the program is not stopped');
+    const frame = Number(args.frame) || 0;
+    const r = await backend.invoke('debug.set', { session: d.paused.session, fullname: String(args.name), expression: String(args.value), depth: frame });
+    if (frame === d.frame) await d.showFrame();
+    return r ? { name: r.fullname || args.name, type: r.type, value: r.value } : null;
+  }
+
+  async tool_debug_exceptions(args) {
+    const d = this.debugger();
+    if (Array.isArray(args.classes)) await d.setExceptions(args.classes.map(String));
+    return { exceptions: d.exceptions };
+  }
+
   async tool_debug_variables(args) {
     const d = this.debugger();
     if (!d.paused) throw new Error('the program is not stopped');

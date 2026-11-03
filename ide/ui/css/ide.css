@@ -546,3 +546,6 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .plugin-stats-cols ul { list-style: none; padding: 0; margin: 0; }
 .plugin-settings .plugin-setting .muted { font-size: 12px; }
 .plugin-settings .plugin-setting input[type=checkbox] { margin-right: 4px; }
+.debug-exception { padding: 6px 8px; margin: 4px; border-radius: 4px; background: color-mix(in srgb, var(--error, #e55) 16%, transparent); color: var(--text); font-size: 12px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.debug-exception svg { color: var(--error, #e55); }
+.debug-exception-message { flex-basis: 100%; color: var(--text-2); word-break: break-word; }

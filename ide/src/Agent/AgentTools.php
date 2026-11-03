@@ -34,7 +34,8 @@ final class AgentTools
         - debug_* to debug PHP with Xdebug where the user sees it (breakpoints in the gutter, the Debug window): set
           breakpoints (debug_breakpoints), run a configuration with the debugger (debug_run: it waits until a breakpoint
           stops the program), read the variables (debug_variables) or evaluate PHP there (debug_eval), step
-          (debug_step), and always end with debug_step stop or run when done. Prefer it to adding var_dump / echo.
+          (debug_step), run to a line (debug_run_to), change a variable (debug_set_value), stop where an exception is
+          thrown (debug_exceptions), and always end with debug_step stop or run when done. Prefer it to adding var_dump / echo.
         Tools named plugin_<plugin>_<name> come from the IDE plugins the user installed: their descriptions say what they do.
         TXT;
 
@@ -69,6 +70,12 @@ final class AgentTools
                 ['action' => ['type' => 'string', 'enum' => ['step_over', 'step_into', 'step_out', 'run', 'stop']], 'timeout' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 600]], ['action'], 660),
             self::tool('debug_eval', 'Evaluates a PHP expression where the program is stopped ($this->score * 2, count($enemies), $map->tileAt(3, 4)...): its value (and its children, for arrays and objects).',
                 ['expression' => ['type' => 'string']], ['expression'], 30),
+            self::tool('debug_run_to', 'Runs the stopped program to a line (Run to Cursor) and waits until it stops there, at a breakpoint met first, or ends.',
+                ['path' => $path, 'line' => $line, 'timeout' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 600]], ['path', 'line'], 660),
+            self::tool('debug_set_value', 'Gives a variable of the stopped program a new value: name as in debug_variables ($sum, $this->lives, $list[3]), value a PHP expression evaluated there (9, "Ada", [1, 2], null). To try a fix or reach a case without editing the code.',
+                ['name' => ['type' => 'string'], 'value' => ['type' => 'string'], 'frame' => ['type' => 'integer', 'minimum' => 0]], ['name', 'value'], 30),
+            self::tool('debug_exceptions', 'Exceptions that stop the program where they are thrown, caught or not ("*": every exception; class names: Error, TypeError, App\\GameOver; []: none). Shown in the IDE\'s Debug window. Without classes: lists them. Then debug_run: the state says which exception and its message.',
+                ['classes' => ['type' => 'array', 'items' => ['type' => 'string']]], [], 15),
             self::tool('debug_variables', 'The variables of a frame of the stopped program, or the children of one of them (name: its full name as given, e.g. $this->player, $list[3]).',
                 ['name' => ['type' => 'string'], 'frame' => ['type' => 'integer', 'minimum' => 0]], [], 30),
             self::tool('play', 'Plays the file\'s game, as the IDE\'s Play does: a scene file starts the game in that scene, a test file runs only its tests.',

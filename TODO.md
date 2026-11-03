@@ -131,13 +131,11 @@ later iOS).
 
 ## JumPHP IDE: the next features
 
-- the debugger, what is left (done in IDE 0.1.13: Xdebug in docker/desktop-xdebug through `JUMPHP_XDEBUG`, gutter
-  breakpoints with conditions, Debug tool window, steps, watches, Claude's debug_* tools in the IDE): a `bin/jumphp
-  debug` MCP server for Claude Code in a terminal (the same tools, ide/src/Debug/Debugger.php reused), the async
-  runtime (PHP 8.6 ZTS image with Xdebug), games in the browser / jumphp.net/ide (no Xdebug in WebAssembly: a
-  step debugger of its own?), desktop apps (Tauri, `ui: webview`: app:run uses the Tauri image, without Xdebug),
-  exception breakpoints, "run to cursor", setting a variable's value; try it on
-  Windows / macOS (host.docker.internal)
+- the debugger, what is left (done in IDE 0.1.13 and 0.1.31: Xdebug, breakpoints with conditions, the Debug window,
+  steps, watches, Run to Cursor, a variable's new value, stop at exceptions, Claude's debug_* tools in the IDE and in a
+  terminal through `bin/jumphp debug`): games in the browser / jumphp.net/ide (no Xdebug in WebAssembly: a step
+  debugger of its own?), the async runtime (PHP 8.6 ZTS image with Xdebug), desktop apps (Tauri, `ui: webview`:
+  app:run uses the Tauri image, without Xdebug); try it on Windows / macOS (host.docker.internal)
 - plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
   PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
   IDE's MCP server, updates: checked every 6 hours,

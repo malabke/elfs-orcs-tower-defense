@@ -550,6 +550,12 @@ class App {
         a.add('stepOver', 'Step Over', () => d.step('step_over'), { kbd: 'F8', icon: 'stepOver', when: paused });
         a.add('stepInto', 'Step Into', () => d.step('step_into'), { kbd: 'F7', icon: 'stepInto', when: paused });
         a.add('stepOut', 'Step Out', () => d.step('step_out'), { kbd: 'Shift+F8', icon: 'stepOut', when: paused });
+        a.add('runToCursor', 'Run to Cursor', () => {
+          const path = this.editors.activePath();
+          const line = this.editors.editor()?.getPosition()?.lineNumber;
+          if (path && line) d.runTo(path, line);
+        }, { kbd: 'Alt+F9', icon: 'play', when: paused });
+        a.add('exceptionBreakpoints', 'Stop at Exceptions…', () => d.editExceptions(), { icon: 'warning' });
         a.add('toggleBreakpoint', 'Toggle Line Breakpoint', () => {
           const path = this.editors.activePath();
           const line = this.editors.editor()?.getPosition()?.lineNumber;
@@ -594,7 +600,7 @@ class App {
       'alt+4': 'runTool', 'alt+6': 'problemsTool', 'alt+7': 'structure', 'alt+9': 'gitLog', 'alt+3': 'findTool', 'ctrl+alt+s': 'settings',
       'ctrl+shift+f12': 'hideTools', 'alt+f1': 'selectInProject', 'ctrl+s': 'saveAll', 'alt+shift+f10': 'runConfigs', 'ctrl+alt+z': 'rollbackFile',
       'alt+insert': 'newFile', 'ctrl+shift+`': 'branches',
-      'shift+f9': 'debug', 'f9': 'debugResume', 'f8': 'stepOver', 'f7': 'stepInto', 'shift+f8': 'stepOut', 'ctrl+f8': 'toggleBreakpoint',
+      'shift+f9': 'debug', 'f9': 'debugResume', 'f8': 'stepOver', 'f7': 'stepInto', 'shift+f8': 'stepOut', 'alt+f9': 'runToCursor', 'ctrl+f8': 'toggleBreakpoint',
     };
     let lastShift = 0;
     let lastCtrl = 0;
@@ -641,7 +647,7 @@ class App {
       section('Navigate', ['searchEverywhere', 'gotoClass', 'gotoFile', 'gotoSymbol', 'recentFiles', 'gotoLine', '-', 'declaration', 'implementations', 'fileStructure', 'back', 'forward', 'selectInProject']),
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
-      section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'toggleBreakpoint', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
+      section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'runToCursor', 'toggleBreakpoint', 'exceptionBreakpoints', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
       section('Tools', ['plugins', 'pluginUpdates']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [

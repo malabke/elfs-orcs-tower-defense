@@ -28,8 +28,12 @@ commits.
 - **Débogueur** (bureau) : Xdebug. Un clic dans la marge à gauche d'une ligne PHP pose un point d'arrêt (clic droit :
   une condition, `Ctrl+F8` au curseur) ; **Debug** (`Maj+F9`, l'insecte à côté de Run) lance la configuration choisie
   avec Xdebug (`JUMPHP_XDEBUG`). À l'arrêt : la ligne marquée, la fenêtre **Debug** avec la pile, les variables en
-  arbre, des expressions surveillées ou évaluées ; Reprendre `F9`, pas à pas `F8`, entrer `F7`, sortir `Maj+F8`, Stop.
-  Claude s'en sert aussi (outils `debug_*`) : vous le voyez poser ses points d'arrêt et avancer dans le code.
+  arbre, des expressions surveillées ou évaluées, une variable changée (double clic ou `F2` : une expression PHP) ;
+  Reprendre `F9`, pas à pas `F8`, entrer `F7`, sortir `Maj+F8`, **exécuter jusqu'au curseur** `Alt+F9`, Stop.
+  **Stop at Exceptions…** (le ⚠ de la fenêtre Debug) : `*` ou des noms de classes, il s'arrête là où l'une est lancée,
+  attrapée ou non, et dit laquelle avec son message. Claude s'en sert aussi (outils `debug_*`) : vous le voyez poser
+  ses points d'arrêt et avancer dans le code. Depuis un terminal : `claude mcp add jumphp-debug -- bin/jumphp debug`
+  (le même débogueur en serveur MCP ; Claude lance le programme avec `JUMPHP_XDEBUG=9003`, puis `debug_wait`).
 - **Éditeur visuel HTML / CSS** : les fichiers `.html` en Code / Split / Design (composants à glisser, calques,
   inspecteur, règles CSS des feuilles liées, tailles d'écran) ; le HTML reste tel qu'écrit. Pour les pages des
   applications de bureau et les sites des jeux.

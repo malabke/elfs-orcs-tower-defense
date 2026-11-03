@@ -1,6 +1,7 @@
 // The debugger (Xdebug): breakpoints in the editors' gutter, Debug runs (a run configuration with JUMPHP_XDEBUG: the
 // program connects to the IDE, ide/src/Debug/Debugger.php), and the Debug tool window: where it stopped (the
-// frames), its variables (a tree read lazily), watches, and the steps (F9 resume, F8 over, F7 into, Shift+F8 out).
+// frames), its variables (a tree read lazily, F2 / double click gives one a new value), watches, the steps (F9 resume,
+// F8 over, F7 into, Shift+F8 out, Alt+F9 run to the caret) and the exceptions that stop it (Stop at Exceptions…).
 // Claude drives the same debugger through its tools (agent.js): the user sees what it does here.
 import { backend } from './backend.js';
 import { el, clear, icon, basename, menu, prompt, notify, prefs, debounce } from './ui.js';
@@ -13,6 +14,8 @@ export class DebugPanel {
     /** path => [{line, condition}] */
     this.breakpoints = new Map(Object.entries(prefs.get(this.key, {}) || {}));
     this.watches = prefs.get('watches:' + app.projectKey, []) || [];
+    /** exception classes that stop the program where thrown ('*': all) */
+    this.exceptions = prefs.get('exceptions:' + app.projectKey, []) || [];
     this.decorations = new Map();      // model uri => decoration ids (breakpoints)
     this.current = new Map();          // model uri => decoration ids (where it stopped)
     this.paused = null;                // {session, path, line, stack}
@@ -27,6 +30,7 @@ export class DebugPanel {
     monaco.editor.onDidCreateModel((model) => { this.decorate(model); this.watchModel(model); });
     for (const model of monaco.editor.getModels()) { this.decorate(model); this.watchModel(model); }
     for (const [path, list] of this.breakpoints) backend.invoke('debug.breakpoints', { path, lines: list }).catch(() => null);
+    if (this.exceptions.length) backend.invoke('debug.exceptions', { classes: this.exceptions }).catch(() => null);
 
     backend.on('debug.paused', (p) => this.onPaused(p));
     backend.on('debug.running', (p) => { if (this.paused?.session === p.session) this.cleared(); });
@@ -45,6 +49,7 @@ export class DebugPanel {
       b('Step Into (F7)', 'stepInto', 'step_into'),
       b('Step Out (Shift+F8)', 'stepOut', 'step_out'),
       b('Stop (ends the program)', 'stop', 'stop', stopped || (this.sessions || []).length > 0),
+      el('button' + (this.exceptions.length ? '.on' : ''), { title: this.exceptions.length ? `Stops at exceptions: ${this.exceptions.join(', ')}` : 'Stop at Exceptions…', onclick: () => this.editExceptions() }, icon('warning')),
       el('button', { title: 'Remove All Breakpoints', onclick: () => this.clearAll() }, icon('close')),
     ];
   }
@@ -104,6 +109,22 @@ export class DebugPanel {
 
   clearAll() {
     for (const path of [...this.breakpoints.keys()]) this.set(path, []);
+  }
+
+  /** The exceptions that stop the program where they are thrown (caught or not). */
+  async editExceptions() {
+    const value = await prompt('Stop at exceptions', { value: this.exceptions.join(', '), placeholder: '* (every exception), or Error, TypeError, App\\GameOver',
+      label: 'The program stops where one of these is thrown, even when it is caught. * stops at every exception; empty: at none.' });
+    if (value === null) return;
+    this.setExceptions(value.split(/[\s,]+/).filter(Boolean));
+  }
+
+  setExceptions(classes) {
+    this.exceptions = [...new Set(classes.map((c) => c.replace(/^\\/, '')))];
+    prefs.set('exceptions:' + this.app.projectKey, this.exceptions);
+    this.render();
+    this.app.refreshToolHeader('debug');
+    return backend.invoke('debug.exceptions', { classes: this.exceptions }).catch(() => null);
   }
 
   decorate(model) {
@@ -179,6 +200,32 @@ export class DebugPanel {
       notify(e.message, 'error', { title: 'Debugger' });
     }
     if (how === 'stop') this.cleared();
+  }
+
+  /** Runs to a line (Alt+F9): it stops there once, or earlier at a breakpoint. */
+  async runTo(path, line) {
+    const session = this.paused?.session;
+    if (!session) return;
+    this.cleared();
+    try {
+      await backend.invoke('debug.runTo', { session, path, line });
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Run to Cursor' });
+    }
+  }
+
+  /** A new value for a variable of the stopped frame (a PHP expression, evaluated there). */
+  async setValue(v) {
+    if (!this.paused || !v.fullname) return;
+    const current = v.type === 'string' ? JSON.stringify(v.value) : ['array', 'object'].includes(v.type) ? '' : String(v.value ?? '');
+    const expression = await prompt(`Set ${v.fullname}`, { value: current, label: 'A PHP expression, evaluated where the program is stopped: 9, "Ada", [1, 2], null, $other * 2…' });
+    if (expression === null || !expression.trim()) return;
+    try {
+      await backend.invoke('debug.set', { session: this.paused.session, fullname: v.fullname, expression, depth: this.frame });
+      await this.showFrame();
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Set Value' });
+    }
   }
 
   onPaused(p) {
@@ -268,6 +315,10 @@ export class DebugPanel {
       const listening = (this.sessions || []).length ? 'A program is running with the debugger: it stops at the next breakpoint.' : 'Not debugging. Debug (Shift+F9) runs the selected configuration with Xdebug.';
       frames.append(el('div.placeholder', {}, listening));
     } else {
+      if (this.paused.exception) {
+        const x = this.paused.exception;
+        frames.append(el('div.debug-exception', { title: 'Stopped where it is thrown (Stop at Exceptions…)' }, icon('warning'), el('b', {}, x.class), x.message ? el('div.debug-exception-message', {}, x.message) : null));
+      }
       this.paused.stack.forEach((f, i) => frames.append(el('div.row' + (i === this.frame ? '.sel' : ''), {
         title: f.path ? `${f.path}:${f.line}` : 'outside the project',
         onclick: () => { this.frame = i; this.showFrame(); },
@@ -298,6 +349,12 @@ export class DebugPanel {
       vars.append(el('div.placeholder', {}, 'Reading the variables…'));
     }
     const count = [...this.breakpoints.values()].reduce((n, l) => n + l.length, 0);
+    if (!this.paused && this.exceptions.length) {
+      vars.append(el('div.debug-section', {}, 'Exceptions'),
+        el('div.row', { onclick: () => this.editExceptions(), title: 'Change them' }, icon('warning'), el('span.label', {}, this.exceptions.includes('*') ? 'Every exception' : this.exceptions.join(', ')),
+          el('span.hint', {}, 'stops where thrown'),
+          el('button.row-action', { title: 'Stop at none', onclick: (e) => { e.stopPropagation(); this.setExceptions([]); } }, icon('close'))));
+    }
     if (!this.paused && count) {
       vars.append(el('div.debug-section', {}, `Breakpoints (${count})`));
       for (const [path, list] of this.breakpoints) {
@@ -321,6 +378,13 @@ export class DebugPanel {
       v.class && v.type === 'object' ? null : el('span.hint', {}, v.type && !['error', 'watch'].includes(v.type) ? v.type : ''),
       watch ? el('button.row-action', { title: 'Remove the watch', onclick: (e) => { e.stopPropagation(); this.removeWatch(v.expression); } }, icon('close')) : null);
     box.append(line);
+    if (!watch && !result && v.fullname && this.paused) {
+      line.title = 'Double click or F2: set its value';
+      line.tabIndex = -1;
+      line.ondblclick = (e) => { e.stopPropagation(); this.setValue(v); };
+      line.onkeydown = (e) => { if (e.key === 'F2') { e.preventDefault(); this.setValue(v); } };
+      line.oncontextmenu = (e) => { e.preventDefault(); menu([{ label: 'Set Value…', kbd: 'F2', action: () => this.setValue(v) }, { label: 'Add to Watches', action: () => this.addWatch(v.fullname) }], { x: e.clientX, y: e.clientY }); };
+    }
     if (v.children) {
       let open = false;
       let kids = null;
