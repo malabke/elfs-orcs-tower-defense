@@ -135,7 +135,8 @@ later iOS).
   steps, watches, Run to Cursor, a variable's new value, stop at exceptions, Claude's debug_* tools in the IDE and in a
   terminal through `bin/jumphp debug`): games in the browser / jumphp.net/ide (no Xdebug in WebAssembly: a step
   debugger of its own?), the async runtime (PHP 8.6 ZTS image with Xdebug), desktop apps (Tauri, `ui: webview`:
-  app:run uses the Tauri image, without Xdebug); try it on Windows / macOS (host.docker.internal)
+  app:run uses the Tauri image, without Xdebug); try it on Windows / macOS (host.docker.internal), and
+  `bin/jumphp debug` there too (only tried on Linux: there its container listens on 0.0.0.0 with the port published)
 - plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
   PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
   IDE's MCP server, updates: checked every 6 hours,
