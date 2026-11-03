@@ -680,7 +680,12 @@ final class Main implements AppMain
         if ($slug === null) {
             return Deferred::rejected(new \RuntimeException('This project is not one of your jumphp.net projects.'));
         }
-        return self::deferred($this->playground->sync((string)$slug))->then(fn (array $r) => [
+        // the commits not pushed yet go first: jumphp.net publishes the last commit of the repository's branch
+        $git = $this->ide->git;
+        $pushed = $git !== null && $git->isRepository()
+            ? $git->status()->then(fn (array $st) => $st['branch'] !== null && ($st['upstream'] === null || $st['ahead'] > 0) ? $git->push() : null)
+            : Deferred::resolved(null);
+        return $pushed->then(fn () => self::deferred($this->playground->sync((string)$slug)))->then(fn (array $r) => [
             'ok' => !in_array($r['status'] ?? '', ['error', 'failed'], true),
             'message' => (string)($r['message'] ?? $r['statusMessage'] ?? ('Status: ' . ($r['status'] ?? 'published'))),
             'url' => $r['url'] ?? null,

@@ -24,6 +24,11 @@ final class Git
         $this->token = $token;
     }
 
+    public function token(): ?string
+    {
+        return $this->token;
+    }
+
     /** @param array{name: string, email: string}|null $author */
     public function setFallbackAuthor(?array $author): void
     {

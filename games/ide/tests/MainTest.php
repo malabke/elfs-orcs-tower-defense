@@ -92,6 +92,24 @@ final class MainTest extends AppTestCase
         $this->frames(2);
     }
 
+    public function testEveryKindOfNewProjectNeedsItsOwnRepositoryHenceTheSignIn(): void
+    {
+        foreach (['original', 'gui', 'gui-mobile', 'app', 'cli', 'plugin', 'hybrid'] as $kind) {
+            try {
+                $this->ide('projects.create', ['kind' => $kind, 'title' => 'Todo', 'folder' => $this->project . '/new']);
+                self::fail("$kind was created without a GitHub repository of its own");
+            } catch (\Throwable $e) {
+                self::assertStringContainsString('Sign in with jumphp.net first', $e->getMessage(), $kind);
+            }
+        }
+        self::assertDirectoryDoesNotExist($this->project . '/new/todo');
+    }
+
+    public function testEveryKindOfTheIdeHasItsKindOnJumphpNet(): void
+    {
+        self::assertSame(['original', 'cpc', 'port', 'original', 'gui', 'mobile', 'desktop', 'cli'], array_values(\App\Creator::PLAYGROUND_KINDS));
+    }
+
     public function testClaudeForJumphpNetSendsBackWhatClaudeChangedInTheGame(): void
     {
         $call = fn (string $method, mixed ...$args) => (new \ReflectionMethod(\App\ClaudeBridge::class, $method))->invoke(null, ...$args);

@@ -169,6 +169,12 @@ user once whether to install the `jumphp` command for the whole system (`bin/jum
 JumPHP is out, updating only if they say yes). Install it only on a yes; it changes their `~/.local/bin` (and,
 if they agree in the terminal, their shell profile).
 
+**The project's own repository**: a project is the user's git repository, remote `origin` on their GitHub (the IDE's New
+Project creates it through jumphp.net for every kind; `bin/jumphp init` with `gh`). The remote `jumphp` is JumPHP itself:
+it only gives updates (`bin/jumphp update`) and cannot be pushed to. Never push, make a release or publish to JumPHP's
+repository from a project: `bin/jumphp installer --github`, `android`, `apple`, `pages` refuse it. A project without
+`origin`: ask the user (name, public / private) before `gh repo create <name> --source . --remote origin --push`.
+
 Headless runs (`test`, `shot`) use a **fresh temporary `var/`** (options and saves start from the defaults,
 the player's files are never touched; `JUMPHP_VAR=<dir>` forces a folder). They are driven by environment variables:
 

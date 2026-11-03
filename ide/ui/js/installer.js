@@ -22,8 +22,10 @@ export async function createInstaller(app, { where: initial } = {}) {
 
   const module = el('select.input', {}, ...modules.map((m) => el('option', { value: m.id }, `${m.title} (${m.id})`)));
   const local = {};
+  // the systems ticked last time for this project (never more than the user ticked)
+  const remembered = prefs.get(key('systems'), null);
   const systems = SYSTEMS.map(([id, name]) => {
-    const box = el('input', { type: 'checkbox', checked: id !== 'macos' || undefined });
+    const box = el('input', { type: 'checkbox', checked: (Array.isArray(remembered) ? remembered.includes(id) : id === 'linux') || undefined });
     const note = el('span.pub-faint');
     return { id, box, note, row: el('label.inst-system', {}, box, el('span', {}, name), note) };
   });
@@ -35,7 +37,6 @@ export async function createInstaller(app, { where: initial } = {}) {
       // a CLI app's Mac executables are built here (two of them: the installer takes the Mac's own); games: on GitHub
       const github = s.id === 'macos' && m?.kind !== 'cli';
       s.note.textContent = f ? ` built: ${f.path.split('/').pop()}` : github ? ' not built yet: built on GitHub first (~10-40 min)' : ' built first';
-      if (s.id === 'macos') s.box.checked = !!f;
     }
   };
   module.addEventListener('change', refreshLocal);
@@ -70,6 +71,7 @@ export async function createInstaller(app, { where: initial } = {}) {
       if (!chosen.length) { notify('Choose at least one system.', 'error'); return false; }
       if (where === 'dir' && !/^https?:\/\/\S+$/.test(url.value.trim())) { notify('Give the https:// address where the folder will be.', 'error'); url.focus(); return false; }
       prefs.set(key('where'), where);
+      prefs.set(key('systems'), chosen);
       prefs.set(key('url'), url.value.trim());
       prefs.set('pubVersion:' + app.projectKey, version.value.trim() || '1.0');
       const m = modules.find((x) => x.id === module.value);

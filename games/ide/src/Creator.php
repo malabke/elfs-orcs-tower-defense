@@ -4,17 +4,28 @@ namespace App;
 
 use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Processes;
+use JumPHP\Ide\Git\Git;
 use JumPHP\Async\Task;
 
 /**
- * New Project. Games (an original one, an Amstrad CPC remake, a port) are jumphp.net projects: the playground makes
- * the GitHub repository from the JumPHP template with the brief, the IDE waits for it, clones and opens it. Desktop
- * apps, graphic apps (forms, desktop or mobile) and hybrid games are local JumPHP projects: the template is cloned,
- * then bin/jumphp app:new / gui:new / new makes the app's folder.
+ * New Project. Every project gets its own GitHub repository, on the user's account (never JumPHP's: the template is
+ * only where its files come from). Games (an original one, an Amstrad CPC remake, a port, a hybrid game) and
+ * applications (graphic, mobile, desktop, CLI) are jumphp.net projects: the playground makes the repository from the
+ * JumPHP template with the skeleton of its kind and the brief, the IDE waits for it, clones and opens it; commit / push
+ * go there and Publish puts it on jumphp.net. IDE plugins (shared from Tools > Plugins…, not published as a game):
+ * the template is cloned, bin/jumphp plugin:new makes the plugin, and the IDE creates the user's public repository
+ * with their GitHub token (through jumphp.net) and pushes it.
  */
 final class Creator
 {
     public const TEMPLATE = 'https://github.com/davidnurdin/jumPhp.git';
+
+    /** The IDE's kinds -> jumphp.net's (hybrid: a game whose game.yaml gets ui: hybrid). */
+    public const PLAYGROUND_KINDS = ['original' => 'original', 'cpc' => 'cpc', 'port' => 'port', 'hybrid' => 'original',
+        'gui' => 'gui', 'gui-mobile' => 'mobile', 'app' => 'desktop', 'cli' => 'cli'];
+
+    /** The framework's remote gives updates only (bin/jumphp update): nothing can be pushed there. */
+    public const NO_PUSH = 'no-push://the-jumphp-framework-only-gives-updates';
 
     public function __construct(private Main $main, private Playground $playground, private Processes $processes)
     {
@@ -28,7 +39,16 @@ final class Creator
         if ($title === '') {
             return Deferred::rejected(new \InvalidArgumentException('A title, please.'));
         }
-        return in_array($kind, ['original', 'cpc', 'port'], true) ? $this->onPlayground($kind, $title, $p) : $this->local($kind, $title, $p);
+        if ($this->main->user() === null) {
+            return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first: it creates the project\'s GitHub repository on your account.'));
+        }
+        if ($kind === 'plugin') {
+            return $this->local($kind, $title, $p);
+        }
+        if (!isset(self::PLAYGROUND_KINDS[$kind])) {
+            return Deferred::rejected(new \InvalidArgumentException("Unknown kind of project: $kind"));
+        }
+        return $this->onPlayground($kind, $title, $p);
     }
 
     private function onPlayground(string $kind, string $title, array $p): Deferred
@@ -44,16 +64,24 @@ final class Creator
         $this->progress('Creating the repository on jumphp.net…');
         return self::deferred($this->playground->create([
             'title' => $title, 'description' => (string)($p['description'] ?? ''), 'category' => $p['category'] ?? null,
-            'kind' => $kind, 'brief' => $brief,
+            'kind' => self::PLAYGROUND_KINDS[$kind], 'brief' => $brief,
         ]))->then(fn (array $project) => $this->waitReady((string)$project['slug'], 0))
             ->then(function (array $project) use ($p, $kind) {
                 $this->progress('Cloning ' . ($project['repoUrl'] ?? $project['slug']) . '…');
                 return $this->main->cloneProject((string)$project['cloneUrl'], (string)$project['slug'], $this->folder($p))
-                    ->then(function (string $path) use ($p, $kind) {
+                    ->then(function (string $path) use ($p, $kind, $project) {
                         if ($kind === 'cpc' && !empty($p['dsk'])) {
                             $this->main->saveProjectSettings($path, array_filter(['dsk' => (string)$p['dsk'], 'roms' => (string)($p['roms'] ?? '')]));
                         }
-                        return $this->main->openProject($path);
+                        $this->noPushToJumphp($path);
+                        $yaml = $path . '/' . trim((string)($project['gameDir'] ?? 'games/' . $project['slug']), '/') . '/config/game.yaml';
+                        if ($kind !== 'hybrid' || !$this->makeHybrid($yaml)) {
+                            return $this->main->openProject($path);
+                        }
+                        $this->progress('ui: hybrid in game.yaml, pushed…');
+                        return $this->git($path)
+                            ->then(fn (Git $git) => $git->commit('A hybrid game: SDL + HTML windows (ui: hybrid)', ['.'])->then(fn () => $git->push()))
+                            ->then(fn () => $this->main->openProject($path));
                     });
             });
     }
@@ -77,11 +105,12 @@ final class Creator
         });
     }
 
+    /** An IDE plugin: the template, bin/jumphp plugin:new, then the user's own public repository (created here) and a push. */
     private function local(string $kind, string $title, array $p): Deferred
     {
-        $id = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-') ?: 'app';
+        $id = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-') ?: 'plugin';
         if (!preg_match('/^[a-z]/', $id)) {
-            $id = 'app-' . $id;
+            $id = 'plugin-' . $id;
         }
         $parent = $this->folder($p);
         @mkdir($parent, 0777, true);
@@ -102,37 +131,88 @@ final class Creator
                 }
                 // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
                 exec('rm -rf ' . escapeshellarg("$root/.git"));
-                // one project, one game or app: not JumPHP's examples (the playground's projects start the same way)
+                // one project, one plugin: not JumPHP's examples (the playground's projects start the same way)
                 foreach (glob("$root/games/*", GLOB_ONLYDIR) ?: [] as $example) {
                     exec('rm -rf ' . escapeshellarg($example));
                 }
                 return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
-                    ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root));
+                    ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root))
+                    ->then(fn () => $this->noPushToJumphp($root));
             })
-            ->then(function () use ($root, $id, $title, $kind) {
-                $command = match ($kind) {
-                    'app' => ['bin/jumphp', 'app:new', $id, $title],
-                    'gui' => ['bin/jumphp', 'gui:new', $id, $title],
-                    'cli' => ['bin/jumphp', 'cli:new', $id, $title],
-                    'plugin' => ['bin/jumphp', 'plugin:new', $id, $title],
-                    'gui-mobile' => ['bin/jumphp', 'gui:new', $id, $title, '--mobile'],
-                    default => ['bin/jumphp', 'new', $id, $title],
-                };
-                $this->progress(implode(' ', array_slice($command, 0, 3)) . '…');
-                return $this->run($command, $root);
+            ->then(function () use ($root, $id, $title) {
+                $this->progress('bin/jumphp plugin:new…');
+                return $this->run(['bin/jumphp', 'plugin:new', $id, $title], $root);
             })
-            ->then(function () use ($root, $id, $kind, $p) {
-                $game = "$root/games/$id";
-                if ($kind === 'hybrid' && is_file("$game/config/game.yaml")) {
-                    $yaml = (string)file_get_contents("$game/config/game.yaml");
-                    if (!preg_match('/^\s*ui:/m', $yaml)) {
-                        file_put_contents("$game/config/game.yaml", preg_replace('/^game:\n/', "game:\n  ui: hybrid                  # an SDL game with HTML windows (docs/tauri.md)\n", $yaml, 1));
-                    }
-                }
+            ->then(function () use ($root, $id, $p) {
                 $brief = trim((string)($p['brief'] ?? ''));
-                file_put_contents("$game/BRIEF.md", "# " . ($p['title'] ?? $id) . "\n\n" . ($p['description'] ?? '') . "\n\n" . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
-                return $this->main->openProject($root);
-            });
+                file_put_contents("$root/games/$id/BRIEF.md", "# " . ($p['title'] ?? $id) . "\n\n" . ($p['description'] ?? '') . "\n\n" . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
+                $this->progress('Creating your GitHub repository…');
+                return $this->git($root)->then(fn (Git $git) => $this->createRepository($git, $id, (string)($p['description'] ?? ''))
+                    ->then(fn (array $repo) => $git->run(['remote', 'add', 'origin', (string)$repo['clone_url']])->then(fn () => $repo))
+                    ->then(fn (array $repo) => $git->commit(($p['title'] ?? $id) . ': a JumPHP IDE plugin', ['.'])->then(fn () => $repo))
+                    ->then(function (array $repo) use ($git) {
+                        $this->progress('Pushing to ' . $repo['html_url'] . '…');
+                        return $git->push();
+                    }));
+            })
+            ->then(fn () => $this->main->openProject($root));
+    }
+
+    /** The user's public repository <login>/<name> (GitHub's API, the user's token): <name>-2, -3... when taken. */
+    private function createRepository(Git $git, string $name, string $description, int $try = 1): Deferred
+    {
+        $token = $git->token();
+        $http = \JumPHP\Tauri\App::current()?->http();
+        if ($token === null || $token === '' || $http === null) {
+            return Deferred::rejected(new \RuntimeException('No GitHub access: sign in with jumphp.net again.'));
+        }
+        $repoName = $try === 1 ? $name : "$name-$try";
+        $d = new Deferred();
+        $http->request('POST', 'https://api.github.com/user/repos', ['name' => $repoName, 'description' => $description, 'private' => false, 'auto_init' => false], [
+            'Authorization' => "Bearer $token", 'Accept' => 'application/vnd.github+json', 'User-Agent' => 'jumphp-ide',
+        ], 30.0)->then(function ($r) use ($d, $git, $name, $description, $try) {
+            $body = $r->json();
+            if ($r->status === 201 && is_array($body) && !empty($body['clone_url'])) {
+                $d->resolve($body);
+            } elseif ($r->status === 422 && $try < 9) {
+                $this->createRepository($git, $name, $description, $try + 1)->then(fn ($v) => $d->resolve($v), fn (\Throwable $e) => $d->reject($e));
+            } else {
+                $d->reject(new \RuntimeException('GitHub did not create the repository (HTTP ' . $r->status . '): ' . (is_array($body) ? ($body['message'] ?? '') : '')));
+            }
+        }, fn (\Throwable $e) => $d->reject($e));
+        return $d;
+    }
+
+    /** git for a project, with the user's GitHub token (through jumphp.net) to push. */
+    private function git(string $root): Deferred
+    {
+        $git = new Git($this->processes, $root);
+        $login = (string)($this->main->user()['login'] ?? 'jumphp');
+        $git->setFallbackAuthor(['name' => $login, 'email' => $login . '@users.noreply.github.com']);
+        return self::deferred($this->playground->githubToken())->then(function (array $r) use ($git) {
+            $git->setToken($r['token'] ?? null);
+            return $git;
+        });
+    }
+
+    /** The remote "jumphp" (if any) fetches JumPHP's updates and can never be pushed to. */
+    private function noPushToJumphp(string $root): Deferred
+    {
+        return $this->run(['git', 'remote'], $root)->then(function ($r) use ($root) {
+            $remotes = preg_split('/\s+/', trim((string)(is_array($r) ? ($r['output'] ?? $r['stdout'] ?? '') : $r))) ?: [];
+            return in_array('jumphp', $remotes, true) ? $this->run(['git', 'remote', 'set-url', '--push', 'jumphp', self::NO_PUSH], $root) : null;
+        });
+    }
+
+    /** ui: hybrid in a game's game.yaml; false when it has it already or there is no game.yaml. */
+    private function makeHybrid(string $yamlFile): bool
+    {
+        $yaml = is_file($yamlFile) ? (string)file_get_contents($yamlFile) : '';
+        if ($yaml === '' || preg_match('/^\s*ui:/m', $yaml)) {
+            return false;
+        }
+        file_put_contents($yamlFile, preg_replace('/^game:\n/', "game:\n  ui: hybrid                  # an SDL game with HTML windows (docs/tauri.md)\n", $yaml, 1));
+        return true;
     }
 
     /** @param list<string> $command */

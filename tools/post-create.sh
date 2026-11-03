@@ -2,6 +2,8 @@
 # Run by `composer create-project jumphp/jumphp <dir>` inside the new project (post-create-project-cmd):
 # 1. turns the folder into a git clone of JumPHP (remote "jumphp": `bin/jumphp update` merges new versions of
 #    the framework into the project later),
+#    fetch only: nothing can be pushed to the framework; the project's own repository is "origin" (the wizard, or
+#    the JumPHP IDE, creates it),
 # 2. starts the set-up wizard (bin/jumphp init) on the terminal.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -25,6 +27,7 @@ if [ ! -d .git ] && command -v git >/dev/null 2>&1; then
     git ls-files -s | awk '$1 == "100755" { print $4 }' | xargs chmod +x 2>/dev/null || true
     if [ -z "$(git status --porcelain)" ]; then linked=1; break; fi
   done
+  git remote set-url --push jumphp no-push://the-jumphp-framework-only-gives-updates
   if [ "$linked" = 1 ]; then
     say "git: branch main, on top of JumPHP $(git log -1 --format=%h)"
   else
@@ -32,6 +35,7 @@ if [ ! -d .git ] && command -v git >/dev/null 2>&1; then
     rm -rf .git
     git init -q -b main 2>/dev/null || git init -q
     git remote add jumphp "$REPO"
+    git remote set-url --push jumphp no-push://the-jumphp-framework-only-gives-updates
   fi
 elif ! command -v git >/dev/null 2>&1; then
   warn "git is not installed: the wizard will offer to install it"
@@ -39,7 +43,7 @@ fi
 
 # the wizard needs a real terminal (and docker): not inside the composer Docker image or a CI job
 if [ -f /.dockerenv ] || [ -n "${CI:-}" ] || ! { : </dev/tty; } 2>/dev/null; then
-  say "project ready. Next: cd $(basename "$PWD") && bin/jumphp init"
+  say "project ready. Next: cd $(basename "$PWD") && bin/jumphp init (it creates the project's own GitHub repository)"
   exit 0
 fi
 exec bash bin/jumphp init </dev/tty >/dev/tty 2>&1

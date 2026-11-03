@@ -1,5 +1,7 @@
 # TODO
 
+**Urgent first: [TODO-URGENT.md](TODO-URGENT.md)** (what is left of the repository / publishing fixes), then [TODO-FIRST.md](TODO-FIRST.md).
+
 ## Desktop apps (Tauri): the next targets
 
 Done: Linux, Windows, macOS runtime (workflow `tauri`), clipboard, tray, global shortcuts, menus, hybrid games (two

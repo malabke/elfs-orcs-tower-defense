@@ -4,15 +4,15 @@ import { backend } from './backend.js';
 import { el, clear, icon, notify, dialog, timeAgo, confirm, basename, progressBar } from './ui.js';
 
 const KINDS = [
-  { id: 'original', icon: 'game', title: 'Game', text: 'An original retro game in PHP: desktop, browser, phones. Published on jumphp.net.', playground: true },
-  { id: 'gui', icon: 'app', title: 'Graphic app (no HTML)', text: 'Windows made in the visual editor: buttons, lists, pictures, a responsive grid; the code behind in PHP. PC, Mac, web.', playground: false },
-  { id: 'gui-mobile', icon: 'app', title: 'Mobile app', text: 'The same for phones (iOS and Android): portrait forms made in the visual editor, exported as native apps.', playground: false },
-  { id: 'app', icon: 'app', title: 'Desktop app', text: 'HTML / CSS pages with PHP behind them (Tauri): a tool, an editor, a utility.', playground: false },
-  { id: 'cli', icon: 'terminal', title: 'CLI app', text: 'A program in the terminal: commands, and full-screen text screens (Symfony Console + symfony/tui). One executable per system.', playground: false },
-  { id: 'plugin', icon: 'plugin', title: 'IDE plugin', text: 'A plugin of this IDE, in PHP: actions, tool windows, completion, problems, run configurations. Tested without a window, shared on jumphp.net.', playground: false },
-  { id: 'hybrid', icon: 'hybrid', title: 'Hybrid game', text: 'An SDL game with HTML windows beside it (control panel, editor).', playground: false },
-  { id: 'cpc', icon: 'disk', title: 'Amstrad CPC remake', text: 'Remake an Amstrad CPC game from its .dsk disc: same graphics, music and rules.', playground: true },
-  { id: 'port', icon: 'fork', title: 'Port of an open-source game', text: 'Port a game whose source code is open (C, JS, Python…) to PHP.', playground: true },
+  { id: 'original', game: true, icon: 'game', title: 'Game', text: 'An original retro game in PHP: desktop, browser, phones. Published on jumphp.net.', playground: true },
+  { id: 'gui', icon: 'app', title: 'Graphic app (no HTML)', text: 'Windows made in the visual editor: buttons, lists, pictures, a responsive grid; the code behind in PHP. PC, Mac, web.', playground: true },
+  { id: 'gui-mobile', icon: 'app', title: 'Mobile app', text: 'The same for phones (iOS and Android): portrait forms made in the visual editor, exported as native apps.', playground: true },
+  { id: 'app', icon: 'app', title: 'Desktop app', text: 'HTML / CSS pages with PHP behind them (Tauri): a tool, an editor, a utility.', playground: true },
+  { id: 'cli', icon: 'terminal', title: 'CLI app', text: 'A program in the terminal: commands, and full-screen text screens (Symfony Console + symfony/tui). One executable per system.', playground: true },
+  { id: 'plugin', icon: 'plugin', title: 'IDE plugin', text: 'A plugin of this IDE, in PHP: actions, tool windows, completion, problems, run configurations. Tested without a window, shared on jumphp.net.', playground: true },
+  { id: 'hybrid', game: true, icon: 'hybrid', title: 'Hybrid game', text: 'An SDL game with HTML windows beside it (control panel, editor).', playground: true },
+  { id: 'cpc', game: true, icon: 'disk', title: 'Amstrad CPC remake', text: 'Remake an Amstrad CPC game from its .dsk disc: same graphics, music and rules.', playground: true },
+  { id: 'port', game: true, icon: 'fork', title: 'Port of an open-source game', text: 'Port a game whose source code is open (C, JS, Python…) to PHP.', playground: true },
 ];
 
 export class Welcome {
@@ -162,10 +162,12 @@ export class Welcome {
     }
     if (kind.playground) {
       if (!s.user) {
-        form.append(el('p', {}, 'A game is a project on jumphp.net (a GitHub repository of yours, published after each push).'),
+        form.append(el('p', {}, 'Every project gets its own GitHub repository, on your account: jumphp.net creates it (sign in with GitHub), the IDE clones it, commits and pushes there, and publishes it on jumphp.net.'),
           el('button.btn.primary', { onclick: () => this.login() }, icon('user'), 'Sign in with jumphp.net'));
         return;
       }
+    }
+    if (kind.game) {
       category = el('select.input');
       backend.invoke('projects.categories').then((list) => { for (const c of list) category.append(el('option', { value: c.slug }, c.name)); }).catch(() => null);
     }
@@ -177,9 +179,9 @@ export class Welcome {
       el('label.field', {}, el('span', {}, 'Brief'), brief),
       el('label.field', {}, el('span', {}, 'Folder (the project goes in a new folder inside)'), el('div', { style: { display: 'flex', gap: '6px' } }, folder,
         el('button.btn', { onclick: async () => { const f = await backend.invoke('native.open', { folder: true }).catch(() => null); if (f) folder.value = f; } }, 'Choose…'))),
-      el('p', { style: { color: 'var(--text-3)', fontSize: '12px' } }, kind.playground
-        ? 'Creates the GitHub repository through jumphp.net (from the JumPHP template, with BRIEF.md), clones it here and opens it.'
-        : `Makes a JumPHP project in a new folder (git clone of the template + bin/jumphp ${kind.id.startsWith('gui') ? 'gui:new' : kind.id === 'cli' ? 'cli:new' : kind.id === 'plugin' ? 'plugin:new' : 'app:new'}), then opens it. It can be pushed to GitHub later.`),
+      el('p', { style: { color: 'var(--text-3)', fontSize: '12px' } }, kind.id === 'plugin'
+        ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the plugin there (bin/jumphp plugin:new), pushes it and opens it. Share it with Tools > Plugins… > Publish on jumphp.net.`
+        : `Creates the GitHub repository ${s.user?.login || 'you'}/<name> on your account through jumphp.net (from the JumPHP template, with BRIEF.md), clones it here and opens it. Commit and push go there; Publish puts it on jumphp.net.`),
       el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('button.btn.primary', { onclick: async (e) => {
         const button = e.currentTarget;
         if (extra.dsk && !extra.dsk.value.trim() && !(await extra.pick())) { notify('Choose the .dsk disc of the game to remake.', 'warning', { title: 'Amstrad CPC remake' }); return; }

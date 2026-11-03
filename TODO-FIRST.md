@@ -1,5 +1,7 @@
 # TODO FIRST: do this before anything else of TODO.md
 
+**Before this: [TODO-URGENT.md](TODO-URGENT.md)** (bugs to fix first).
+
 David's decision (2026-11-03): this is the next piece of work, first thing in the next session with tokens.
 
 ## `apps/` beside `games/`: projects that are not games get a folder of their own

@@ -442,6 +442,8 @@ step_github() {
     origin=""
   fi
   git remote get-url jumphp >/dev/null 2>&1 || git remote add jumphp "$UPSTREAM"
+  # the framework only gives updates: nothing of the project can be pushed there
+  git remote set-url --push jumphp no-push://the-jumphp-framework-only-gives-updates
   if [ -n "$origin" ]; then
     ok "$(t "le projet a déjà un dépôt : $origin" "the project already has a repository: $origin")"
   fi
