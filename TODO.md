@@ -59,30 +59,18 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
 
 ## CLI apps on jumphp.net: a real terminal in the browser (interactive like on the desktop)
 
-Done (2026-11-03): Play on a CLI app is a web terminal (jumphp-playground `public/cli/terminal.js`, `PlayController::terminal()`):
-each command line runs `app.php` in the shared engine's PHP (`phpw_restart`), the app's own Composer packages installed
-at publish (`Publisher::packages()`, no scripts nor plugins) and used by its tests (`TestRunner`). Limit: PHP has no
-keyboard there (stdin = end of file), so questions get no answer and full-screen screens show their plain fallback.
+Done (2026-11-04, not deployed yet): PHP runs in a Web Worker (jumphp-playground `public/cli/terminal-worker.js`) and waits
+for what is typed through a SharedArrayBuffer (the CLI page sends COOP / COEP / Document-Isolation-Policy); questions
+(line edited and echoed by the page, Ctrl+D / Ctrl+C = end of input, twice Ctrl+C = the command stopped), full-screen
+symfony/tui screens (`skeleton-cli/src/Ui/WebTerminal.php` + `WebLoop.php`, a Revolt loop without fibers), docs. Tried in
+headless Chrome (puppeteer 24.10, Chrome 137): hello-cli's `add` question answered, its `ui` screen driven by arrows /
+Enter / q, Ctrl+C, top level and inside a frame; the fallback without isolation. No engine rebuild.
 
-1. **Interactive questions** (Symfony `ask()` / `confirm()` / `choice()`, any `fgets(STDIN)`), no engine rebuild:
-   - run PHP in a Web Worker (the engine already runs in workers: `engine/web/jumphp-worker.js`); its emscripten `stdin`
-     callback waits on a `SharedArrayBuffer` with `Atomics.wait` until the page's terminal sends the typed line (or a
-     key in raw mode); Ctrl+C stops the command (an interrupt flag PHP checks, or terminate and restart the worker)
-   - the CLI page served cross-origin isolated (`Cross-Origin-Opener-Policy: same-origin`,
-     `Cross-Origin-Embedder-Policy: require-corp`, its resources same-origin or CORP): check the web IDE's preview
-     frame and the game page framing still work
-   - hidden input (passwords: Symfony uses `stty -echo`): the page's terminal hides what is typed instead
-   - `stream_isatty(STDIN/STDOUT)`: true in the web terminal (an env var, e.g. `JUMPHP_WEB_TERMINAL=1`, the apps and the
-     skeleton check it), so apps choose their interactive path
-2. **Full-screen screens (symfony/tui)** like on the desktop:
-   - a web terminal for symfony/tui, like `skeleton-cli/src/Ui/WindowsTerminal.php` (no `stty` in the browser): raw keys
-     from the page, the size from xterm.js (and its resize events), output straight to xterm.js
-   - the Revolt event loop in the worker: waiting on keys and timers together (`Atomics.wait` with the next timer's
-     timeout instead of `stream_select` on STDIN)
-   - the skeleton picks it in the browser (`Platform`/env check, like `WindowsTerminal::create()`); apps made before
-     copy the file (docs/cli.md says how); hello-cli's screen tried for real in headless Chrome (keys typed, screen read)
-3. Docs: AGENTS.md §18 and docs/cli.md ("On jumphp.net") once each part works; the playground's 14 languages for any
-   new text of the page.
+Left:
+- hidden answers (Symfony's `askHidden`: `stty -echo`) are shown as typed: a way for the app to tell the page
+- browsers without Document-Isolation-Policy (Firefox, Safari): inside the playground's frame they get a link to a tab of
+  its own; try them for real
+- fibers in the WebAssembly engine (PHP's ucontext fallback: `getcontext` is missing) would let Revolt's own drivers run
 
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
@@ -179,8 +167,8 @@ later iOS).
   (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
   computer, never in the project)
-- Claude's usage in the IDE's Claude pane: three bars from 0 to 100 %, the context window of the conversation, the
-  5-hour limit and the weekly limit, each with the date / time it resets
+- done (2026-11-04, not released yet): Claude's usage in the IDE's Claude pane: the open conversation's context, the 5-hour
+  and the weekly limits with when they start again (from claude's rate_limit_event and its usage)
 
 ## Windows: Docker through WSL, and a composer install that seemed to loop
 

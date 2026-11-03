@@ -1122,8 +1122,10 @@ When the user wants a command-line tool, "a CLI", "a TUI", a program "in the ter
   `ScreenBuffer::getScreen()`).
 - Don'ts: no SDL / engine scenes, no `sleep()` inside a screen (`scheduleInterval()`), data only in `Main::boot()`'s
   folder. In the browser (the playground's Play, `docs/cli.md`) its commands are typed in a web terminal, one
-  `app.php` run each, with no keyboard for PHP: questions and full-screen screens only work in a real terminal
-  (keep the plain output when `stream_isatty()` is false). A widget removed from the `Tui` (`remove()`) loses its listeners:
+  `app.php` run each, interactive like a real terminal: questions wait for the typed line, full-screen screens get raw
+  keys through `src/Ui/WebTerminal.php` + `WebLoop.php` (a Revolt loop without fibers: the browser's PHP has none) when
+  `JUMPHP_WEB_TERMINAL=1`; `stream_isatty()` is false there, so check `WebTerminal::available()` too, and keep the
+  plain output for pipes. A widget removed from the `Tui` (`remove()`) loses its listeners:
   build a new one to show it again. A screen needs a terminal both ways (`stream_isatty(STDIN)` and `STDOUT`): on a
   pipe, print something plain instead.
 

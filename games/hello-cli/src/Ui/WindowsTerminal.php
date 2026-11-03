@@ -40,9 +40,12 @@ final class WindowsTerminal implements TerminalInterface
     private ?\Closure $onInput = null;
     private ?\Closure $onResize = null;
 
-    /** The terminal for this console: this one on Windows (with FFI), symfony/tui's elsewhere. */
+    /** The terminal for this console: this one on Windows (with FFI), jumphp.net's web terminal, symfony/tui's elsewhere. */
     public static function create(): TerminalInterface
     {
+        if (WebTerminal::available()) {
+            return WebTerminal::create();
+        }
         if (PHP_OS_FAMILY === 'Windows' && extension_loaded('ffi')) {
             try {
                 $terminal = new self();

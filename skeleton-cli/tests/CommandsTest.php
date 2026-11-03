@@ -34,6 +34,15 @@ final class CommandsTest extends TestCase
         self::assertStringContainsString('Water the plants', $this->app->getDisplay());
     }
 
+    public function testAddAsksWhatToDoWhenNothingIsGiven(): void
+    {
+        $this->app->setInputs(['Buy bread']);
+        self::assertSame(0, $this->app->run(['command' => 'add']));
+        self::assertStringContainsString('What to do?', $this->app->getDisplay());
+        $this->app->run(['command' => 'list-tasks']);
+        self::assertStringContainsString('Buy bread', $this->app->getDisplay());
+    }
+
     public function testDoneMarksATask(): void
     {
         $this->app->run(['command' => 'add', 'text' => ['Call', 'Ada']]);

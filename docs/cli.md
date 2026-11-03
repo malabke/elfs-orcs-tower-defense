@@ -61,9 +61,21 @@ experimental by Symfony: pin its version in composer.json when the app is done.
 Published on the playground (a project of kind `cli`), the app's **Play** is a terminal in the page: each command line
 typed there runs `app.php` with those arguments in the browser's PHP (WebAssembly), with the app's own Composer
 packages (the playground installs its composer.json's `require` from Packagist: no scripts nor plugins). Its output
-keeps its colours (`FORCE_COLOR`); `var/` (its data) is kept in the visitor's browser. PHP has no keyboard there
-(standard input is empty): questions get no answer and the full-screen screens show their plain fallback (`stream_isatty()`
-is false), so keep one. The playground runs the app's tests (`tests/`) with the same packages.
+keeps its colours (`FORCE_COLOR`); `var/` (its data) is kept in the visitor's browser. The playground runs the app's
+tests (`tests/`) with the same packages.
+
+It is interactive like a real terminal: PHP runs in a Web Worker and waits for what is typed (a SharedArrayBuffer; the
+page is cross-origin isolated by its COOP / COEP / Document-Isolation-Policy headers).
+- **Questions** (Symfony's `ask()`, `confirm()`, `choice()`, any `fgets(STDIN)`): the page edits and echoes the line,
+  Enter gives it to PHP; Ctrl+D or Ctrl+C is the end of the input (Symfony: "Aborted."). Twice Ctrl+C within 1.5 s stops
+  the command (its PHP is started again: what it did not save is lost). Hidden answers are not hidden there (no `stty`).
+- **Full-screen screens** (symfony/tui): `JUMPHP_WEB_TERMINAL=1` says the app runs there; `WindowsTerminal::create()`
+  then gives `src/Ui/WebTerminal.php` (raw keys and the size through the page's `/dev/jumphp-term` and
+  `/dev/jumphp-keys`) and installs `src/Ui/WebLoop.php`, a Revolt event loop without fibers (the browser's PHP has none:
+  Revolt's own drivers abort there). `stream_isatty()` stays false: check `WebTerminal::available()` too (the skeleton's
+  `ui` command does). Apps made before: copy `WebTerminal.php`, `WebLoop.php` and the `create()` / `UiCommand` lines.
+- A browser that cannot isolate the page in a frame (no Document-Isolation-Policy) shows a link to open it in a tab of
+  its own; there questions end at once and screens show their plain fallback, as before.
 
 ## One executable
 
