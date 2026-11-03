@@ -29,35 +29,52 @@ final class World3d
         uniform mat4 u_model;
         varying vec3 v_color;
         varying vec3 v_normal;
+        varying vec3 v_world;
+        varying float v_local;
         varying float v_dist;
         void main() {
-            gl_Position = u_vp * (u_model * vec4(a_pos, 1.0));
+            vec4 w = u_model * vec4(a_pos, 1.0);
+            gl_Position = u_vp * w;
             v_normal = (u_model * vec4(a_normal, 0.0)).xyz;
             v_color = a_color;
+            v_world = w.xyz;
+            v_local = a_pos.y;
             v_dist = gl_Position.w;
         }
         GLSL;
 
+    // Stylised light: half-lambert between a cool shade and a warm sun, the foot of every model darkened (a cheap
+    // occlusion that sets it on the ground), a pale rim against the camera, a little more colour.
     private const FRAGMENT = <<<'GLSL'
         precision mediump float;
         uniform vec3 u_light;
         uniform vec3 u_tint;
+        uniform vec3 u_eye;
         uniform float u_alpha;
         uniform float u_emit;
+        uniform float u_ao;
         uniform vec3 u_fog;
         uniform vec2 u_fogRange;
         varying vec3 v_color;
         varying vec3 v_normal;
+        varying vec3 v_world;
+        varying float v_local;
         varying float v_dist;
         void main() {
             vec3 n = normalize(v_normal);
-            float diffuse = max(dot(n, u_light), 0.0);
-            float sky = 0.5 + 0.5 * n.y;
+            float d = clamp(dot(n, u_light) * 0.5 + 0.5, 0.0, 1.0);
+            d = d * d * (3.0 - 2.0 * d);
+            vec3 light = mix(vec3(0.46, 0.55, 0.80), vec3(1.22, 1.08, 0.86), d);
+            float foot = mix(1.0, mix(0.52, 1.0, smoothstep(0.0, 9.0, v_local)), u_ao);
+            vec3 view = normalize(u_eye - v_world);
+            float rim = pow(1.0 - clamp(dot(n, view), 0.0, 1.0), 2.4) * 0.26 * u_ao;
             vec3 base = v_color * u_tint;
-            vec3 lit = base * (0.30 + 0.28 * sky + 0.62 * diffuse);
-            lit = mix(lit, base * 1.25, u_emit);
+            vec3 lit = base * light * foot + rim * vec3(0.85, 0.92, 1.0);
+            float g = dot(lit, vec3(0.299, 0.587, 0.114));
+            lit = mix(vec3(g), lit, 1.16);
+            lit = mix(lit, base * 1.3, u_emit);
             float f = clamp((v_dist - u_fogRange.x) / (u_fogRange.y - u_fogRange.x), 0.0, 1.0);
-            gl_FragColor = vec4(mix(lit, u_fog, f * 0.8), u_alpha);
+            gl_FragColor = vec4(mix(lit, u_fog, f * 0.75), u_alpha);
         }
         GLSL;
 
@@ -120,11 +137,13 @@ final class World3d
             'u_vp' => $rig->viewProj(),
             'u_light' => $this->light,
             'u_fog' => $fog,
-            'u_fogRange' => [520.0, 1500.0],
+            'u_fogRange' => [650.0, 1500.0],
+            'u_eye' => $rig->eye(),
             'u_model' => self::matrix(0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
             'u_tint' => [1.0, 1.0, 1.0],
             'u_alpha' => 1.0,
             'u_emit' => 0.0,
+            'u_ao' => 0.0,
         ], false));
     }
 
@@ -135,7 +154,7 @@ final class World3d
      * @param array{0: float, 1: float, 2: float} $tint multiplies the colours (above 1: brighter)
      */
     public function draw(string $key, callable $build, float $x, float $y, float $z, float $yaw = 0.0, float|array $scale = 1.0,
-                         array $tint = [1.0, 1.0, 1.0], float $alpha = 1.0, float $emit = 0.0): void
+                         array $tint = [1.0, 1.0, 1.0], float $alpha = 1.0, float $emit = 0.0, float $ao = 1.0): void
     {
         if ($this->gl === null || $this->scene === null) {
             return;
@@ -150,25 +169,26 @@ final class World3d
             'u_tint' => $tint,
             'u_alpha' => $alpha,
             'u_emit' => $emit,
+            'u_ao' => $ao,
         ], $alpha < 1.0));
     }
 
     /** A flat disc on the ground, $r wide (shadows, ranges, blasts). */
     public function disc(float $x, float $z, float $r, array $tint, float $alpha, float $y = 0.6, float $emit = 0.0): void
     {
-        $this->draw('unit:disc', static fn () => Props::disc(), $x, $y, $z, 0.0, [$r, 1.0, $r], $tint, $alpha, $emit);
+        $this->draw('unit:disc', static fn () => Props::disc(), $x, $y, $z, 0.0, [$r, 1.0, $r], $tint, $alpha, $emit, 0.0);
     }
 
     /** A thin ring on the ground, $r wide. */
     public function ring(float $x, float $z, float $r, array $tint, float $alpha, float $y = 0.8): void
     {
-        $this->draw('unit:ring', static fn () => Props::ring(), $x, $y, $z, 0.0, [$r, 1.0, $r], $tint, $alpha, 1.0);
+        $this->draw('unit:ring', static fn () => Props::ring(), $x, $y, $z, 0.0, [$r, 1.0, $r], $tint, $alpha, 1.0, 0.0);
     }
 
     /** A ball in the air, $r wide. */
     public function ball(float $x, float $y, float $z, float $r, array $tint, float $alpha = 1.0, float $emit = 1.0): void
     {
-        $this->draw('unit:ball', static fn () => Props::ball(), $x, $y, $z, 0.0, $r, $tint, $alpha, $emit);
+        $this->draw('unit:ball', static fn () => Props::ball(), $x, $y, $z, 0.0, $r, $tint, $alpha, $emit, 0.0);
     }
 
     /** @return array{0: int, 1: int} */
