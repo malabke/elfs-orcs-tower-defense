@@ -1,0 +1,37 @@
+# The JumPHP IDE's .dmg for macOS (hdiutil only exists on a Mac): takes ide-macos.zip of the release ide-v<version>,
+# puts the .app and a link to Applications in a disk image, and adds JumPHP-IDE.dmg to the same release.
+# Started by games/ide/tools/release.sh after each release (or by hand: Actions > ide-dmg).
+name: ide-dmg
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The IDE release (ide-v0.1.28)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: The .app of the release
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p ide-macos.zip
+          mkdir dmg && ditto -x -k ide-macos.zip dmg
+          ls -la dmg
+      - name: JumPHP-IDE.dmg
+        run: |
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "JumPHP IDE" -srcfolder dmg -ov -format UDZO JumPHP-IDE.dmg
+          hdiutil verify JumPHP-IDE.dmg
+          hdiutil attach -nobrowse -readonly -mountpoint /tmp/ide JumPHP-IDE.dmg
+          ls /tmp/ide; ls /tmp/ide/*.app/Contents/MacOS
+          hdiutil detach /tmp/ide
+      - name: Added to the release
+        run: gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber JumPHP-IDE.dmg

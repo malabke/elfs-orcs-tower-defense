@@ -68,4 +68,6 @@ git add "$DIR/installer/update.json" "$DIR/installer/version.json" "$DIR/config/
 git commit -m "JumPHP IDE $VERSION: the installed IDEs update themselves to it, the installers install it" -- \
   "$DIR/installer/update.json" "$DIR/installer/version.json" "$DIR/config/update.pub" "$DIR/config/game.yaml"
 git push origin main
-say "done: the installed IDEs take $VERSION within 6 hours (or at their next start)"
+# the .dmg for macOS, made on one of GitHub's Macs and added to the release a few minutes later (.github/workflows/ide-dmg.yml)
+gh workflow run ide-dmg.yml -R "$REPO" -f tag="$TAG" || echo "the .dmg was not started: Actions > ide-dmg > Run workflow (tag $TAG)"
+say "done: the installed IDEs take $VERSION within 6 hours (or at their next start); JumPHP-IDE.dmg in a few minutes"
