@@ -38,6 +38,17 @@ project (games/ only), a game kept in its own repository (linked into the IDE's 
 the Terminal, External Libraries, debugger), publishing on jumphp.net (a test project), the GitHub workflows that build
 apps. Then a JumPHP release (VERSION, runtime, Packagist) and an IDE release.
 
+## Same work: names that say "game" for every kind of project, backward compatible
+
+Asked by David (2026-11-03) with the above: what is named after games but holds any project gets a neutral name, the old
+one still read (nothing breaks):
+- `config/game.yaml` → `config/app.yaml` (or `project.yaml`: to decide), its root key `game:` → `app:`; the engine
+  (GameConfig), bin/jumphp, tools/, the IDE, jumphp.net read the new name first, then the old one; new projects get
+  the new one; `bin/jumphp update` leaves old projects as they are
+- `JUMPHP_GAME` (.env) → `JUMPHP_APP` (both read), `game_dir` / `default_game` / "missing <game>" messages, help texts
+- the same kind of names elsewhere: `game.json` (the portal), `GameConfig`, `GameTestCase` (keep it for games, an alias
+  for apps?), the IDE's labels; list them all first (grep), then decide with David what is renamed and what stays
+
 ## Where the entry point of a project is (asked by David, to keep in the docs)
 
 - which project: the folder name, `games/<id>`, given to the commands; without it: the folder of `games/` the command
