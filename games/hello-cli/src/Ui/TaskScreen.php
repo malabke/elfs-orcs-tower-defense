@@ -23,7 +23,7 @@ final class TaskScreen
     /** this console's own screen: the screen takes the whole terminal (its alternate screen), as vim or htop do */
     private bool $fullScreen;
     private SelectListWidget $list;
-    private InputWidget $input;
+    private ?InputWidget $input = null;
     private TextWidget $help;
 
     /** @param TerminalInterface|null $terminal null: this console's (WindowsTerminal::create()) */
@@ -32,8 +32,6 @@ final class TaskScreen
         $this->fullScreen = $terminal === null;
         $this->tui = new Tui(terminal: $terminal ?? WindowsTerminal::create());
         $this->list = new SelectListWidget([], 12);
-        $this->input = new InputWidget();
-        $this->input->setPrompt('New task: ');
         $this->help = new TextWidget();
         $this->tui->add(new TextWidget(Main::title()))->add($this->list)->add($this->help);
 
@@ -47,13 +45,6 @@ final class TaskScreen
             };
         });
         $this->list->onSelect(fn (SelectEvent $e) => $this->toggle((int)$e->getValue()));
-        $this->input->onSubmit(function (SubmitEvent $e): void {
-            if (trim($e->getValue()) !== '') {
-                $this->tasks->add($e->getValue());
-            }
-            $this->stopAdding();
-        });
-        $this->input->onCancel(fn (CancelEvent $e) => $this->stopAdding());
         $this->refresh();
         $this->tui->setFocus($this->list);
     }
@@ -104,9 +95,21 @@ final class TaskScreen
         return true;
     }
 
+    /**
+     * The field to add a task: a new one each time (a widget removed from the Tui loses its listeners, so the same
+     * field added again would not hear Enter any more).
+     */
     private function startAdding(): bool
     {
-        $this->input->setValue('');
+        $this->input = new InputWidget();
+        $this->input->setPrompt('New task: ');
+        $this->input->onSubmit(function (SubmitEvent $e): void {
+            if (trim($e->getValue()) !== '') {
+                $this->tasks->add($e->getValue());
+            }
+            $this->stopAdding();
+        });
+        $this->input->onCancel(fn (CancelEvent $e) => $this->stopAdding());
         $this->tui->add($this->input);
         $this->tui->setFocus($this->input);
         return true;
@@ -114,7 +117,10 @@ final class TaskScreen
 
     private function stopAdding(): void
     {
-        $this->tui->remove($this->input);
+        if ($this->input !== null) {
+            $this->tui->remove($this->input);
+            $this->input = null;
+        }
         $this->refresh(count($this->tasks->all()) - 1);
         $this->tui->setFocus($this->list);
     }

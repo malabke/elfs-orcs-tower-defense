@@ -1111,7 +1111,9 @@ When the user wants a command-line tool, "a CLI", "a TUI", a program "in the ter
 - Tests as you go: `ApplicationTester` for commands, a `VirtualTerminal` for screens (`simulateInput()`, `tick()`,
   `ScreenBuffer::getScreen()`).
 - Don'ts: no SDL / engine scenes, no `sleep()` inside a screen (`scheduleInterval()`), data only in `Main::boot()`'s
-  folder; no browser build (a terminal program).
+  folder; no browser build (a terminal program). A widget removed from the `Tui` (`remove()`) loses its listeners:
+  build a new one to show it again. A screen needs a terminal both ways (`stream_isatty(STDIN)` and `STDOUT`): on a
+  pipe, print something plain instead.
 
 
 ## 19. Plugins of the JumPHP IDE (PHP)

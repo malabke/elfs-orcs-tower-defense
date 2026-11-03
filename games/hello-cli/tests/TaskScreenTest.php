@@ -67,6 +67,26 @@ final class TaskScreenTest extends TestCase
         self::assertCount(3, (new Tasks($this->file))->all());
     }
 
+    public function testTasksAreAddedOneAfterTheOther(): void
+    {
+        $this->keys('a', 'O', 'n', 'e', "\r");
+        $this->keys('a', 'T', 'w', 'o', "\r");
+        $this->keys('a', 'T', 'h', 'r', 'e', 'e', "\r");
+        self::assertSame(['Write the tests', 'Ship it', 'One', 'Two', 'Three'], array_column((new Tasks($this->file))->all(), 'text'));
+        self::assertStringContainsString('[ ] Three', $this->screenText());
+        self::assertStringNotContainsString('New task:', $this->screenText(), 'the field is gone');
+        // the list has the keys again
+        $this->keys('q');
+        self::assertFalse($this->screen->tui->isRunning());
+    }
+
+    public function testEscapeLeavesTheFieldWithoutAdding(): void
+    {
+        $this->keys('a', 'N', 'o', "\x1b");
+        $this->keys('a', 'Y', 'e', 's', "\r");
+        self::assertSame(['Write the tests', 'Ship it', 'Yes'], array_column((new Tasks($this->file))->all(), 'text'));
+    }
+
     public function testQQuits(): void
     {
         $this->keys('q');
