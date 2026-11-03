@@ -914,7 +914,9 @@ To make a game for the user on the playground:
 
 What the playground publishes and how:
 - only `games/<id>/` (the `vendor/` of the game is not used: the engine and its packages come from the shared
-  engine; Composer packages of the game itself are not supported there);
+  engine; Composer packages of a game are not supported there). An application without the engine (a CLI app:
+  `kind: cli`, Symfony Console + symfony/tui) gets its own packages: the playground installs its composer.json's
+  `require` (Packagist only, no scripts nor plugins) for its tests and its page;
 - the engine version is the repository's `VERSION` (it must be one the playground serves: keep JumPHP up to
   date with `bin/jumphp update`);
 - a commit with a PHP syntax error (`php -l`) is not published; no PHP runs on the server (it runs in the
@@ -1117,7 +1119,9 @@ When the user wants a command-line tool, "a CLI", "a TUI", a program "in the ter
 - Tests as you go: `ApplicationTester` for commands, a `VirtualTerminal` for screens (`simulateInput()`, `tick()`,
   `ScreenBuffer::getScreen()`).
 - Don'ts: no SDL / engine scenes, no `sleep()` inside a screen (`scheduleInterval()`), data only in `Main::boot()`'s
-  folder; no browser build (a terminal program). A widget removed from the `Tui` (`remove()`) loses its listeners:
+  folder. In the browser (the playground's Play, `docs/cli.md`) its commands are typed in a web terminal, one
+  `app.php` run each, with no keyboard for PHP: questions and full-screen screens only work in a real terminal
+  (keep the plain output when `stream_isatty()` is false). A widget removed from the `Tui` (`remove()`) loses its listeners:
   build a new one to show it again. A screen needs a terminal both ways (`stream_isatty(STDIN)` and `STDOUT`): on a
   pipe, print something plain instead.
 

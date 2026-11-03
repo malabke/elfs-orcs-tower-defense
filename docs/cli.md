@@ -56,6 +56,15 @@ experimental by Symfony: pin its version in composer.json when the app is done.
   `JUMPHP_ROWS`, 100 x 30), types `JUMPHP_KEYS` (`[[seconds, "text"], ...]`), passes `JUMPHP_ARGS`, and writes the
   screen as text in `var/screenshots/screen.txt` (a fresh data folder each time).
 
+## On jumphp.net
+
+Published on the playground (a project of kind `cli`), the app's **Play** is a terminal in the page: each command line
+typed there runs `app.php` with those arguments in the browser's PHP (WebAssembly), with the app's own Composer
+packages (the playground installs its composer.json's `require` from Packagist: no scripts nor plugins). Its output
+keeps its colours (`FORCE_COLOR`); `var/` (its data) is kept in the visitor's browser. PHP has no keyboard there
+(standard input is empty): questions get no answer and the full-screen screens show their plain fallback (`stream_isatty()`
+is false), so keep one. The playground runs the app's tests (`tests/`) with the same packages.
+
 ## One executable
 
 `bin/jumphp export:standalone <app>` (`--linux`, `--windows`, `--macos`): StaticPHP's micro of the desktop apps
