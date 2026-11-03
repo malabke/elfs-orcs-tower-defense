@@ -43,6 +43,18 @@ final class CommandsTest extends TestCase
         self::assertStringContainsString('Buy bread', $this->app->getDisplay());
     }
 
+    public function testHiddenQuestionsGoThroughTheAppsQuestionHelper(): void
+    {
+        $main = new Main($this->dir);
+        $helper = $main->console->getHelperSet()->get('question');
+        self::assertInstanceOf(\App\Ui\QuestionHelper::class, $helper);
+        $input = new \Symfony\Component\Console\Input\ArrayInput([]);
+        $input->setStream(fopen('data://text/plain,s3cret' . "\n", 'r'));
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+        $question = (new \Symfony\Component\Console\Question\Question('Password? '))->setHidden(true);
+        self::assertSame('s3cret', $helper->ask($input, $output, $question));
+    }
+
     public function testDoneMarksATask(): void
     {
         $this->app->run(['command' => 'add', 'text' => ['Call', 'Ada']]);

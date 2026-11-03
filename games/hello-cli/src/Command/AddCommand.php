@@ -28,7 +28,9 @@ final class AddCommand extends Command
     {
         $text = trim(implode(' ', (array)$input->getArgument('text')));
         if ($text === '' && $input->isInteractive()) {
-            $text = trim((string)(new QuestionHelper())->ask($input, $output, new Question('What to do? ')));
+            $helper = $this->getHelper('question');      // App\Ui\QuestionHelper: hidden answers stay hidden in the browser too
+            assert($helper instanceof QuestionHelper);
+            $text = trim((string)$helper->ask($input, $output, new Question('What to do? ')));
         }
         if ($text === '') {
             $output->writeln('<error>Nothing to add: add <what to do></error>');

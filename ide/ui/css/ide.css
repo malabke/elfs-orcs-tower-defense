@@ -245,6 +245,7 @@ textarea.input { resize: vertical; font-family: var(--font); }
 /* status bar */
 .statusbar { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--text-2); user-select: none; white-space: nowrap; overflow: hidden; }
 .sb-item { padding: 0 6px; height: 20px; display: inline-flex; align-items: center; gap: 5px; border-radius: 4px; }
+.sb-readonly { color: var(--warning, #d9a520); display: inline-flex; align-items: center; gap: 4px; }
 .sb-item.clickable { cursor: pointer; }
 .sb-item.clickable:hover { background: var(--hover); color: var(--text); }
 .sb-spacer { flex: 1; }

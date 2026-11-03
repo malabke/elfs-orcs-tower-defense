@@ -327,6 +327,13 @@ class App {
     $('stopBtn').hidden = !caps.run;
     $('previewBtn').hidden = !caps.preview;
     $('publishBtn').hidden = !(backend.kind === 'native' && this.project.playground);
+    // a project shared with read rights only (the web IDE): said in the status bar, the files open read-only
+    let mark = $('sbReadOnly');
+    if (caps.readOnly && !mark) {
+      mark = el('span.sb-item.sb-readonly', { id: 'sbReadOnly', title: 'This project is shared with you to read: you can open the files, search and run the tests, not change them' }, icon('eye'), 'Read only');
+      $('sbBranch').before(mark);
+    }
+    if (mark) mark.hidden = !caps.readOnly;
     const user = this.session?.user || backend.config.user;
     const widget = $('userWidget');
     clear(widget);
@@ -537,7 +544,7 @@ class App {
     a.add('recentFiles', 'Recent Files', () => recentFiles(this), { kbd: 'Ctrl+E', icon: 'history' });
     a.add('fileStructure', 'File Structure', () => fileStructure(this), { kbd: 'Ctrl+F12', icon: 'structure' });
     a.add('findInFiles', 'Find in Files…', () => this.findInFiles(), { kbd: 'Ctrl+Shift+F', icon: 'find' });
-    a.add('replaceInFiles', 'Replace in Files…', () => this.findInFiles({ replace: true }), { kbd: 'Ctrl+Shift+R' });
+    if (!caps.readOnly) a.add('replaceInFiles', 'Replace in Files…', () => this.findInFiles({ replace: true }), { kbd: 'Ctrl+Shift+R' });
     a.add('find', 'Find', trigger('actions.find'), { kbd: 'Ctrl+F' });
     a.add('replace', 'Replace', trigger('editor.action.startFindReplaceAction'), { kbd: 'Ctrl+R' });
     a.add('gotoLine', 'Go to Line…', trigger('editor.action.gotoLine'), { kbd: 'Ctrl+G' });
@@ -552,7 +559,7 @@ class App {
     a.add('saveAll', 'Save All', () => this.editors.saveAll(), { kbd: 'Ctrl+S' });
     a.add('closeTab', 'Close Tab', () => { const t = this.editors.activeTab(); if (t) this.editors.closeTab(this.editors.focused, t); }, { kbd: 'Ctrl+F4' });
     a.add('split', 'Split Right', () => this.editors.split(), { icon: 'split' });
-    a.add('newFile', 'New File…', () => this.tree.newFile(this.tree.targetDir()), { kbd: 'Alt+Insert', icon: 'plus' });
+    if (!caps.readOnly) a.add('newFile', 'New File…', () => this.tree.newFile(this.tree.targetDir()), { kbd: 'Alt+Insert', icon: 'plus' });
     a.add('project', 'Project Tool Window', () => this.toggleTool('project'), { kbd: 'Alt+1', icon: 'folder' });
     a.add('structure', 'Structure Tool Window', () => this.toggleTool('structure'), { kbd: 'Alt+7', icon: 'structure' });
     a.add('problemsTool', 'Problems Tool Window', () => this.toggleTool('problems'), { kbd: 'Alt+6', icon: 'problems' });

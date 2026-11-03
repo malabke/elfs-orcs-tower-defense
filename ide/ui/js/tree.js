@@ -16,9 +16,17 @@ export class ProjectTree {
 
   title() { return 'Project'; }
 
+  /** A project shared with read rights only (the web IDE): nothing to create, rename or delete. */
+  get readOnly() { return !!this.app.project?.capabilities?.readOnly; }
+
+  refuseReadOnly() {
+    if (this.readOnly) notify('Read only: this project is shared with you to read.', 'info');
+    return this.readOnly;
+  }
+
   actions() {
     return [
-      el('button', { title: 'New file (Alt+Insert)', onclick: () => this.newFile(this.targetDir()) }, icon('plus')),
+      this.readOnly ? null : el('button', { title: 'New file (Alt+Insert)', onclick: () => this.newFile(this.targetDir()) }, icon('plus')),
       el('button', { title: 'Select Opened File (Alt+F1)', onclick: () => this.reveal(this.app.editors.activePath(), true) }, icon('eye')),
       el(`label.tw-check${prefs.get('autoscroll', false) ? '.on' : ''}`, { title: 'Always Select Opened File: the Project view follows the file you are on' },
         el('input', { type: 'checkbox', checked: prefs.get('autoscroll', false), onchange: (e) => {
@@ -28,7 +36,7 @@ export class ProjectTree {
         } }), 'Follow'),
       el('button', { title: 'Collapse all', onclick: () => { this.open.clear(); this.save(); this.render(); } }, icon('collapse')),
       el('button', { title: 'Refresh', onclick: () => this.refresh() }, icon('refresh')),
-    ];
+    ].filter(Boolean);
   }
 
   async refresh() {
@@ -221,8 +229,9 @@ export class ProjectTree {
   contextMenu(node, e) {
     const dir = node.dir ? node.path : dirname(node.path);
     const module = this.app.project?.modules?.find((m) => m.dir && (node.path + '/').startsWith(m.dir + '/'));
+    const write = !this.readOnly;
     menu([
-      { label: 'New', icon: 'plus', items: [
+      !write ? null : { label: 'New', icon: 'plus', items: [
         { label: 'File…', icon: 'file', action: () => this.newFile(dir) },
         { label: 'PHP Class…', action: () => this.newFile(dir, '.php', 'Class name (Hero, Scene/PlayScene, Entity/Coin…)') },
         { label: 'Directory…', icon: 'folder', action: () => this.newDirectory(dir) },
@@ -232,7 +241,7 @@ export class ProjectTree {
         module ? { label: 'Entity', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'src/Entity', '.php', 'Entity class name') } : null,
         module ? { label: 'Game Test', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'tests', '.php', 'Test class name (JumpTest…)', 'Test') } : null,
       ].filter(Boolean) },
-      '-',
+      write ? '-' : null,
       !node.dir && this.app.playTarget?.(node.path) ? { label: this.app.playTarget(node.path).label, icon: colorIcon('play', 'green'), kbd: 'Ctrl+Shift+F10', action: () => this.app.playFile(node.path) } : null,
       !node.dir && this.app.playTarget?.(node.path) ? '-' : null,
       !node.dir ? { label: 'Open', action: () => this.app.editors.open(node.path) } : null,
@@ -242,8 +251,8 @@ export class ProjectTree {
       { label: 'Copy Path', action: () => copyText(node.path) },
       { label: 'Copy Name', action: () => copyText(basename(node.path)) },
       !node.dir && this.app.project?.capabilities?.localHistory ? { label: 'Show Local History', icon: 'history', action: () => showLocalHistory(this.app, node.path) } : null,
-      node.path ? { label: 'Rename…', kbd: 'Shift+F6', action: () => this.rename(node.path) } : null,
-      node.path ? { label: 'Delete…', kbd: 'Delete', action: () => this.remove(node.path) } : null,
+      write && node.path ? { label: 'Rename…', kbd: 'Shift+F6', action: () => this.rename(node.path) } : null,
+      write && node.path ? { label: 'Delete…', kbd: 'Delete', action: () => this.remove(node.path) } : null,
       this.app.git?.enabled && node.path ? '-' : null,
       this.app.git?.enabled && node.path ? { label: 'Git', icon: 'branch', items: [
         { label: 'Show Diff', icon: 'diff', action: () => this.app.git.diff(node.path), disabled: node.dir },
@@ -257,6 +266,7 @@ export class ProjectTree {
   }
 
   async newFile(dir, suffix = '', label = 'File name (folders with /)', append = '') {
+    if (this.refuseReadOnly()) return;
     let name = await prompt(suffix === '.php' ? 'New PHP Class' : 'New File', { label: dir ? `In ${dir}/` : 'At the project root', placeholder: label });
     if (!name) return;
     name = name.trim();
@@ -273,6 +283,7 @@ export class ProjectTree {
   }
 
   async newDirectory(dir) {
+    if (this.refuseReadOnly()) return;
     const name = await prompt('New Directory', { label: dir ? `In ${dir}/` : 'At the project root' });
     if (!name) return;
     const path = (dir ? dir + '/' : '') + name.trim().replace(/\/+$/, '');
@@ -282,6 +293,7 @@ export class ProjectTree {
   }
 
   async rename(path) {
+    if (this.refuseReadOnly()) return;
     const name = basename(path);
     const dot = name.lastIndexOf('.');
     const target = await prompt('Rename', { value: name, label: path, select: [0, dot > 0 ? dot : name.length], ok: 'Rename' });
@@ -310,6 +322,7 @@ export class ProjectTree {
   }
 
   async remove(path) {
+    if (this.refuseReadOnly()) return;
     const isDir = !this.files.includes(path);
     if (!(await confirm('Delete', `Delete ${isDir ? 'the folder' : ''} ${path}${isDir ? ' and everything in it' : ''}?`, { ok: 'Delete', danger: true }))) return;
     try {

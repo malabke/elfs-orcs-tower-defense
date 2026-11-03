@@ -37,6 +37,16 @@ final class WebTerminal implements TerminalInterface
         return getenv('JUMPHP_WEB_TERMINAL') === '1' && file_exists(self::CONTROL);
     }
 
+    /** A hidden answer (a password) is being typed: the page stops showing the keys (true), or shows them again. */
+    public static function hideInput(bool $hide): void
+    {
+        $control = self::available() ? @fopen(self::CONTROL, 'r+') : false;
+        if ($control) {
+            fwrite($control, $hide ? "hidden\n" : "shown\n");
+            fclose($control);
+        }
+    }
+
     /** This terminal, with an event loop that works there (the browser's PHP has no fibers: WebLoop). */
     public static function create(): self
     {

@@ -6,6 +6,7 @@ use App\Command\AddCommand;
 use App\Command\DoneCommand;
 use App\Command\ListCommand;
 use App\Command\UiCommand;
+use App\Ui\QuestionHelper;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,6 +25,8 @@ final class Main
     {
         $this->tasks = new Tasks($data . '/tasks.json');
         $this->console = new Application(self::title(), self::version());
+        // questions: hidden answers stay hidden in jumphp.net's web terminal too ($this->getHelper('question'))
+        $this->console->getHelperSet()->set(new QuestionHelper());
         $this->console->addCommands([
             new UiCommand($this->tasks),
             new AddCommand($this->tasks),
