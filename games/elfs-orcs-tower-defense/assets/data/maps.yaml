@@ -130,7 +130,7 @@ maps:
     name: FROSTPEAK RIDGE
     theme: snow
     hero: 0.7
-    start_gold: 400
+    start_gold: 470
     lives: 20
     first_wave: 30
     paths:

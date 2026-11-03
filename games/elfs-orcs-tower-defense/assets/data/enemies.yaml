@@ -236,7 +236,7 @@ enemies:
     armor: armored
     attack: 40
     gold: 80
-    lives: 5
+    lives: 4
     boss: true
   high_warden:
     side: alliance

@@ -232,8 +232,8 @@ towers:
     desc: RIDERS HOLD THE ROAD
     sprite: stables
     levels:
-      - {cost: 90, kind: barracks, range: 64, soldiers: {count: 2, hp: 60, damage: 8, respawn: 8, sprite: rider}}
-      - {cost: 80, soldiers: {count: 2, hp: 90, damage: 12, respawn: 8, sprite: rider}}
+      - {cost: 90, kind: barracks, range: 64, soldiers: {count: 2, hp: 70, damage: 10, respawn: 8, sprite: rider}}
+      - {cost: 80, soldiers: {count: 2, hp: 100, damage: 14, respawn: 8, sprite: rider}}
       - {cost: 110, soldiers: {count: 3, hp: 120, damage: 16, respawn: 7, sprite: rider}}
     specs:
       royal_guard:
@@ -253,7 +253,7 @@ towers:
     desc: FAST SPEARS, GROUND AND AIR
     sprite: javelin
     levels:
-      - {cost: 75, damage: 12, rate: 0.95, range: 76, damage_type: pierce, targets: both, projectile: javelin, speed: 230}
+      - {cost: 75, damage: 13, rate: 0.95, range: 76, damage_type: pierce, targets: both, projectile: javelin, speed: 230}
       - {cost: 70, damage: 19, rate: 0.9}
       - {cost: 110, damage: 29, rate: 0.85, range: 82}
     specs:
@@ -429,9 +429,9 @@ towers:
     desc: ORCS HOLD THE ROAD
     sprite: barracks
     levels:
-      - {cost: 70, kind: barracks, range: 64, soldiers: {count: 3, hp: 50, damage: 7, respawn: 9, sprite: grunt}}
-      - {cost: 70, soldiers: {count: 3, hp: 75, damage: 10, respawn: 9, sprite: grunt}}
-      - {cost: 100, soldiers: {count: 3, hp: 100, damage: 14, respawn: 8, sprite: grunt}}
+      - {cost: 70, kind: barracks, range: 64, soldiers: {count: 3, hp: 60, damage: 8, respawn: 9, sprite: grunt}}
+      - {cost: 70, soldiers: {count: 3, hp: 90, damage: 12, respawn: 8, sprite: grunt}}
+      - {cost: 100, soldiers: {count: 3, hp: 120, damage: 16, respawn: 7, sprite: grunt}}
     specs:
       berserker_pit:
         name: BERSERKER PIT
