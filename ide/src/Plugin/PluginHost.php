@@ -41,6 +41,9 @@ final class PluginHost
     /** @var array{disabled: list<string>, settings: array<string, array<string, mixed>>}|null */
     private ?array $state = null;
 
+    /** @var array<string, array<string, array<string, mixed>>> each plugin's settings page: its fields (Api::settings) */
+    private array $fields = [];
+
     /** @var array<string, string> where an older version of a plugin was replaced: needs a restart */
     private array $pending = [];
 
@@ -113,6 +116,7 @@ final class PluginHost
         $this->listeners = array_values(array_filter($this->listeners, $keep));
         $this->timers = array_values(array_filter($this->timers, $keep));
         $this->mcp = array_filter($this->mcp, $keep);
+        unset($this->fields[$plugin]);
     }
 
     // what plugins add (Api) ----------------------------------------------------------------------------------------
@@ -222,8 +226,15 @@ final class PluginHost
         $this->ide->register('plugins.enable', fn (array $p) => $this->enable((string)($p['id'] ?? ''), !empty($p['on'])));
         $this->ide->register('plugins.setting', function (array $p) {
             $info = $this->plugins[(string)($p['id'] ?? '')]['info'] ?? throw new \InvalidArgumentException('no plugin ' . ($p['id'] ?? ''));
-            $this->setSetting($info, (string)($p['name'] ?? ''), $p['value'] ?? null);
-            return true;
+            $name = (string)($p['name'] ?? '');
+            $value = $this->checkSetting($info->id, $name, $p['value'] ?? null);
+            $this->setSetting($info, $name, $value);
+            foreach ($this->listeners as $l) {
+                if ($l['plugin'] === $info->id && $l['event'] === 'setting.changed') {
+                    $this->call($info->id, fn () => ($l['listener'])($name, $value), false);
+                }
+            }
+            return ['value' => $value];
         });
         if ($this->userDir !== null) {
             $this->ide->register('plugins.install', fn (array $p) => $this->install((string)($p['dir'] ?? '')));
@@ -244,6 +255,7 @@ final class PluginHost
         }
         return $p['info']->describe() + ['status' => $p['status'], 'error' => $p['error'], 'restart' => isset($this->pending[$id]),
             'installedVersion' => $installed,
+            'settings' => $this->settingsPage($id),
             'removable' => $this->userDir !== null && $p['info']->source === 'user'];
     }
 
@@ -475,6 +487,57 @@ final class PluginHost
             return $this->load($p['info']->dir, $p['info']->source);
         }
         return $this->describe($id);
+    }
+
+    /** @param array<string, array<string, mixed>> $fields */
+    public function setSettingsFields(PluginInfo $plugin, array $fields): void
+    {
+        $page = [];
+        foreach ($fields as $name => $f) {
+            $type = in_array($f['type'] ?? 'text', ['text', 'number', 'bool', 'choice'], true) ? ($f['type'] ?? 'text') : 'text';
+            $page[(string)$name] = ['label' => (string)($f['label'] ?? $name), 'type' => $type, 'default' => $f['default'] ?? match ($type) {
+                'bool' => false, 'number' => 0, 'choice' => array_key_first((array)($f['choices'] ?? [])), default => '',
+            }, 'description' => (string)($f['description'] ?? '')]
+                + ($type === 'choice' ? ['choices' => array_map('strval', (array)($f['choices'] ?? []))] : [])
+                + ($type === 'number' ? array_intersect_key($f, ['min' => 1, 'max' => 1]) : []);
+        }
+        $this->fields[$plugin->id] = $page;
+    }
+
+    public function settingDefault(PluginInfo $plugin, string $name): mixed
+    {
+        return $this->fields[$plugin->id][$name]['default'] ?? null;
+    }
+
+    /** @return list<array<string, mixed>> the fields of a plugin's settings page with their values (none: no page) */
+    private function settingsPage(string $id): array
+    {
+        $values = $this->state()['settings'][$id] ?? [];
+        $out = [];
+        foreach ($this->fields[$id] ?? [] as $name => $f) {
+            $out[] = ['name' => $name, 'value' => $values[$name] ?? $f['default']] + $f;
+        }
+        return $out;
+    }
+
+    /** A value from the settings page, as its field's type wants it (a plugin without fields: as it comes). */
+    private function checkSetting(string $id, string $name, mixed $value): mixed
+    {
+        $f = $this->fields[$id][$name] ?? null;
+        if ($f === null) {
+            if (isset($this->fields[$id])) {
+                throw new \InvalidArgumentException("no setting $name");
+            }
+            return $value;
+        }
+        return match ($f['type']) {
+            'bool' => (bool)$value,
+            'number' => is_numeric($value)
+                ? max($f['min'] ?? -INF, min($f['max'] ?? INF, $value + 0))
+                : throw new \InvalidArgumentException("{$f['label']}: a number"),
+            'choice' => isset($f['choices'][(string)$value]) ? (string)$value : throw new \InvalidArgumentException("{$f['label']}: one of " . implode(', ', array_keys($f['choices']))),
+            default => (string)$value,
+        };
     }
 
     /** @return array<string, mixed> */

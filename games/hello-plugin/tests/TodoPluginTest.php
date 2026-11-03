@@ -36,6 +36,18 @@ final class TodoPluginTest extends PluginTestCase
         self::assertStringNotContainsString('sound', $text);
     }
 
+    public function testItsSettingsPage(): void
+    {
+        $this->project(['a.php' => "<?php\n// TODO: sound\n// FIXME: crash\n// TODO: music\n"]);
+        self::assertSame(['fixmeOnly' => false, 'warnFixme' => true, 'max' => 500], $this->settingsPage());
+        $this->changeSetting('fixmeOnly', true);
+        self::assertStringNotContainsString('sound', $this->toolText('todos'));
+        $this->changeSetting('warnFixme', false);
+        self::assertSame([], $this->problems('a.php', $this->read('a.php')));
+        self::assertSame(10, $this->changeSetting('max', 3));          // at least 10
+        self::assertSame(['fixmeOnly' => true, 'warnFixme' => false, 'max' => 10], $this->settingsPage());
+    }
+
     public function testASavedFileUpdatesTheList(): void
     {
         $this->project(['a.php' => "<?php\n"]);

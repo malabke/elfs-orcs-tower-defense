@@ -143,7 +143,7 @@ later iOS).
 - plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
   PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
   IDE's MCP server, updates: checked every 6 hours,
-  installed automatically if wanted): a plugin's own settings page, plugins in the web IDE (they would run on the server: a
+  installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE (they would run on the server: a
   sandbox first)
 - editors for a game's resources, inside the IDE: sprites (sheets, animations, palettes), music, sound effects (and
   tiles / levels): see how David's game site with editors does it (its public/js/editor-sprites.js, editor-music.js,

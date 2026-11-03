@@ -544,3 +544,5 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .plugin-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
 .plugin-stats-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .plugin-stats-cols ul { list-style: none; padding: 0; margin: 0; }
+.plugin-settings .plugin-setting .muted { font-size: 12px; }
+.plugin-settings .plugin-setting input[type=checkbox] { margin-right: 4px; }

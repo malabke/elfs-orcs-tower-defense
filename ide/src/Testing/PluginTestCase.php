@@ -81,6 +81,24 @@ abstract class PluginTestCase extends TestCase
         return str_starts_with($id, 'plugin:') ? $id : 'plugin:' . (string)json_decode((string)file_get_contents($this->pluginDir() . '/composer.json'), true)['extra']['jumphp-ide']['id'] . ":$id";
     }
 
+    private function pluginId(): string
+    {
+        return (string)json_decode((string)file_get_contents($this->pluginDir() . '/composer.json'), true)['extra']['jumphp-ide']['id'];
+    }
+
+    /** @return array<string, mixed> the plugin's settings page as the IDE shows it: name => value (its defaults until changed) */
+    protected function settingsPage(): array
+    {
+        $me = array_values(array_filter($this->ide->handle('plugins.list', []), fn ($p) => $p['id'] === $this->pluginId()))[0] ?? [];
+        return array_column($me['settings'] ?? [], 'value', 'name');
+    }
+
+    /** The user changes a field of the settings page and saves (on('setting.changed') listeners run): the value kept. */
+    protected function changeSetting(string $name, mixed $value): mixed
+    {
+        return $this->ide->handle('plugins.setting', ['id' => $this->pluginId(), 'name' => $name, 'value' => $value])['value'];
+    }
+
     /** Runs an action, the editor on $path (its text read from the project) at $line. */
     protected function action(string $id, ?string $path = null, int $line = 1, int $column = 1, string $selection = ''): mixed
     {

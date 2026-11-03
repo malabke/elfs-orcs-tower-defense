@@ -104,13 +104,14 @@ final class TodoPlugin implements Plugin
 | `completion($glob, fn (EditorState) => items)` | Completion in the files that match: `label`, `insert`, `detail`, `kind` (text, keyword, value, property, method, function, class, snippet). |
 | `diagnostics($glob, fn ($path, $text) => problems)` | Problems in the files that match, checked as the user types: `line`, `column`, `endLine`, `endColumn`, `message`, `severity` (warning or error). |
 | `mcpTool($name, $description, fn (array $args), $properties, $required)` | Adds a tool for Claude, on the IDE's MCP server (see below). Returns its MCP name. |
-| `on('file.saved' \| 'files.changed', fn)` | A listener. `file.saved` gets the path; `files.changed` means files changed outside the editor (git, a run). |
+| `on('file.saved' \| 'files.changed' \| 'setting.changed', fn)` | A listener. `file.saved` gets the path; `files.changed` means files changed outside the editor (git, a run); `setting.changed` gets the name and the value saved on the plugin's settings page. |
 | `every($seconds, fn)` | A timer, called on the IDE's frame. |
 | `notify($message, $kind)`, `openFile($path, $line)`, `showToolWindow($id)`, `run($command, $label)` | Asks the interface to show a notification, open a file at a line, show a tool window, or run a command in the Run window. |
 | `workspace()` | The project's files: `files()`, `read()`, `write()`, `exists()`… Paths are relative to the project. |
 | `root()` | The project's folder on this computer. |
 | `core()` | The IDE's core: `->index` (the PHP index), `->php` (code intelligence: completion, definitions, usages), `->search`, `->git`. |
-| `setting($name, $default)`, `setSetting($name, $value)` | The plugin's settings, kept on this computer for all projects. |
+| `settings([$name => field, ...])` | The plugin's **settings page**: Tools › Plugins… › **Settings…** next to it. A field: `label`, `type` (text, number, bool, choice), `default`, `description`, `choices` (choice: value => label), `min` / `max` (number). The IDE draws the form and checks the values (a number is kept between min and max). |
+| `setting($name, $default)`, `setSetting($name, $value)` | The plugin's settings, kept on this computer for all projects. Without a value of the user's, `setting()` gives `$default`, else the field's `default`. `on('setting.changed', fn (string $name, mixed $value) => ...)` follows the settings page. |
 
 Globs: `*` (every file), `*.php` (a file name), `config/*.yaml` (a path).
 
@@ -229,6 +230,8 @@ final class TodoPluginTest extends PluginTestCase
 | `wait($seconds)` | Lets time pass for the timers. |
 | `mcp($name, $args)` | Calls one of the plugin's tools for Claude. |
 | `mcpTools()` | The MCP names of the plugin's tools. |
+| `settingsPage()` | The settings page as the IDE shows it: name => value (the defaults until changed). |
+| `changeSetting($name, $value)` | The user saves a field of the settings page (`setting.changed` listeners run); returns the value kept. |
 | `notifications()`, `opened()`, `ui($do)`, `errors()` | What the plugin asked the interface, and the errors it reported. |
 
 ## Sharing a plugin: jumphp.net

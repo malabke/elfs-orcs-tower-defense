@@ -145,10 +145,30 @@ final class Api
         return $this->ide;
     }
 
-    /** A setting of this plugin, kept for this computer (all projects). */
+    /**
+     * The plugin's settings page (Tools > Plugins… > Settings… next to it): its fields, drawn by the IDE, kept for this
+     * computer; read them with setting(), on('setting.changed', fn (string $name, mixed $value) => ...) follows them.
+     *
+     *     $ide->settings([
+     *         'tag' => ['label' => 'Comment tag', 'default' => 'TODO', 'description' => 'what the tool window lists'],
+     *         'max' => ['label' => 'At most', 'type' => 'number', 'default' => 200, 'min' => 1, 'max' => 5000],
+     *         'case' => ['label' => 'Match case', 'type' => 'bool', 'default' => false],
+     *         'sort' => ['label' => 'Sort by', 'type' => 'choice', 'choices' => ['path' => 'File', 'text' => 'Text'], 'default' => 'path'],
+     *     ]);
+     *
+     * Types: text (default), number, bool, choice. setting($name) gives the default until the user changes it.
+     *
+     * @param array<string, array{label?: string, type?: string, default?: mixed, description?: string, choices?: array<string, string>, min?: int|float, max?: int|float}> $fields
+     */
+    public function settings(array $fields): void
+    {
+        $this->host->setSettingsFields($this->plugin, $fields);
+    }
+
+    /** A setting of this plugin, kept for this computer (all projects): the user's value, else its field's default. */
     public function setting(string $name, mixed $default = null): mixed
     {
-        return $this->host->settings($this->plugin)[$name] ?? $default;
+        return $this->host->settings($this->plugin)[$name] ?? $default ?? $this->host->settingDefault($this->plugin, $name);
     }
 
     public function setSetting(string $name, mixed $value): void

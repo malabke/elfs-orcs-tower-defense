@@ -275,6 +275,7 @@ export class Plugins {
               return tools.length ? [el('div.plugin-mcp', { title: 'Claude Code calls them mcp__jumphp-ide__<name>' }, `Tools for Claude: ${tools.join(', ')}`)] : [];
             })()),
           el('div.plugin-buttons', {},
+            p.settings?.length ? el('button.btn.small', { title: 'Its settings, for this computer', onclick: () => this.settingsPage(p, draw) }, 'Settings…') : null,
             el('label', {}, el('input', { type: 'checkbox', checked: p.status !== 'disabled', onchange: async (e) => {
               await backend.invoke('plugins.enable', { id: p.id, on: e.target.checked }).catch((err) => notify(err.message, 'error'));
               if (e.target.checked) restart();
@@ -384,6 +385,37 @@ export class Plugins {
         }
       },
     })), at);
+  }
+
+  /** A plugin's settings page: the fields it declared ($ide->settings([...])), drawn here, saved one by one. */
+  settingsPage(p, redraw) {
+    const inputs = p.settings.map((f) => {
+      const id = `plugin-setting-${p.id}-${f.name}`;
+      let input;
+      if (f.type === 'bool') input = el('input', { id, type: 'checkbox', checked: !!f.value });
+      else if (f.type === 'choice') input = el('select', { id }, ...Object.entries(f.choices || {}).map(([v, l]) => el('option', { value: v, selected: String(f.value) === v }, l)));
+      else input = el('input', { id, type: f.type === 'number' ? 'number' : 'text', value: f.value ?? '', ...(f.min !== undefined ? { min: f.min } : {}), ...(f.max !== undefined ? { max: f.max } : {}) });
+      const read = () => (f.type === 'bool' ? input.checked : f.type === 'number' ? Number(input.value) : input.value);
+      const row = f.type === 'bool'
+        ? el('div.field.plugin-setting', {}, el('label', {}, input, ` ${f.label}`), f.description ? el('div.muted', {}, f.description) : null)
+        : el('div.field.plugin-setting', {}, el('label', { for: id }, f.label), input, f.description ? el('div.muted', {}, f.description) : null);
+      return { f, row, read };
+    });
+    dialog({ title: `${p.name} — settings`, body: el('div.plugin-settings', {}, ...inputs.map((i) => i.row)), buttons: [
+      { label: 'Save', primary: true, action: async () => {
+        for (const { f, read } of inputs) {
+          const value = read();
+          if (value !== f.value) await backend.invoke('plugins.setting', { id: p.id, name: f.name, value });
+        }
+        notify(`${p.name}: settings saved.`, 'success', { title: 'Plugins' });
+        redraw?.();
+      } },
+      { label: 'Reset', action: async () => {
+        for (const { f } of inputs) if (f.value !== f.default) await backend.invoke('plugins.setting', { id: p.id, name: f.name, value: f.default });
+        redraw?.();
+      } },
+      { label: 'Cancel' },
+    ] });
   }
 
   /** The private statistics of one of the user's plugins (jumphp.net, 30 days). */
