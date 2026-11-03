@@ -22,7 +22,9 @@ export class TerminalPanel {
     this.tabsNode = el('div.tw-tabs');
     backend.on('terminal.output', (p) => {
       const t = this.terms.find((x) => x.id === p.id);
-      if (t) t.term.write(decode(p.data));
+      if (!t) return;
+      t.lastOutput = Date.now();
+      t.term.write(decode(p.data));
     });
     backend.on('terminal.exit', (p) => {
       const t = this.terms.find((x) => x.id === p.id);
@@ -89,11 +91,28 @@ export class TerminalPanel {
     const t = this.current();
     if (!t) return;
     if (label) { t.label = label; this.render(); }
+    // typed only once the shell shows its prompt: typed earlier, the terminal echoes it, then readline again, and the
+    // shell's start (stty, its rc files) may swallow the line: it was shown twice and never ran
+    await this.ready(t);
     this.input(t, command + '\r');
     t.term.focus();
   }
 
+  /** Resolves once the shell has printed something (its prompt) then stayed quiet 250 ms; at most 8 s. */
+  ready(t) {
+    const begun = Date.now();
+    return new Promise((resolve) => {
+      const check = () => {
+        const now = Date.now();
+        if (t.ended || now - begun > 8000 || (t.lastOutput && now - t.lastOutput >= 250)) resolve();
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+
   async start(t) {
+    t.lastOutput = 0;
     t.ended = false;
     try {
       const r = await backend.invoke('terminal.open', { cols: t.term.cols, rows: t.term.rows });
