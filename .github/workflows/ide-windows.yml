@@ -1,0 +1,34 @@
+# The JumPHP IDE's core on a real Windows (ide/tests/WindowsTest.php): programs' output read as it is written without
+# the frame waiting, bin/jumphp run through Git for Windows' bash, a stopped run ends what it started, a Docker that
+# does not answer (its service stopped) or hangs is said in time. GitHub's Windows has no Linux containers, so the
+# real bin/jumphp commands (Docker) are not run here.
+name: ide-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['ide/src/Async/**', 'ide/src/Run/**', 'ide/tests/WindowsTest.php', '.github/workflows/ide-windows.yml']
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer
+          coverage: none
+      - name: composer install (ide)
+        working-directory: ide
+        run: composer install --no-interaction --no-progress
+      - name: Docker stopped (as on a computer where Docker Desktop is not started)
+        shell: pwsh
+        run: |
+          Stop-Service docker -ErrorAction SilentlyContinue
+          Get-Service docker -ErrorAction SilentlyContinue | Format-Table -AutoSize
+          docker info --format '{{.ServerVersion}}'; "docker info exit: $LASTEXITCODE"
+      - name: The tests on Windows
+        working-directory: ide
+        run: vendor/bin/phpunit tests/WindowsTest.php --testdox --display-skipped

@@ -72,6 +72,7 @@ final class Runner
                     . "or if it is installed somewhere unusual, start the IDE from a terminal where `docker` works. Searched: " . Environment::path());
             }
         }
+        $command = Environment::runnable($command, $this->root);     // Windows: bin/jumphp through Git's bash
         if (is_file('/usr/bin/setsid') || is_file('/bin/setsid')) {
             // its own process group: stop() ends docker and what it started too
             array_unshift($command, 'setsid');

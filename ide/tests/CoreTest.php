@@ -197,6 +197,18 @@ final class CoreTest extends TestCase
         }
     }
 
+    public function testOnWindowsShellScriptsGoThroughGitBash(): void
+    {
+        mkdir("$this->dir/bin");
+        file_put_contents("$this->dir/bin/jumphp", "#!/usr/bin/env bash\necho hi\n");
+        $bash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+        $run = fn (array $c) => \JumPHP\Ide\Async\Environment::runnable($c, $this->dir, 'Windows', $bash);
+        self::assertSame([$bash, 'bin/jumphp', 'install', 'pong'], $run(['bin/jumphp', 'install', 'pong']));
+        self::assertSame([$bash, '-c', 'bin/jumphp build:site a && bin/jumphp siteshot a'], $run(['sh', '-c', 'bin/jumphp build:site a && bin/jumphp siteshot a']));
+        self::assertSame(['git', 'status'], $run(['git', 'status']), 'programs stay as they are');
+        self::assertSame(['bin/jumphp', 'test', 'x'], \JumPHP\Ide\Async\Environment::runnable(['bin/jumphp', 'test', 'x'], $this->dir, 'Linux'));
+    }
+
     public function testNoDockerIsSaidAtOnce(): void
     {
         $saved = (string)getenv('PATH');

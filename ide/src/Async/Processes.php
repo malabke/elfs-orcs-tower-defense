@@ -141,6 +141,13 @@ final class Processes
             return false;
         }
         $status = proc_get_status($this->running[$id]['process']);
+        if (PHP_OS_FAMILY === 'Windows' && $status['pid'] > 0) {
+            // the whole tree (bash -> docker): proc_terminate only ends the first one
+            @exec('taskkill /T ' . ($force ? '/F ' : '') . '/PID ' . (int)$status['pid'] . ' 2>NUL');
+            if (!$force) {
+                @exec('taskkill /T /F /PID ' . (int)$status['pid'] . ' 2>NUL');   // console programs ignore the polite one
+            }
+        }
         if (function_exists('posix_kill') && $status['pid'] > 0) {
             // the whole group: bin/jumphp starts docker, which starts PHP
             @posix_kill(-$status['pid'], $force ? 9 : 15);

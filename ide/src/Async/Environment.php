@@ -53,6 +53,56 @@ final class Environment
         return $env;
     }
 
+    /**
+     * Windows: the bash of Git for Windows, which runs bin/jumphp and the `sh -c` scripts (bin/jumphp knows MINGW). Not
+     * C:\Windows\System32\bash.exe (WSL's: another file system). Null when Git for Windows is not installed.
+     */
+    public static function gitBash(): ?string
+    {
+        $candidates = [];
+        if (($git = self::which('git')) !== null) {
+            $candidates[] = dirname($git, 2) . '\bin\bash.exe';      // Git\cmd\git.exe -> Git\bin\bash.exe
+            $candidates[] = dirname($git) . '\bash.exe';               // Git\bin\git.exe
+        }
+        foreach ([getenv('ProgramW6432'), getenv('ProgramFiles'), getenv('LOCALAPPDATA') ? getenv('LOCALAPPDATA') . '\Programs' : null, 'C:\Program Files'] as $dir) {
+            if (is_string($dir) && $dir !== '') {
+                $candidates[] = $dir . '\Git\bin\bash.exe';
+            }
+        }
+        foreach ($candidates as $bash) {
+            if (is_file($bash)) {
+                return $bash;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A command as this system can start it. Windows starts no shell script: bin/jumphp (bash), a script with a #!
+     * line, `sh -c` / `bash -c` go through Git for Windows' bash.
+     *
+     * @param list<string> $command
+     * @return list<string>
+     */
+    public static function runnable(array $command, string $cwd, string $os = PHP_OS_FAMILY, ?string $bash = null): array
+    {
+        if ($os !== 'Windows' || $command === []) {
+            return $command;
+        }
+        $program = $command[0];
+        $script = in_array($program, ['sh', 'bash'], true);
+        if (!$script && pathinfo($program, PATHINFO_EXTENSION) === '') {
+            $absolute = in_array($program[0], ['/', '\\'], true) || preg_match('/^[A-Za-z]:/', $program) === 1;
+            $file = $absolute ? $program : $cwd . '/' . $program;
+            $script = is_file($file) && str_starts_with((string)@file_get_contents($file, false, null, 0, 2), '#!');
+        }
+        if (!$script) {
+            return $command;
+        }
+        $bash ??= self::gitBash() ?? throw new \RuntimeException('Git for Windows is needed: its bash runs bin/jumphp. Install it (https://git-scm.com/download/win), then run again.');
+        return in_array($program, ['sh', 'bash'], true) ? [$bash, ...array_slice($command, 1)] : [$bash, str_replace('\\', '/', $program), ...array_slice($command, 1)];
+    }
+
     /** Where a program is (null: not found in the PATH programs get). */
     public static function which(string $program): ?string
     {
