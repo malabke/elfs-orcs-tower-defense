@@ -57,6 +57,33 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
 - the playground's shared engine loading the extensions a published game requires (today a game's own Composer
   packages are not supported there)
 
+## CLI apps on jumphp.net: a real terminal in the browser (interactive like on the desktop)
+
+Done (2026-11-03): Play on a CLI app is a web terminal (jumphp-playground `public/cli/terminal.js`, `PlayController::terminal()`):
+each command line runs `app.php` in the shared engine's PHP (`phpw_restart`), the app's own Composer packages installed
+at publish (`Publisher::packages()`, no scripts nor plugins) and used by its tests (`TestRunner`). Limit: PHP has no
+keyboard there (stdin = end of file), so questions get no answer and full-screen screens show their plain fallback.
+
+1. **Interactive questions** (Symfony `ask()` / `confirm()` / `choice()`, any `fgets(STDIN)`), no engine rebuild:
+   - run PHP in a Web Worker (the engine already runs in workers: `engine/web/jumphp-worker.js`); its emscripten `stdin`
+     callback waits on a `SharedArrayBuffer` with `Atomics.wait` until the page's terminal sends the typed line (or a
+     key in raw mode); Ctrl+C stops the command (an interrupt flag PHP checks, or terminate and restart the worker)
+   - the CLI page served cross-origin isolated (`Cross-Origin-Opener-Policy: same-origin`,
+     `Cross-Origin-Embedder-Policy: require-corp`, its resources same-origin or CORP): check the web IDE's preview
+     frame and the game page framing still work
+   - hidden input (passwords: Symfony uses `stty -echo`): the page's terminal hides what is typed instead
+   - `stream_isatty(STDIN/STDOUT)`: true in the web terminal (an env var, e.g. `JUMPHP_WEB_TERMINAL=1`, the apps and the
+     skeleton check it), so apps choose their interactive path
+2. **Full-screen screens (symfony/tui)** like on the desktop:
+   - a web terminal for symfony/tui, like `skeleton-cli/src/Ui/WindowsTerminal.php` (no `stty` in the browser): raw keys
+     from the page, the size from xterm.js (and its resize events), output straight to xterm.js
+   - the Revolt event loop in the worker: waiting on keys and timers together (`Atomics.wait` with the next timer's
+     timeout instead of `stream_select` on STDIN)
+   - the skeleton picks it in the browser (`Platform`/env check, like `WindowsTerminal::create()`); apps made before
+     copy the file (docs/cli.md says how); hello-cli's screen tried for real in headless Chrome (keys typed, screen read)
+3. Docs: AGENTS.md §18 and docs/cli.md ("On jumphp.net") once each part works; the playground's 14 languages for any
+   new text of the page.
+
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
 `bin/jumphp apple <game>` (docs/apple.md) builds the macOS app (.dmg, Apple silicon + Intel), the iPhone / iPad
