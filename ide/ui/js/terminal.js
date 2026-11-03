@@ -45,7 +45,7 @@ export class TerminalPanel {
 
   /** Shown: a first shell, the size of the window, the keys. */
   shown() {
-    if (!this.terms.length) this.open();
+    if (!this.terms.length && !this.running) this.open();
     else { this.render(); requestAnimationFrame(() => { this.fit(); this.current()?.term.focus(); }); }
   }
 
@@ -80,6 +80,17 @@ export class TerminalPanel {
     term.onResize(({ cols, rows }) => { if (t.id !== null && t.pty) backend.invoke('terminal.resize', { id: t.id, cols, rows }).catch(() => {}); });
     await this.start(t);
     term.focus();
+  }
+
+  /** Runs a command in a new tab (a CLI app's Run): typed into its shell, which stays there afterwards. */
+  async run(command, label = null) {
+    this.running = true;          // shown() must not open an empty shell beside it
+    try { await this.open(); } finally { this.running = false; }
+    const t = this.current();
+    if (!t) return;
+    if (label) { t.label = label; this.render(); }
+    this.input(t, command + '\r');
+    t.term.focus();
   }
 
   async start(t) {

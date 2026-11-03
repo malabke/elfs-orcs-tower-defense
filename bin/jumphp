@@ -231,7 +231,9 @@ php_run() {
   # not get -t (its output would come with \r)
   local tty=-i
   if [ -t 0 ] && [ -t 1 ]; then tty=-it; fi
-  docker run --rm "$tty" --user "$(id -u):$(id -g)" \
+  # --init: a real PID 1 that passes the signals on (PHP as PID 1 ignores SIGTERM: the IDE's Stop, a killed bin/jumphp
+  # left the container running)
+  docker run --rm --init "$tty" --user "$(id -u):$(id -g)" \
     "${WS[@]}" -w "/workspace/$wd" \
     -e HOME=/tmp -e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/workspace/.cache/composer \
     ${JUMPHP_LIVE:+-e JUMPHP_LIVE=/workspace/var/live/frame.png -e JUMPHP_LIVE_EVERY=${JUMPHP_LIVE_EVERY:-10}} \
@@ -511,7 +513,7 @@ cmd_twa() {
   local image="${JUMPHP_TWA_IMAGE:-jumphp/twa:dev}"
   docker image inspect "$image" >/dev/null 2>&1 || { say "building $image (first time, ~2 min)"; docker build -t "$image" docker/twa; }
   local log; log="$(mktemp)"
-  docker run --rm $TTY_FLAGS --network host --user "$(id -u):$(id -g)" \
+  docker run --rm --init $TTY_FLAGS --network host --user "$(id -u):$(id -g)" \
     "${WS[@]}" -v "$home/android/keys:/keys" -v "$home/android-sdk:/opt/android-sdk" -v "$home/gradle:/gradle" \
     -e HOME=/tmp/home -e GRADLE_USER_HOME=/gradle -e GAME="$game" -e URL="$url" -e PACKAGE="$package" -e NAME="$name" \
     -e BUMP="$bump" -e ACCEPT_LICENSE="$accept" \

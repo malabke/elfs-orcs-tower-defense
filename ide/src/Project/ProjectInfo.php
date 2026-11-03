@@ -107,8 +107,10 @@ final class ProjectInfo
                     continue;
                 }
                 if ($m['kind'] === 'cli') {
-                    // a CLI app (docs/cli.md): run (no terminal here: its plain output), tests, its screen as text, executables
-                    $configs[] = ['id' => "run:$id", 'label' => "Run $id", 'group' => $id, 'icon' => 'play', 'command' => ['bin/jumphp', 'run', $id], 'kind' => 'run'];
+                    // a CLI app (docs/cli.md): run (in the IDE's Terminal when there is one: its screens need a real terminal;
+                    // the Run window gives it pipes, its plain output), tests, its screen as text, executables
+                    $configs[] = ['id' => "run:$id", 'label' => "Run $id", 'group' => $id, 'icon' => 'play', 'command' => ['bin/jumphp', 'run', $id], 'kind' => 'run',
+                        'terminal' => $this->workspace->exists('bin/jumphp') && PHP_OS_FAMILY !== 'Windows'];     // Windows' Terminal is cmd.exe: no bash
                     $configs[] = ['id' => "test:$id", 'label' => "Test $id", 'group' => $id, 'icon' => 'test', 'command' => ['bin/jumphp', 'test', $id], 'kind' => 'test'];
                     $configs[] = ['id' => "shot:$id", 'label' => "Screen of $id (as text)", 'group' => $id, 'icon' => 'terminal', 'command' => ['bin/jumphp', 'shot', $id], 'kind' => 'tool'];
                     $configs[] = ['id' => "standalone:$id", 'label' => "Executable of $id (Linux)", 'group' => $id, 'icon' => 'package', 'command' => ['bin/jumphp', 'export:standalone', $id], 'kind' => 'build'];

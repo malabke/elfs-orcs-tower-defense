@@ -87,6 +87,13 @@ export class Runner {
     await this.app.editors.saveAll(true);
     // bin/jumphp runs everything in Docker: wait until the IDE has it running (it starts Docker Desktop by itself)
     if (/(^|[\/])jumphp$/.test(String(config.command?.[0] || ''))) await this.app.docker();
+    // a CLI app: in the Terminal (a real terminal: its full-screen screens get their keys and their size)
+    if (config.terminal && this.app.terminal && !Object.keys(env).length) {
+      const started = this.app.terminal.run(config.command.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`)).join(' '), config.label);
+      this.app.showTool('terminal');
+      await started;
+      return;
+    }
     try {
       const { id, label } = await backend.invoke('run.start', { id: config.id, command: config.id === 'adhoc' ? config.command : undefined, kind: config.kind, env });
       const shown = Object.entries(env).map(([k, v]) => `${k}=${v} `).join('');
