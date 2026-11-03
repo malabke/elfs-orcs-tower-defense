@@ -87,6 +87,7 @@ export class Git {
     };
     this.amend = amend;
     node.append(
+      ...[this.mergePanel()].filter(Boolean),
       el('div.tw-header', {}, el('span.tw-title', {}, 'Commit'), el('span.tw-spacer'), el('div.tw-actions', {},
         el('button', { title: 'Refresh', onclick: () => this.refresh() }, icon('refresh')),
         el('button', { title: 'Rollback the selected files', onclick: () => this.rollback([...this.checked]) }, icon('rollback')),
@@ -97,6 +98,58 @@ export class Git {
         el('div.actions', {}, this.buttons.commit, this.buttons.push,
           el('span', { style: { color: 'var(--text-3)', fontSize: '12px' } }, this.status.branch ? `on ${this.status.branch}${this.status.ahead ? ` · ${this.status.ahead}↑` : ''}${this.status.behind ? ` · ${this.status.behind}↓` : ''}` : ''))));
     this.updateButtons();
+  }
+
+  /** A merge stopped on conflicts: each conflicted file (compare, open, take ours / theirs / both, resolved), then commit or abort. */
+  mergePanel() {
+    if (!this.caps.branches || this.status.merging == null) return null;
+    const conflicts = this.status.files.filter((f) => f.conflict);
+    const what = this.status.merging ? `Merging ${this.status.merging} into ${this.status.branch || 'HEAD'}` : 'Merge in progress';
+    const take = (f, how, label, hint) => el('button.btn', { title: hint, onclick: () => this.resolve(f.path, how) }, label);
+    return el('div.merge-box', { style: { padding: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)' } },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' } }, icon('branch'),
+        el('strong', {}, what), el('span.hint', {}, conflicts.length ? `${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''} left` : 'every conflict resolved')),
+      ...conflicts.map((f) => el('div.merge-file', { style: { margin: '4px 0 8px' }, title: f.path },
+        el('div.row.st-conflict', { style: { paddingLeft: '6px' }, ondblclick: () => this.compareConflict(f.path) }, fileIcon(f.path), el('span.label', {}, f.path)),
+        el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', paddingLeft: '28px' } },
+        el('button.btn', { title: 'Their version beside yours', onclick: () => this.compareConflict(f.path) }, 'Compare'),
+        el('button.btn', { title: 'Edit the file with its <<<<<<< / >>>>>>> markers, then mark it resolved', onclick: () => this.app.editors.open(f.path) }, 'Open'),
+        take(f, 'ours', 'Ours', `Keep ${this.status.branch || 'the current branch'}'s version`),
+        take(f, 'theirs', 'Theirs', `Take ${this.status.merging || 'the merged branch'}'s version`),
+        take(f, 'both', 'Both', 'Ours, then theirs'),
+        take(f, 'mark', 'Resolved', 'The file as it is now (its markers edited away)')))),
+      el('div', { style: { display: 'flex', gap: '8px', marginTop: '6px' } },
+        el('button.btn.primary', { disabled: conflicts.length > 0, onclick: () => this.commitMerge() }, 'Commit Merge'),
+        el('button.btn', { onclick: () => this.abortMerge() }, 'Abort Merge')));
+  }
+
+  async compareConflict(path) {
+    try {
+      const v = await backend.invoke('git.conflict', { path });
+      this.app.editors.openDiff(path, { original: v.ours, modified: v.theirs, title: `${basename(path)} (ours ↔ theirs)` });
+    } catch (e) { notify(e.message, 'error', { title: 'Git' }); }
+  }
+
+  async resolve(path, how) {
+    await this.app.editors.saveAll(true);
+    try {
+      await backend.invoke('git.resolve', { path, how });
+      if (how !== 'mark') await this.app.editors.reloadFromDisk();
+    } catch (e) { notify(e.message, 'error', { title: 'Not resolved' }); }
+    this.refresh();
+  }
+
+  async commitMerge() {
+    try {
+      const { sha } = await backend.invoke('git.commitMerge');
+      notify(`Merge committed ${String(sha || '').slice(0, 8)}`, 'success', { title: 'Git', actions: [{ label: 'Push', action: () => this.push() }] });
+    } catch (e) { notify(e.message, 'error', { title: 'Merge not committed' }); }
+    this.refresh();
+  }
+
+  async abortMerge() {
+    if (!(await confirm('Abort Merge', 'Give up this merge? The branch goes back to how it was before it (what you resolved is lost).', { ok: 'Abort Merge', danger: true }))) return;
+    await this.run('git.abortMerge', {}, 'Merge aborted', true);
   }
 
   updateButtons() {
@@ -183,18 +236,64 @@ export class Git {
   }
 
   branchMenu(branch, at) {
+    const merging = this.status?.merging != null;
     menu([
       { head: branch.name },
-      { label: 'Checkout', action: () => this.run('git.checkout', { branch: branch.name }, `Checked out ${branch.name}`, true), disabled: branch.current },
-      { label: `Merge into current`, action: () => this.run('git.merge', { branch: branch.name }, `Merged ${branch.name}`, true), disabled: branch.current },
-      { label: 'New Branch from here…', action: async () => { await this.run('git.checkout', { branch: branch.name }, null, true); this.newBranch(); } },
-      !branch.remote ? { label: 'Delete', action: async () => { if (await confirm('Delete Branch', `Delete ${branch.name}?`, { ok: 'Delete', danger: true })) this.run('git.deleteBranch', { branch: branch.name }, 'Branch deleted'); }, disabled: branch.current } : null,
+      { label: 'Checkout', action: () => this.checkout(branch.name), disabled: branch.current || merging },
+      { label: `Merge into ${this.status?.branch || 'current'}`, action: () => this.merge(branch.name), disabled: branch.current || merging },
+      { label: 'New Branch from here…', action: async () => { if (branch.current || await this.checkout(branch.name)) this.newBranch(); }, disabled: merging },
+      branch.current && !branch.upstream ? { label: 'Push (publish this branch)', icon: 'push', action: () => this.push() } : null,
+      !branch.remote ? { label: 'Delete…', action: () => this.deleteBranch(branch.name), disabled: branch.current } : null,
     ].filter(Boolean), at);
+  }
+
+  /** Switches branch; local changes are offered a stash first (or the switch is cancelled). @return {Promise<boolean>} */
+  async checkout(name, create = false) {
+    if (this.status?.merging != null) { notify('Finish or abort the merge in progress first (Commit window).', 'warning', { title: 'Git' }); return false; }
+    await this.app.editors.saveAll(true);
+    await this.refresh();
+    const changed = (this.status?.files || []).filter((f) => f.status !== 'untracked');
+    if (!create && changed.length) {
+      if (!(await confirm('Uncommitted Changes', `${changed.length} file${changed.length > 1 ? 's have' : ' has'} changes not committed. Stash them (put aside, "Unstash" brings them back) and check out ${name}?`, { ok: 'Stash and Checkout' }))) return false;
+      try { await backend.invoke('git.stash', { message: `before checking out ${name}` }); } catch (e) { notify(e.message, 'error', { title: 'Stash failed' }); return false; }
+      notify('Your changes are stashed: Branches > Unstash brings them back.', 'info', { title: 'Git' });
+    }
+    await this.run('git.checkout', { branch: name, create }, create ? `On new branch ${name}` : `Checked out ${name}`, true);
+    return this.status?.branch === name.replace(/^origin\//, '');
+  }
+
+  async merge(name) {
+    await this.app.editors.saveAll(true);
+    const task = this.app.task?.(`Merging ${name} (git merge)…`, { open: () => this.app.showTool('commit') });
+    try {
+      const { conflicts } = await backend.invoke('git.merge', { branch: name });
+      await this.app.editors.reloadFromDisk();
+      this.app.tree?.refresh();
+      if (conflicts?.length) {
+        notify(`${conflicts.length} file${conflicts.length > 1 ? 's' : ''} in conflict: resolve them in the Commit window, then Commit Merge (or Abort Merge).`, 'warning', { title: `Merging ${name}` });
+        this.app.showTool('commit');
+      } else {
+        notify(`Merged ${name}`, 'success', { title: 'Git' });
+      }
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Merge failed' });
+    } finally {
+      task?.();
+      this.refresh();
+    }
+  }
+
+  async deleteBranch(name) {
+    const merged = await backend.invoke('git.isMerged', { branch: name }).catch(() => false);
+    const ok = merged
+      ? await confirm('Delete Branch', `Delete ${name}? It is merged into ${this.status?.branch || 'the current branch'}: nothing is lost.`, { ok: 'Delete', danger: true })
+      : await confirm('Delete Unmerged Branch', `${name} has commits that are not merged into ${this.status?.branch || 'the current branch'}: deleting it loses them (unless it was pushed). Delete it anyway?`, { ok: 'Delete Anyway', danger: true });
+    if (ok) this.run('git.deleteBranch', { branch: name, force: !merged }, 'Branch deleted');
   }
 
   async newBranch() {
     const name = await prompt('New Branch', { placeholder: 'feature/my-change', ok: 'Create' });
-    if (name) this.run('git.checkout', { branch: name.trim(), create: true }, `On new branch ${name}`, true);
+    if (name) this.checkout(name.trim(), true);
   }
 
   async run(command, payload, success, reload = false) {
@@ -211,7 +310,7 @@ export class Git {
       notify(e.message, 'error', { title: 'Git' });
     } finally {
       task?.();
-      this.refresh();
+      await this.refresh();
     }
   }
 

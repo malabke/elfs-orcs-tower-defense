@@ -593,6 +593,11 @@ final class Ide
         $this->register('git.checkout', fn (array $p) => $after($git->checkout((string)$p['branch'], !empty($p['create']))));
         $this->register('git.deleteBranch', fn (array $p) => $git->deleteBranch((string)$p['branch'], !empty($p['force'])));
         $this->register('git.merge', fn (array $p) => $after($git->merge((string)$p['branch'])));
+        $this->register('git.resolve', fn (array $p) => $after($git->resolve((string)$p['path'], (string)$p['how'])));
+        $this->register('git.conflict', fn (array $p) => $git->conflictVersions((string)$p['path']));
+        $this->register('git.commitMerge', fn () => $git->commitMerge()->then(fn ($sha) => ['sha' => $sha]));
+        $this->register('git.abortMerge', fn () => $after($git->abortMerge()));
+        $this->register('git.isMerged', fn (array $p) => $git->isMerged((string)$p['branch']));
         $this->register('git.log', fn (array $p) => $git->log(isset($p['path']) ? (string)$p['path'] : null, (int)($p['limit'] ?? 200)));
         $this->register('git.commitFiles', fn (array $p) => $git->commitFiles((string)$p['sha']));
         $this->register('git.blame', fn (array $p) => $git->blame((string)$p['path'], isset($p['content']) ? (string)$p['content'] : null));

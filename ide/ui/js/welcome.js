@@ -112,6 +112,7 @@ export class Welcome {
         el('div.p-main', {}, el('div.p-name', {}, p.title || p.slug), el('div.p-path', {}, p.localPath || p.description || p.repoUrl || '')),
         el('span.p-tag', {}, { original: 'game', cpc: 'CPC remake', port: 'port' }[p.kind] || p.kind || 'game'),
         p.status && p.status !== 'ready' && p.status !== 'published' ? el('span.p-tag', {}, p.status) : null,
+        p.shared ? el('span.p-tag', { title: 'Shared with you by its owner' }, p.role === 'write' ? 'shared · write' : 'shared · read') : null,
         el('button.btn.small', { onclick: (e) => { e.stopPropagation(); p.localPath ? this.open(p.localPath) : this.clone(p); } }, p.localPath ? 'Open' : 'Clone')));
     }
   }

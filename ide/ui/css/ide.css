@@ -294,7 +294,7 @@ textarea.input { resize: vertical; font-family: var(--font); }
 .toast .t-body { flex: 1; min-width: 0; }
 .toast .t-title { font-weight: 600; margin-bottom: 2px; }
 .toast .t-text { color: var(--text-2); white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto; }
-.toast.error { border-left: 3px solid var(--red); } .toast.success { border-left: 3px solid var(--green); } .toast.info { border-left: 3px solid var(--accent); }
+.toast.error { border-left: 3px solid var(--red); } .toast.success { border-left: 3px solid var(--green); } .toast.info { border-left: 3px solid var(--accent); } .toast.warning { border-left: 3px solid var(--yellow); }
 .toast .t-actions { display: flex; gap: 10px; margin-top: 6px; }
 .toast .t-actions a { cursor: pointer; }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
@@ -561,6 +561,14 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .claude-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .claude-conv { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .claude-settings { flex: none; padding: 0 8px 8px; }
+.claude-usage { flex: none; display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 4px 8px 2px; font-size: 11px; color: var(--text-3); }
+.claude-gauge { flex: 1 1 170px; min-width: 0; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.claude-gauge-label { flex: none; }
+.claude-gauge-bar { flex: 1 1 40px; min-width: 40px; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.claude-gauge-fill { display: block; height: 100%; width: 0; background: var(--accent, #4a90e2); transition: width .3s; }
+.claude-gauge[data-level="mid"] .claude-gauge-fill { background: #d9a520; }
+.claude-gauge[data-level="high"] .claude-gauge-fill { background: #d9534f; }
+.claude-gauge-text { flex: none; overflow: hidden; text-overflow: ellipsis; }
 .claude-status { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
 .claude-tabs { flex: none; display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 6px; border-bottom: 1px solid var(--border); }
 .claude-tabs .tw-tab { max-width: 100%; }

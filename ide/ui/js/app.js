@@ -336,7 +336,7 @@ class App {
 
   onGitStatus(status) {
     $('branchName').textContent = status.branch || 'detached';
-    $('sbBranch').textContent = this.project.capabilities.gitMode === 'drafts' ? `${status.files.length} draft(s)` : (status.branch ? '⎇ ' + status.branch : '');
+    $('sbBranch').textContent = this.project.capabilities.gitMode === 'drafts' ? `${status.files.length} draft(s)` : (status.branch ? '⎇ ' + status.branch + (status.merging != null ? ' · merging' : '') : '');
     this.badge('commit', status.files.length ? 'on' : null);
     for (const g of this.editors.groups) this.editors.renderTabs(g);
     this.tree.render();

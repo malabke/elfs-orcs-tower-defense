@@ -64,19 +64,20 @@ export class PublishPanel {
     const p = this.data.project;
     if (!p) { this.node.append(el('div.placeholder', {}, 'Loading…')); return; }
     if (p.error) { this.node.append(el('div.placeholder', {}, el('p', {}, p.error))); return; }
-    this.node.append(
+    this.node.append(...[
       el('div.pub-head', {}, el('div.pub-title', {}, p.title), el('span.pub-badge', { dataset: { status: p.status } }, p.status === 'ready' ? 'published' : p.status),
         p.stage ? el('span.pub-badge', { dataset: { status: p.stage === 'done' ? 'ready' : 'creating' } }, STAGES[p.stage]) : null,
+        p.shared ? el('span.pub-badge', { title: 'Shared with you by its owner' }, p.role === 'write' ? 'shared · write' : 'shared · read') : null,
         el('div.pub-links', {}, p.url ? this.link('Page', p.url) : null, p.play ? this.link('Play', p.play) : null, p.repoUrl ? this.link('GitHub', p.repoUrl) : null)),
       p.statusMessage ? el('pre.pub-message', {}, p.statusMessage) : null,
-      this.section('publish', 'Publish', (b) => this.publishSection(b)),
-      this.section('settings', 'Settings', (b) => this.settingsSection(b)),
+      p.role === 'read' ? null : this.section('publish', 'Publish', (b) => this.publishSection(b)),
+      p.shared ? null : this.section('settings', 'Settings', (b) => this.settingsSection(b)),
       this.section('stats', 'Statistics and messages', (b) => this.statsSection(b)),
       this.section('site', 'Web site', (b) => this.siteSection(b)),
-      this.section('downloads', 'Executables and installer', (b) => this.downloadsSection(b)),
-      this.section('android', 'Android app (Google Play)', (b) => this.androidSection(b)),
-      this.section('apple', 'iPhone, iPad and Mac apps (App Store)', (b) => this.appleSection(b)),
-    );
+      p.shared ? null : this.section('downloads', 'Executables and installer', (b) => this.downloadsSection(b)),
+      p.shared ? null : this.section('android', 'Android app (Google Play)', (b) => this.androidSection(b)),
+      p.shared ? null : this.section('apple', 'iPhone, iPad and Mac apps (App Store)', (b) => this.appleSection(b)),
+    ].filter(Boolean));
   }
 
   // publish ------------------------------------------------------------------------------------------------------

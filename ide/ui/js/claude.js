@@ -56,7 +56,8 @@ export class ClaudePanel {
     this.mcpBanner = el('div.claude-mcp', { hidden: true });
     this.tabsNode = el('div.claude-tabs');
     this.body = el('div.claude-body');
-    this.node = el('div.claude-panel', {}, this.tabsNode, this.mcpBanner, this.body,
+    this.usage = new UsageGauges();
+    this.node = el('div.claude-panel', {}, this.tabsNode, this.mcpBanner, this.body, this.usage.node,
       el('div.claude-bar.claude-settings', {}, this.modelSelect, this.effortSelect, this.status));
     this.remote = !!app.project.capabilities?.claudeRemote;     // the web IDE: the Claude of the user's computer
     this.historyLocal = backend.kind === 'native' && !this.remote;
@@ -64,7 +65,10 @@ export class ClaudePanel {
     this.active = null;            // a Conversation, or 'history'
     this.saveSoon = debounce(() => this.saveTabs(), 400);
     this.restore();
-    backend.on('claude.event', (p) => this.route(p)?.event(p));
+    backend.on('claude.event', (p) => {
+      if (p.event?.type === 'rate_limit_event') this.usage.limits(p.event.rate_limit_info);
+      this.route(p)?.event(p);
+    });
     backend.on('claude.exit', (p) => this.route(p)?.exit(p));
     backend.on('ui.broadcast', (m) => this.broadcast(m));
     this.checkStatus();
@@ -110,6 +114,7 @@ export class ClaudePanel {
     clear(this.body);
     if (target === 'history') this.body.append(this.historyNode());
     else if (target) { this.body.append(target.node); target.scroll(); requestAnimationFrame(() => target.input.focus()); }
+    this.usage.context(target && target !== 'history' ? target.context : null);
     this.renderTabs();
     this.saveSoon();
   }
@@ -533,6 +538,11 @@ class Conversation {
     if (event.type === 'system' && event.subtype === 'init') {
       panel.say(event.model ? `${event.model}` : 'working…');
     } else if (event.type === 'assistant') {
+      const u = event.message?.usage;
+      if (u && !event.parent_tool_use_id) {
+        this.context = { ...this.context, used: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.output_tokens || 0) };
+        if (panel.active === this) panel.usage.context(this.context);
+      }
       for (const part of event.message?.content || []) {
         if (part.type === 'text' && part.text?.trim()) this.add({ role: 'assistant', text: part.text });
         else if (part.type === 'tool_use') {
@@ -551,6 +561,11 @@ class Conversation {
         if (part.type === 'tool_result') panel.watch.result(part);
       }
     } else if (event.type === 'result') {
+      const windows = Object.values(event.modelUsage || {}).map((m) => m.contextWindow).filter(Boolean);
+      if (windows.length) {
+        this.context = { ...this.context, window: Math.max(...windows) };
+        if (panel.active === this) panel.usage.context(this.context);
+      }
       const seconds = Math.round((event.duration_ms || (Date.now() - this.run.started)) / 1000);
       const cost = typeof event.total_cost_usd === 'number' ? ` · $${event.total_cost_usd.toFixed(3)}` : '';
       if (event.is_error && event.result) this.add({ role: 'error', text: event.result });
@@ -665,4 +680,76 @@ function toolText(name, input, root) {
     Grep: () => `searching ${input.pattern}`, Glob: () => `looking for ${input.pattern}`, WebFetch: () => `fetching ${input.url}`,
     WebSearch: () => `searching the web: ${input.query}`, TodoWrite: () => 'planning',
   }[name] || (() => name.replace(/^mcp__[^_]+__/, '')))();
+}
+
+/**
+ * Claude's usage under the conversations: the open conversation's context window, and the account's 5-hour and weekly
+ * limits (what `claude` reports in its rate_limit_event), each with when it starts again. The limits are kept between
+ * starts of the IDE (they belong to the account, not to a conversation).
+ */
+export class UsageGauges {
+  constructor() {
+    this.bars = {};
+    const gauge = (key, label, title) => {
+      const fill = el('span.claude-gauge-fill');
+      const text = el('span.claude-gauge-text');
+      this.bars[key] = { node: el('div.claude-gauge', { title, dataset: { title } }, el('span.claude-gauge-label', {}, label), el('span.claude-gauge-bar', {}, fill), text), fill, text };
+      return this.bars[key].node;
+    };
+    this.node = el('div.claude-usage', {},
+      gauge('context', 'Context', 'The open conversation: how much of the model\'s context window it fills (Claude compacts it when it is full)'),
+      gauge('five_hour', '5 h', 'Your Claude plan: what is used of the 5-hour limit'),
+      gauge('seven_day', 'Week', 'Your Claude plan: what is used of the weekly limit'));
+    this.saved = prefs.get('claudeLimits', {}) || {};
+    this.context(null);
+    this.paint();
+    setInterval(() => this.paint(), 60000);
+  }
+
+  /** rate_limit_info of a rate_limit_event: {unifiedWindows: {five_hour: {utilization, resetsAt}, seven_day: ...}} */
+  limits(info) {
+    const windows = info?.unifiedWindows || (info?.rateLimitType ? { [info.rateLimitType]: info } : {});
+    for (const key of ['five_hour', 'seven_day']) {
+      const w = windows[key];
+      if (w && typeof w.utilization === 'number') this.saved[key] = { ratio: w.utilization, resets: w.resetsAt || null };
+    }
+    prefs.set('claudeLimits', this.saved);
+    this.paint();
+  }
+
+  context(ctx) {
+    const known = ctx?.used && ctx?.window;
+    this.set('context', known ? ctx.used / ctx.window : null,
+      known ? `${Math.round(100 * ctx.used / ctx.window)} % · ${tokens(ctx.used)} / ${tokens(ctx.window)}` : '—');
+  }
+
+  paint() {
+    for (const key of ['five_hour', 'seven_day']) {
+      const w = this.saved[key];
+      const over = w?.resets && w.resets * 1000 <= Date.now();      // that window started again since
+      if (!w) { this.set(key, null, '—'); continue; }
+      const ratio = over ? 0 : w.ratio;
+      this.set(key, ratio, `${Math.round(100 * ratio)} %` + (w.resets && !over ? ` · ↻ ${resetText(w.resets * 1000, key === 'seven_day')}` : ''));
+      this.bars[key].node.title = `${this.bars[key].node.dataset.title}: ${Math.round(100 * ratio)} % used` + (w.resets && !over ? `, starts again ${new Date(w.resets * 1000).toLocaleString()}` : '');
+    }
+  }
+
+  set(key, ratio, text) {
+    const b = this.bars[key];
+    const r = ratio === null ? 0 : Math.max(0, Math.min(1, ratio));
+    b.fill.style.width = `${(100 * r).toFixed(1)}%`;
+    b.node.dataset.level = ratio === null ? 'none' : r >= 0.9 ? 'high' : r >= 0.7 ? 'mid' : 'low';
+    b.text.textContent = text;
+  }
+}
+
+function tokens(n) {
+  return n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+}
+
+/** When a limit starts again: "14:30", or with the day for the weekly one ("Thu 09:00"). */
+function resetText(ms, withDay) {
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return (withDay || d.toDateString() !== new Date().toDateString() ? d.toLocaleDateString([], { weekday: 'short' }) + ' ' : '') + time;
 }

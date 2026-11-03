@@ -80,7 +80,33 @@ final class Git
      */
     public function status(): Deferred
     {
-        return $this->run(['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all'])->then(fn (string $out) => self::parseStatus($out));
+        return $this->run(['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all'])
+            ->then(fn (string $out) => self::parseStatus($out) + ['merging' => $this->mergingBranch()]);
+    }
+
+    /** The branch being merged when a merge stopped on conflicts ("" when its name is unknown), else null. */
+    public function mergingBranch(): ?string
+    {
+        $head = $this->gitPath('MERGE_HEAD');
+        if ($head === null || !is_file($head)) {
+            return null;
+        }
+        $message = (string)@file_get_contents((string)$this->gitPath('MERGE_MSG'));
+        return preg_match("/^Merge (?:remote-tracking )?branch '([^']+)'/", $message, $m) ? $m[1] : '';
+    }
+
+    /** A file of the repository's .git folder (a worktree's .git file points at it), null when it has none. */
+    private function gitPath(string $name): ?string
+    {
+        $dot = $this->root . '/.git';
+        if (is_dir($dot)) {
+            return "$dot/$name";
+        }
+        if (is_file($dot) && preg_match('/^gitdir:\s*(.+)$/m', (string)file_get_contents($dot), $m)) {
+            $dir = trim($m[1]);
+            return (preg_match('#^(/|[A-Za-z]:)#', $dir) ? $dir : $this->root . '/' . $dir) . '/' . $name;
+        }
+        return null;
     }
 
     /** @return array<string, mixed> */
@@ -131,6 +157,7 @@ final class Git
     /** The file's content at a revision (default HEAD); "" when it did not exist there. */
     public function show(string $path, string $revision = 'HEAD'): Deferred
     {
+        // revision ':1' / ':2' / ':3': the base, ours and theirs of a conflicted file (git show :2:<path>)
         return $this->run(['show', $revision . ':' . $path])->then(null, fn (\Throwable $e) => '');
     }
 
@@ -266,9 +293,82 @@ final class Git
         return $this->run(['branch', $force ? '-D' : '-d', $branch]);
     }
 
+    /**
+     * Merges a branch into the current one. Conflicts are not an error: the merge waits (resolve(), then
+     * commitMerge(), or abortMerge()).
+     *
+     * @return Deferred resolves with array{conflicts: list<string>}
+     */
     public function merge(string $branch): Deferred
     {
-        return $this->run(['merge', '--no-edit', $branch]);
+        return $this->author()->then(fn (array $author) => $this->run([...self::identity($author), 'merge', '--no-edit', $branch]))
+            ->then(fn () => ['conflicts' => []], fn (\Throwable $e) => $this->status()->then(function (array $status) use ($e) {
+                $conflicts = array_values(array_column(array_filter($status['files'], fn (array $f) => $f['conflict']), 'path'));
+                if (!$conflicts) {
+                    throw $e;
+                }
+                return ['conflicts' => $conflicts];
+            }));
+    }
+
+    /**
+     * Resolves a conflicted file: "ours" (the current branch's version), "theirs" (the merged branch's), "both"
+     * (ours then theirs), or "mark" (the file as it is now, edited by hand: refused while it has conflict markers).
+     */
+    public function resolve(string $path, string $how): Deferred
+    {
+        $add = fn () => $this->run(['add', '--', $path]);
+        return match ($how) {
+            'ours', 'theirs' => $this->run(['checkout', '--' . $how, '--', $path])->then($add, fn () => $this->run(['rm', '-q', '--', $path])),
+            'both' => $this->show($path, ':2')->then(fn (string $ours) => $this->show($path, ':3')->then(function (string $theirs) use ($path, $ours, $add) {
+                file_put_contents($this->root . '/' . $path, $ours . ($ours !== '' && !str_ends_with($ours, "\n") ? "\n" : '') . $theirs);
+                return $add();
+            })),
+            'mark' => preg_match('/^(<{7}|>{7})( |$)/m', (string)@file_get_contents($this->root . '/' . $path))
+                ? Deferred::rejected(new GitException("$path still has conflict markers (<<<<<<< / >>>>>>>): edit them away first"))
+                : $add(),
+            default => Deferred::rejected(new GitException("unknown way to resolve: $how")),
+        };
+    }
+
+    /** @return Deferred resolves with array{base: string, ours: string, theirs: string} (the three versions of a conflicted file) */
+    public function conflictVersions(string $path): Deferred
+    {
+        return $this->show($path, ':1')->then(fn (string $base) => $this->show($path, ':2')
+            ->then(fn (string $ours) => $this->show($path, ':3')->then(fn (string $theirs) => ['base' => $base, 'ours' => $ours, 'theirs' => $theirs])));
+    }
+
+    /** Commits the merge once every conflict is resolved (the message git prepared). */
+    public function commitMerge(): Deferred
+    {
+        return $this->status()->then(function (array $status) {
+            if ($status['merging'] === null) {
+                throw new GitException('no merge in progress');
+            }
+            if (array_filter($status['files'], fn (array $f) => $f['conflict'])) {
+                throw new GitException('some files still have conflicts: resolve them first');
+            }
+            return $this->author()->then(fn (array $author) => $this->run([...self::identity($author), 'commit', '--no-edit']));
+        })->then(fn () => $this->run(['rev-parse', 'HEAD']))->then(fn (string $sha) => trim($sha));
+    }
+
+    /** Gives up the merge in progress: the branch as it was before it. */
+    public function abortMerge(): Deferred
+    {
+        return $this->run(['merge', '--abort']);
+    }
+
+    /** Whether a local branch is merged into the current one (deleting it loses nothing). */
+    public function isMerged(string $branch): Deferred
+    {
+        return $this->run(['branch', '--merged', 'HEAD', '--format=%(refname:short)'])
+            ->then(fn (string $out) => in_array($branch, array_map('trim', explode("\n", $out)), true));
+    }
+
+    /** @param array<string, string> $author @return list<string> */
+    private static function identity(array $author): array
+    {
+        return $author ? ['-c', 'user.name=' . $author['name'], '-c', 'user.email=' . $author['email']] : [];
     }
 
     /** @return Deferred resolves with list<array{sha: string, short: string, author: string, email: string, time: int, subject: string, refs: string, parents: list<string>}> */
