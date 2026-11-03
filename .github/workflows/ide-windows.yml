@@ -28,7 +28,7 @@ jobs:
         run: |
           Stop-Service docker -ErrorAction SilentlyContinue
           Get-Service docker -ErrorAction SilentlyContinue | Format-Table -AutoSize
-          docker info --format '{{.ServerVersion}}'; "docker info exit: $LASTEXITCODE"
+          docker info --format '{{.ServerVersion}}'; "docker info exit: $LASTEXITCODE (1 expected)"; exit 0
       - name: The tests on Windows
         working-directory: ide
         run: vendor/bin/phpunit tests/WindowsTest.php --testdox --display-skipped
