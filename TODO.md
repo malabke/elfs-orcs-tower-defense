@@ -172,8 +172,3 @@ Seen 2026-11-02: two downloads of the installers out of six stopped half way thr
 Tried again the same evening: three downloads whole (Linux 5.4 MB/s, macOS 1 MB/s, Windows 0.4 MB/s). Likely
 transient (David). The executables stay behind Cloudflare. If it comes back: a cache rule on /installers/download/
 (the download counted another way), FrankenPHP's file server instead of PHP streaming them, Range requests.
-
-## Cleaning
-
-- the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's
-  processor, before docker/standalone/spc-target); no key points to it any more
