@@ -75,7 +75,7 @@ final class MapSelectTest extends GameTestCase
 
     public function testTheHeroButtonThenAClickOnTheRoadSendsTheHero(): void
     {
-        $this->game->start(PlayScene::class, ['faction' => 'elves', 'countdown' => 999]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'faction' => 'elves', 'countdown' => 999]);
         /** @var Battle $battle */
         $battle = $this->game->peek('battle');
         $this->tap(17, $this->game->engine->sdl->getRenderer()->getHeight() - 17);
@@ -89,7 +89,7 @@ final class MapSelectTest extends GameTestCase
 
     public function testThePowerIsCastWithTheKeys(): void
     {
-        $this->game->start(PlayScene::class, ['faction' => 'dwarves', 'countdown' => 999]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'faction' => 'dwarves', 'countdown' => 999]);
         /** @var Battle $battle */
         $battle = $this->game->peek('battle');
         $battle->hero = null;

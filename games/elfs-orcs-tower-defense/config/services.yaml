@@ -9,4 +9,4 @@ services:
   App\:
     resource: '../src/*'
     # the game's logic (plain classes created with `new`, no SDL, unit-tested) and helpers made with `new`
-    exclude: '../src/{Td,Ui/MixedFont.php,Ui/Text.php}'
+    exclude: '../src/{Td,View3d,Ui/MixedFont.php,Ui/Text.php}'

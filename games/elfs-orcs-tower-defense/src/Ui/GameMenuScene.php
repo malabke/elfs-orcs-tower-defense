@@ -83,7 +83,8 @@ abstract class GameMenuScene extends MenuScene
     protected function renderBackground(Renderer $r): void
     {
         if ($this->isOverlay()) {
-            $r->fillRect(0, 0, $this->width(), $this->height(), [6, 8, 16, 215]);
+            // pure black: over a 3D scene (keyed by magenta) only black darkens it, any other colour tints it
+            $r->fillRect(0, 0, $this->width(), $this->height(), [0, 0, 0, 215]);
         } else {
             $r->clear($this->background);
         }

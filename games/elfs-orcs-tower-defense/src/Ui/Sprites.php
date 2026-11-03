@@ -459,7 +459,7 @@ final class Sprites
     }
 
     /** The colours of each map theme: ground (4), road (3, edge, pebble), trees (dark, mid, light), water (2). */
-    private const THEMES = [
+    public const THEMES = [
         'meadow' => ['grass' => ['#4f8f3a', '#58993f', '#467f33', '#5fa346'], 'road' => ['#c0a06a', '#b4945e', '#caa974', '#8a7048', '#9a7e50'],
             'tree' => ['#1f4a22', '#2f6a2c', '#4a8a3a'], 'water' => ['#3a6ea8', '#6a9ed0']],
         'marsh' => ['grass' => ['#3f7a44', '#47854a', '#36683c', '#5a9450'], 'road' => ['#8a7a54', '#7e6e4a', '#968660', '#5a4e34', '#6e6040'],
@@ -475,7 +475,7 @@ final class Sprites
     ];
 
     /** The scenery rows of a map: its own, or scattered from its `scenery` (the same each time). @return list<string> */
-    private static function sceneryRows(array $map, string $seed): array
+    public static function sceneryRows(array $map, string $seed): array
     {
         if (isset($map['rows'])) {
             return $map['rows'];

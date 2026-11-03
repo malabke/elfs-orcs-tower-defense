@@ -737,17 +737,27 @@ cmd_test() {
   fi
   if is_app "$target"; then cmd_app_test "$@"; return; fi
   local dir; dir="$(game_dir "$target")"
+  # more arguments (bin/jumphp test <game> --filter ThreeD): only phpunit, with them
+  local only=("${@:2}")
   ensure_vendor "$dir"
   live_announce
-  say "$dir: php -l"
-  php_run "$dir" -- sh -c 'find src app.php -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null'
-  if [ -f "$ROOT/$dir/phpstan.neon" ] && [ -x "$ROOT/engine/vendor/bin/phpstan" ]; then
+  if [ ${#only[@]} -eq 0 ]; then
+    say "$dir: php -l"
+    php_run "$dir" -- sh -c 'find src app.php -name "*.php" -print0 | xargs -0 -n1 php -l >/dev/null'
+  fi
+  if [ ${#only[@]} -eq 0 ] && [ -f "$ROOT/$dir/phpstan.neon" ] && [ -x "$ROOT/engine/vendor/bin/phpstan" ]; then
     say "$dir: phpstan"
     php_run "$dir" -- /workspace/engine/vendor/bin/phpstan analyse --no-progress --memory-limit=1G
   fi
   if [ -d "$ROOT/$dir/tests" ] && [ -x "$ROOT/engine/vendor/bin/phpunit" ]; then
-    say "$dir: phpunit"
-    php_run "$dir" -e SDL_VIDEODRIVER=dummy -e SDL_AUDIODRIVER=dummy -- /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox tests
+    # a game that draws with OpenGL gets its tests on the virtual X display too (Mesa), so that its 3D tests run
+    local glf; glf="$(gl_flags "$dir")"
+    say "$dir: phpunit$([ -n "$glf" ] && echo ' (OpenGL on Xvfb)')"
+    # shellcheck disable=SC2086
+    php_run "$dir" ${glf:--e SDL_VIDEODRIVER=dummy} -e SDL_AUDIODRIVER=dummy -- $(gl_wrap "$dir") /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox ${only[@]+"${only[@]}"} tests
+  fi
+  if [ ${#only[@]} -gt 0 ]; then
+    return
   fi
   say "$dir: headless smoke test (${JUMPHP_MAX_FRAMES:-600} frames$([ -n "$(gl_flags "$dir")" ] && echo ', OpenGL on Xvfb'))"
   # shellcheck disable=SC2046

@@ -38,7 +38,7 @@ final class PlayTest extends GameTestCase
 
     public function testThePlayerBuildsATowerWithTheMouse(): void
     {
-        $this->game->start(PlayScene::class, ['countdown' => 999]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'countdown' => 999]);
         $battle = $this->battle();
         $gold = $battle->gold;
         $this->clickSlot(1);
@@ -58,7 +58,7 @@ final class PlayTest extends GameTestCase
 
     public function testTheKeyboardCursorBuildsUpgradesAndSells(): void
     {
-        $this->game->start(PlayScene::class, ['countdown' => 999, 'gold' => 1000]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'countdown' => 999, 'gold' => 1000]);
         $battle = $this->battle();
         $this->game->press('right', 2);
         $slot = $this->game->peek('cursor');
@@ -84,7 +84,7 @@ final class PlayTest extends GameTestCase
 
     public function testAnEnemyWalksTheRoadAndTakesALifeAtTheBastion(): void
     {
-        $this->game->start(PlayScene::class, ['countdown' => 999, 'speed' => 3]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'countdown' => 999, 'speed' => 3]);
         $battle = $this->battle();
         $battle->hero = null;   // it would stop the goblin
         $goblin = $battle->spawnEnemy('goblin_runner');
@@ -98,7 +98,7 @@ final class PlayTest extends GameTestCase
 
     public function testTowersShootAndKillTheFirstWave(): void
     {
-        $this->game->start(PlayScene::class, ['countdown' => 1, 'gold' => 600, 'speed' => 3]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'countdown' => 1, 'gold' => 600, 'speed' => 3]);
         $battle = $this->battle();
         foreach ([0, 1, 3] as $slot) {
             $battle->build($slot, 'elf_archer');
@@ -112,7 +112,7 @@ final class PlayTest extends GameTestCase
 
     public function testTheSpeedButtonsAndTheCallWaveButton(): void
     {
-        $this->game->start(PlayScene::class, []);
+        $this->game->start(PlayScene::class, ['view' => 'flat']);
         $battle = $this->battle();
         $this->game->press('speed', 2);
         self::assertSame(2, $this->game->peek('speed'));
@@ -126,7 +126,7 @@ final class PlayTest extends GameTestCase
 
     public function testPauseStopsTheGameAndResumes(): void
     {
-        $this->game->start(PlayScene::class, ['countdown' => 999]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'countdown' => 999]);
         $battle = $this->battle();
         $battle->spawnEnemy('grunt');
         $this->game->press('pause', 2);
@@ -142,7 +142,7 @@ final class PlayTest extends GameTestCase
 
     public function testTheLastWaveLostWithoutTowersShowsTheDefeat(): void
     {
-        $this->game->start(PlayScene::class, ['wave' => 9, 'countdown' => 0.1, 'lives' => 1, 'speed' => 3]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'wave' => 9, 'countdown' => 0.1, 'lives' => 1, 'speed' => 3]);
         $battle = $this->battle();
         $this->game->wait(12);
         self::assertSame('lost', $battle->state);
@@ -152,7 +152,7 @@ final class PlayTest extends GameTestCase
 
     public function testTheBotHoldsTheLastWaveAndTheVictoryShowsTheStars(): void
     {
-        $this->game->start(PlayScene::class, ['wave' => 9, 'countdown' => 8, 'gold' => 30000, 'demo' => true]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'wave' => 9, 'countdown' => 8, 'gold' => 30000, 'demo' => true]);
         for ($i = 0; $i < 120 && !$this->game->scene() instanceof VictoryScene; $i++) {
             $this->game->wait(1);
         }

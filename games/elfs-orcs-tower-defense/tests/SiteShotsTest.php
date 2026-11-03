@@ -55,8 +55,17 @@ final class SiteShotsTest extends GameTestCase
     public function testABattleIsShot(string $faction, string $map, int $wave): void
     {
         $this->game->start(PlayScene::class, ['faction' => $faction, 'map' => $map, 'demo' => true, 'wave' => $wave, 'countdown' => 2, 'gold' => 1400]);
-        $this->game->wait(20);
         $battle = $this->game->peek('battle');
+        $bot = $this->game->peek('bot');
+        // 25 s of battle without drawing it (the 3D frames are slow without a graphics card), then a few real frames
+        for ($t = 0; $t < 60 * 25; $t++) {
+            if ($t % 30 === 0) {
+                $bot->play();
+            }
+            $battle->step();
+            $battle->events = [];
+        }
+        $this->game->run(30);
         // the wave banner would hide the middle of the picture
         $banners = new \ReflectionProperty(PlayScene::class, 'banners');
         $banners->setValue($this->game->scene(), []);

@@ -69,7 +69,7 @@ final class FactionSelectTest extends GameTestCase
 
     public function testOrcSoldiersStopTheAllianceOnTheRoad(): void
     {
-        $this->game->start(PlayScene::class, ['faction' => 'orcs', 'countdown' => 999, 'speed' => 2]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'faction' => 'orcs', 'countdown' => 999, 'speed' => 2]);
         /** @var Battle $battle */
         $battle = $this->game->peek('battle');
         $battle->build(0, 'orc_barracks');
@@ -91,7 +91,7 @@ final class FactionSelectTest extends GameTestCase
     #[DataProvider('sides')]
     public function testTheDemoPlaysWithEverySide(string $faction): void
     {
-        $this->game->start(PlayScene::class, ['faction' => $faction, 'demo' => true, 'gold' => 1500]);
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'faction' => $faction, 'demo' => true, 'gold' => 1500]);
         $this->game->wait(25);
         $battle = $this->game->peek('battle');
         self::assertGreaterThan(3, count($battle->towers()));

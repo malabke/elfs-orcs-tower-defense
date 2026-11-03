@@ -13,6 +13,15 @@ use App\Ui\FontProvider;
 use App\Ui\Sfx;
 use App\Ui\Sprites;
 use App\Ui\Text;
+use App\Ui\World3d;
+use App\View3d\FlatView;
+use App\View3d\MapModel;
+use App\View3d\Mesh;
+use App\View3d\Projection;
+use App\View3d\Props;
+use App\View3d\Rig;
+use App\View3d\Towers;
+use App\View3d\Units;
 use JumPHP\Renderer\Renderer;
 use JumPHP\Scene\AbstractScene;
 use JumPHP\Scene\HotReloadable;
@@ -26,8 +35,12 @@ use JumPHP\Util\Lang;
  * (up / right / down / left: the keys pick them too); the first click on a choice shows what it does, the second
  * one does it.
  *
+ * Drawing: the map and everything on it are 3D (World3d, a WebGL layer under the 2D); the HUD, the ring menu, the
+ * bars and the numbers are 2D over it, placed through $cam (the camera's projection). Without WebGL (or with the
+ * param view: flat) the scene draws the flat 2D version of the map instead, through the same $cam interface.
+ *
  * Params: map, faction; test / demo ones: demo (the bot plays), speed (1..3), gold, lives, countdown (seconds
- * before the first wave), wave (waves already done), seed.
+ * before the first wave), wave (waves already done), seed, view ('flat': no 3D).
  */
 final class PlayScene extends AbstractScene implements HotReloadable
 {
@@ -71,9 +84,67 @@ final class PlayScene extends AbstractScene implements HotReloadable
     /** where the keyboard / pad points while aiming (play area pixels) */
     private float $reticleX = 0.0;
     private float $reticleY = 0.0;
+    /** the 3D layer is on (else the flat 2D drawing) */
+    private bool $use3d = false;
+    private Projection $cam;
+    private ?Rig $rig = null;
+    /** creatures are drawn this much bigger than their models (readable from the camera's height) */
+    private const UNIT_SCALE = 2.0;
+    /** towers are drawn this much bigger than their models (a platform is 30 wide) */
+    private const TOWER_SCALE = 1.3;
 
-    public function __construct(private FontProvider $fonts, private Sprites $sprites, private Progress $progress)
+    public function __construct(private FontProvider $fonts, private Sprites $sprites, private Progress $progress, private World3d $world)
     {
+        $this->cam = new FlatView(self::MAP_Y);
+    }
+
+    /** Where a point of the map is on the screen (the 3D camera, or the flat view): for tests and overlays. @return array{0: float, 1: float} */
+    public function screenOf(float $x, float $y, float $height = 0.0): array
+    {
+        return $this->cam->screen($x, $y, $height);
+    }
+
+    public function exit(): void
+    {
+        if ($this->use3d) {
+            $this->engine->gl()->disable();
+            $this->use3d = false;
+        }
+    }
+
+    /** The 3D layer, the camera fitted on the platforms, the ground built. Flat when WebGL is not there. */
+    private function setUpView(string $mapId, bool $wanted): void
+    {
+        $gl = $this->engine->gl();
+        $this->use3d = $wanted && $this->world->boot($gl);
+        if (!$this->use3d) {
+            $gl->disable();
+            $this->cam = new FlatView(self::MAP_Y);
+            $this->rig = null;
+            return;
+        }
+        $this->world->loadMap($mapId, $this->map, $this->colors);
+        $minX = $minZ = INF;
+        $maxX = $maxZ = -INF;
+        $grow = static function (float $x0, float $z0, float $x1, float $z1) use (&$minX, &$minZ, &$maxX, &$maxZ): void {
+            $minX = min($minX, $x0);
+            $minZ = min($minZ, $z0);
+            $maxX = max($maxX, $x1);
+            $maxZ = max($maxZ, $z1);
+        };
+        foreach ($this->map['slots'] as [$sx, $sy]) {
+            $grow(($sx + 1) * 16.0 - 18, ($sy + 1) * 16.0 - 18, ($sx + 1) * 16.0 + 18, ($sy + 1) * 16.0 + 18);
+        }
+        [$bx, $by] = $this->map['bastion'];
+        $grow($bx * 16.0, $by * 16.0, $bx * 16.0 + 48, $by * 16.0 + 96);
+        foreach ($this->map['paths'] as $points) {
+            foreach ($points as [$px, $pz]) {
+                $grow(max(0.0, min(480.0, $px * 16.0)), max(0.0, min(240.0, $pz * 16.0)), max(0.0, min(480.0, $px * 16.0)), max(0.0, min(240.0, $pz * 16.0)));
+            }
+        }
+        $this->rig = new Rig((float)$this->width(), (float)$this->height());
+        $this->rig->fit($minX, $minZ, $maxX, $maxZ, 60.0, self::MAP_Y + 6.0, $this->height() - 4.0, 52.0);
+        $this->cam = $this->rig;
     }
 
     public function enter(array $params = []): void
@@ -102,6 +173,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
         if (isset($params['countdown'])) {
             $this->battle->countdown = (float)$params['countdown'];
         }
+        $this->setUpView($mapId, ($params['view'] ?? '3d') !== 'flat');
         $demo = !empty($params['demo']);
         $this->bot = $demo ? new Bot($this->battle, true, true) : null;
         $this->aim = null;
@@ -149,6 +221,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     {
         $this->time += $dt;
         $this->updateEffects($dt);
+        $this->rig?->update($this->shake > 0 ? $this->shake * 5.0 : 0.0, $this->time);
         if ($this->endTimer >= 0) {
             $this->endTimer += $dt;
             if ($this->endTimer > 1.5) {
@@ -295,8 +368,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
             $this->reticleX = max(0.0, min(GameData::COLS * GameData::TILE, $this->reticleX + $dx * 150 * $dt));
             $this->reticleY = max(0.0, min(GameData::ROWS * GameData::TILE, $this->reticleY + $dy * 150 * $dt));
         } elseif (!$this->keyboard && $mouse->y > self::MAP_Y) {
-            $this->reticleX = $mouse->x;
-            $this->reticleY = $mouse->y - self::MAP_Y;
+            [$this->reticleX, $this->reticleY] = $this->cam->world($mouse->x, $mouse->y);
         }
         if ($mouse->isPressed()) {
             $this->keyboard = false;
@@ -311,7 +383,8 @@ final class PlayScene extends AbstractScene implements HotReloadable
                 }
             }
             if ($mouse->y > self::MAP_Y) {
-                $this->applyAim($mouse->x, $mouse->y - self::MAP_Y);
+                [$wx, $wy] = $this->cam->world($mouse->x, $mouse->y);
+                $this->applyAim($wx, $wy);
             } else {
                 $this->aim = null;
             }
@@ -364,7 +437,11 @@ final class PlayScene extends AbstractScene implements HotReloadable
             }
         }
         foreach ($this->battle->slots as $i => $slot) {
-            if (abs($x - $slot['x']) <= 16 && abs($y - self::MAP_Y - $slot['y']) <= 16) {
+            // the platform, or the tower standing on it
+            [$px, $py] = $this->cam->screen($slot['x'], $slot['y']);
+            [, $ty] = $this->cam->screen($slot['x'], $slot['y'], 22.0);
+            $rad = max(14.0, 17.0 * $this->cam->scale($slot['x'], $slot['y']));
+            if (($x - $px) ** 2 + ($y - $py) ** 2 <= $rad ** 2 || ($x - $px) ** 2 + ($y - $ty) ** 2 <= $rad ** 2) {
                 $this->cursor = $i;
                 if ($this->menuSlot === $i) {
                     $this->closeMenu();
@@ -514,8 +591,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
             }
             $options[] = ['id' => 'sell', 'dir' => 'down', 'icon' => 'sell', 'tower' => null, 'cost' => $tower->sellValue(), 'enabled' => true];
         }
-        $cx = $this->battle->slots[$slot]['x'];
-        $cy = $this->battle->slots[$slot]['y'] + self::MAP_Y;
+        [$cx, $cy] = $this->cam->screen($this->battle->slots[$slot]['x'], $this->battle->slots[$slot]['y']);
         foreach ($options as &$option) {
             [$dx, $dy] = self::DIRS[$option['dir']];
             $option['x'] = max(14, min($this->width() - 14, $cx + $dx * self::RING));
@@ -568,14 +644,13 @@ final class PlayScene extends AbstractScene implements HotReloadable
                         $play('boom');
                     }
                     if ($event['crit']) {
-                        $this->floaters[] = ['text' => '!', 'x' => $event['x'], 'y' => $event['y'] + self::MAP_Y - 8, 't' => 0.0, 'color' => [255, 120, 80]];
+                        $this->floatAt('!', $event['x'], $event['y'], 18.0, [255, 120, 80]);
                     }
                     break;
                 case 'kill':
                     $play('kill');
                     if ($event['gold'] > 0) {
-                        $this->floaters[] = ['text' => '+' . $event['gold'], 'x' => $event['x'], 'y' => $event['y'] + self::MAP_Y - 6, 't' => 0.0,
-                            'color' => [255, 220, 90]];
+                        $this->floatAt('+' . $event['gold'], $event['x'], $event['y'], 16.0, [255, 220, 90]);
                     }
                     break;
                 case 'leak':
@@ -593,12 +668,10 @@ final class PlayScene extends AbstractScene implements HotReloadable
                     }
                     break;
                 case 'dodge':
-                    $this->floaters[] = ['text' => Lang::t('MISS'), 'x' => $event['x'], 'y' => $event['y'] + self::MAP_Y - 8, 't' => 0.0,
-                        'color' => [200, 220, 255]];
+                    $this->floatAt(Lang::t('MISS'), $event['x'], $event['y'], 18.0, [200, 220, 255]);
                     break;
                 case 'income':
-                    $this->floaters[] = ['text' => '+' . $event['gold'], 'x' => $event['x'], 'y' => $event['y'] + self::MAP_Y - 20, 't' => 0.0,
-                        'color' => [255, 220, 90]];
+                    $this->floatAt('+' . $event['gold'], $event['x'], $event['y'], 40.0, [255, 220, 90]);
                     $play('coin');
                     break;
                 case 'heal':
@@ -640,6 +713,13 @@ final class PlayScene extends AbstractScene implements HotReloadable
             }
         }
         $this->battle->events = [];
+    }
+
+    /** A number or a word that rises from a point of the map (above the ground by $height). */
+    private function floatAt(string $text, float $x, float $y, float $height, array $color): void
+    {
+        [$sx, $sy] = $this->cam->screen($x, $y, $height);
+        $this->floaters[] = ['text' => $text, 'x' => $sx, 'y' => $sy, 't' => 0.0, 'color' => $color];
     }
 
     private function announceWave(int $wave, bool $boss): void
@@ -738,6 +818,10 @@ final class PlayScene extends AbstractScene implements HotReloadable
 
     public function render(Renderer $r): void
     {
+        if ($this->use3d) {
+            $this->render3d($r);
+            return;
+        }
         $r->clear([20, 30, 20]);
         $sy = self::MAP_Y + ($this->shake > 0 ? (int)round(sin($this->time * 80) * 2) : 0);
         $this->sprites->drawMap($r, $this->battle->mapId, $this->map, $this->colors, 0, $sy);
@@ -796,6 +880,245 @@ final class PlayScene extends AbstractScene implements HotReloadable
         }
         $this->drawMapButtons($r);
         $this->drawHud($r);
+    }
+
+    // ---- the 3D version ---------------------------------------------------------------------------------------
+
+    /** The 3D layer (ground, towers, creatures, shots, glows), then the 2D over it: bars, banner, ring menu, HUD. */
+    private function render3d(Renderer $r): void
+    {
+        $r->clear(World3d::KEY);
+        if ($this->rig === null) {
+            return;
+        }
+        $w = $this->world;
+        $b = $this->battle;
+        $w->begin($this->rig);
+        $black = [0.0, 0.0, 0.0];
+
+        // shadows first: they lie on the ground, everything else stands over them
+        foreach ($b->enemies as $e) {
+            if (!$e->isUnderground()) {
+                $w->disc($e->x, $e->y, ($e->isFlying() ? 3.4 : 5.2) * (float)($e->def['scale'] ?? 1.0) * self::UNIT_SCALE * 0.9, $black,
+                    $e->isFlying() ? 0.2 : 0.36);
+            }
+        }
+        foreach ($b->towers() as $t) {
+            foreach ($t->soldiers as $s) {
+                if ($s->isAlive()) {
+                    $w->disc($s->x, $s->y, 5.4, $black, 0.36);
+                }
+            }
+        }
+        if ($b->hero?->isAlive()) {
+            $w->disc($b->hero->x, $b->hero->y, 6.4, Mesh::rgb((string)($this->colors['main'] ?? '#ffffff'), 0.9), 0.85, 0.7, 1.0);
+        }
+
+        foreach ($b->towers() as $t) {
+            if ($t->road !== null && $t->kind() !== 'barracks') {
+                $this->roadObject3d($t);
+            }
+            $this->tower3d($t);
+            foreach ($t->soldiers as $s) {
+                if ($s->isAlive()) {
+                    $sprite = (string)$t->stats['soldiers']['sprite'];
+                    $this->creature3d($sprite, 1.0, $s->x, $s->y, $this->headingOf($s->x, $s->y, $s->target, $s->facingLeft), (int)($s->age * 7) % 2);
+                }
+            }
+        }
+        if ($b->hero?->isAlive()) {
+            $h = $b->hero;
+            $moving = $h->isWalking() || $h->isFighting();
+            $this->creature3d((string)$h->def['sprite'], (float)($h->def['scale'] ?? 1.0), $h->x, $h->y,
+                $this->headingOf($h->x, $h->y, $h->target, $h->facingLeft), $moving ? (int)($h->age * 7) % 2 : 0);
+        }
+        foreach ($b->enemies as $e) {
+            $this->enemy3d($e);
+        }
+        foreach ($b->projectiles as $p) {
+            $this->projectile3d($p);
+        }
+        $this->effects3d();
+
+        // the 2D over the 3D
+        $this->bars3d($r);
+        foreach ($this->floaters as $floater) {
+            $this->font()->draw($r, $floater['text'], $floater['x'], $floater['y'], 1, $floater['color'], 'center', [0, 0, 0]);
+        }
+        $this->drawBanner($r);
+        if ($this->menuSlot !== null) {
+            $this->drawRing($r, $this->menuSlot);
+        }
+        if ($this->aim !== null) {
+            $this->drawAim($r, 0);
+        }
+        $this->drawMapButtons($r);
+        $this->drawHud($r);
+    }
+
+    /** The yaw (about y) of a creature that looks at its target, or the way it walks. */
+    private function headingOf(float $x, float $y, ?Enemy $target, bool $left): float
+    {
+        if ($target !== null) {
+            return -atan2($target->y - $y, $target->x - $x);
+        }
+        return $left ? M_PI : 0.0;
+    }
+
+    private function creature3d(string $sprite, float $size, float $x, float $y, float $yaw, int $frame, array $tint = [1.0, 1.0, 1.0],
+                                float $alpha = 1.0, float $lift = 0.3): void
+    {
+        $this->world->draw("u:$sprite:$frame", static fn () => Units::build($sprite, $frame), $x, $lift, $y, $yaw, $size * self::UNIT_SCALE, $tint, $alpha);
+    }
+
+    private function enemy3d(Enemy $e): void
+    {
+        $def = $e->def;
+        if ($e->isUnderground()) {
+            $this->world->draw('mound', static fn () => Props::mound(), $e->x, 0.4, $e->y, 0.0, 1.4);
+            return;
+        }
+        $tint = [1.0, 1.0, 1.0];
+        if ($e->isStunned()) {
+            $tint = [0.75, 0.75, 0.82];
+        }
+        if ($e->isSlowed()) {
+            $tint = [0.72, 0.92, 1.35];
+        }
+        if ($e->isBurning()) {
+            $tint = [1.4, 0.8 + 0.25 * sin($this->time * 20), 0.62];
+        }
+        $alpha = $e->isStealthy() && !$e->revealed ? 0.28 : 1.0;
+        $lift = $e->isFlying() ? 15.0 + sin($e->age * 5) * 1.5 : 0.3 + abs(sin($e->age * 8)) * 0.5;
+        $this->creature3d((string)$def['sprite'], (float)($def['scale'] ?? 1.0), $e->x, $e->y, -atan2($e->dirY, $e->dirX),
+            $e->isStunned() ? 0 : (int)($e->age * 7) % 2, $tint, $alpha, $lift);
+    }
+
+    private function tower3d(Tower $t): void
+    {
+        $sprite = (string)$this->data->tower($t->type)['sprite'];
+        $lv = min(3, $t->level);
+        $spec = $t->spec !== null ? (int)array_search($t->spec, $t->specNames(), true) : null;
+        $flag = (string)($this->colors['main'] ?? '#3fa860');
+        // a small jolt when it shoots
+        $jolt = $t->sinceShot < 0.1 ? 1.0 + 0.05 * (1 - $t->sinceShot / 0.1) : 1.0;
+        $this->world->draw("t:$sprite:$lv:" . ($spec ?? 'n') . ":$flag", static fn () => Towers::build($sprite, $lv, $spec, $flag),
+            $t->x, MapModel::PLATFORM, $t->y, 0.0, [self::TOWER_SCALE, self::TOWER_SCALE * $jolt, self::TOWER_SCALE]);
+    }
+
+    /** A wall across the road (broken: stumps), or a trap (open jaws when armed). */
+    private function roadObject3d(Tower $t): void
+    {
+        $road = (array)$t->road;
+        [, , $dx, $dz] = $this->battle->paths[$road['path']]->at($road['distance']);
+        $yaw = -atan2($dz, $dx);
+        if ($t->kind() === 'barrier') {
+            $stone = $t->spec === 'stone_rampart';
+            $spiked = $t->spec === 'spiked_palisade';
+            $standing = $road['hp'] > 0;
+            $this->world->draw('wall:' . (int)$stone . (int)$standing . (int)$spiked, static fn () => Props::wall($stone, $standing, $spiked),
+                $road['x'], 0.3, $road['y'], $yaw);
+            return;
+        }
+        $armed = $road['timer'] <= 0;
+        $this->world->draw('trap:' . (int)$armed, static fn () => Props::trap($armed), $road['x'], 0.3, $road['y'], $yaw);
+    }
+
+    private function projectile3d(\App\Td\Projectile $p): void
+    {
+        $kind = $p->kind();
+        $total = hypot($p->targetX - $p->fromX, $p->targetY - $p->fromY);
+        $frac = $total > 0 ? max(0.0, min(1.0, 1 - hypot($p->targetX - $p->x, $p->targetY - $p->y) / $total)) : 1.0;
+        $arc = in_array($kind, ['rock', 'pitch'], true) ? 16.0 : 3.0;
+        $height = 27.0 + (9.0 - 27.0) * $frac + sin(M_PI * $frac) * $arc;
+        $yaw = $kind === 'star' ? $this->time * 9.0 : -atan2($p->targetY - $p->y, $p->targetX - $p->x);
+        $glow = in_array($kind, ['orb', 'note', 'star', 'spark', 'pitch'], true) ? 1.0 : 0.0;
+        $this->world->draw("p:$kind", static fn () => Props::projectile($kind), $p->x, $height, $p->y, $yaw, 1.3, [1.0, 1.0, 1.0], 1.0, $glow);
+    }
+
+    /** Blasts, glows and the markers of what the player is choosing: translucent, so drawn last. */
+    private function effects3d(): void
+    {
+        $w = $this->world;
+        foreach ($this->flashes as $f) {
+            $k = max(0.0, 1 - $f['t'] / 0.25);
+            $rgb = match ($f['kind']) {
+                'star' => [1.0, 0.94, 0.55],
+                'rock' => [0.67, 0.55, 0.4],
+                'pitch', 'spark' => [1.0, 0.55, 0.16],
+                'heal' => [0.47, 1.0, 0.55],
+                'pulse' => [1.0, 1.0, 1.0],
+                'power' => [1.0, 0.94, 0.78],
+                default => [0.78, 0.55, 1.0],
+            };
+            if ($f['splash'] > 0) {
+                $radius = $f['splash'] * (0.5 + 0.5 * (1 - $k));
+                $w->disc($f['x'], $f['y'], $radius, $rgb, 0.12 + 0.32 * $k, 0.9, 1.0);
+                $w->ring($f['x'], $f['y'], $radius, $rgb, 0.4 + 0.6 * $k, 1.0);
+            } elseif ($f['kind'] === 'root') {
+                foreach ([[-3.0, 1.0], [3.0, -1.5], [0.0, 3.0]] as [$dx, $dz]) {
+                    $w->ball($f['x'] + $dx, 2.0 + (1 - $k) * 4.0, $f['y'] + $dz, 2.2, [0.36, 0.5, 0.2], max(0.3, $k), 0.0);
+                }
+            } elseif ($k > 0.05) {
+                $w->ball($f['x'], 8.0, $f['y'], 1.2 + (1 - $k) * 2.4, [1.0, 1.0, 0.86], $k);
+            }
+        }
+
+        // the platform in focus, its range
+        $slot = $this->menuSlot ?? ($this->keyboard && $this->aim === null ? $this->cursor : null);
+        if ($slot !== null && isset($this->battle->slots[$slot])) {
+            $s = $this->battle->slots[$slot];
+            $pulse = $this->menuSlot === null ? 0.65 + 0.35 * sin($this->time * 8) : 1.0;
+            $w->ring($s['x'], $s['y'], 19.0, [1.0, 0.88, 0.35], $pulse * 0.9, MapModel::PLATFORM + 0.3);
+            $range = $this->menuSlot !== null ? $this->rangeFor($slot) : null;
+            if ($range !== null) {
+                $w->disc($s['x'], $s['y'], $range, [1.0, 1.0, 1.0], 0.13, MapModel::PLATFORM + 0.2);
+                $w->ring($s['x'], $s['y'], $range, [1.0, 1.0, 1.0], 0.7, MapModel::PLATFORM + 0.3);
+            }
+        }
+        // where the hero would go, where the power would fall
+        if ($this->aim === 'power') {
+            $radius = (float)$this->battle->power()['radius'];
+            $w->disc($this->reticleX, $this->reticleY, $radius, [1.0, 0.9, 0.5], 0.22, 1.2, 1.0);
+            $w->ring($this->reticleX, $this->reticleY, $radius, [1.0, 0.95, 0.7], 0.9, 1.3);
+        } elseif ($this->aim === 'hero') {
+            $point = $this->battle->nearestRoad($this->reticleX, $this->reticleY);
+            $w->disc($point['x'], $point['y'], 9.0, [0.5, 0.85, 1.0], 0.35, 1.2, 1.0);
+            $w->ring($point['x'], $point['y'], 9.0, [0.8, 0.95, 1.0], 0.9, 1.3);
+        }
+    }
+
+    /** Health bars of what is hurt, over the 3D (2D: crisp at any size). */
+    private function bars3d(Renderer $r): void
+    {
+        $bar = function (float $x, float $y, float $height, float $ratio, float $width, array $fill) use ($r): void {
+            [$sx, $sy] = $this->cam->screen($x, $y, $height);
+            $r->fillRect($sx - $width / 2 - 1, $sy - 1, $width + 2, 4, [20, 10, 10]);
+            $r->fillRect($sx - $width / 2, $sy, $width * max(0.0, min(1.0, $ratio)), 2, $fill);
+        };
+        foreach ($this->battle->enemies as $e) {
+            if ($e->hp < $e->maxHp && !$e->isUnderground() && ($e->isTargetable() || $e->isStealthy())) {
+                $ratio = $e->hp / $e->maxHp;
+                $height = Units::height((string)$e->def['sprite']) * (float)($e->def['scale'] ?? 1.0) * self::UNIT_SCALE + ($e->isFlying() ? 18.0 : 5.0);
+                $bar($e->x, $e->y, $height, $ratio, !empty($e->def['boss']) ? 24.0 : 13.0,
+                    $ratio > 0.5 ? [90, 220, 80] : ($ratio > 0.25 ? [240, 200, 60] : [230, 70, 50]));
+            }
+        }
+        foreach ($this->battle->towers() as $t) {
+            foreach ($t->soldiers as $s) {
+                if ($s->isAlive() && $s->hp < $s->maxHp) {
+                    $bar($s->x, $s->y, 24.0, $s->hp / $s->maxHp, 12.0, [110, 190, 255]);
+                }
+            }
+            if ($t->kind() === 'barrier' && $t->road !== null && $t->road['hp'] > 0 && $t->road['hp'] < $t->road['maxHp']) {
+                $bar($t->road['x'], $t->road['y'], 18.0, $t->road['hp'] / max(1.0, $t->road['maxHp']), 18.0, [240, 200, 60]);
+            }
+        }
+        $h = $this->battle->hero;
+        if ($h?->isAlive()) {
+            $bar($h->x, $h->y, Units::height((string)$h->def['sprite']) * (float)($h->def['scale'] ?? 1.0) * self::UNIT_SCALE + 6.0,
+                $h->hp / $h->maxHp, 18.0, [110, 190, 255]);
+        }
     }
 
     private function drawTower(Renderer $r, Tower $tower, int $sy): void
@@ -901,18 +1224,22 @@ final class PlayScene extends AbstractScene implements HotReloadable
     /** Where the hero goes / the power falls: a circle at the pointer, and what it is. */
     private function drawAim(Renderer $r, int $sy): void
     {
-        $x = $this->reticleX;
-        $y = $this->reticleY + $sy;
+        [$x, $y] = $this->cam->screen($this->reticleX, $this->reticleY);
         if ($this->aim === 'hero') {
             $point = $this->battle->nearestRoad($this->reticleX, $this->reticleY);
-            $this->drawRange($r, $point['x'], $point['y'] + $sy, 10);
-            $r->drawLine($x, $y, $point['x'], $point['y'] + $sy, [255, 255, 255, 120]);
+            if (!$this->use3d) {
+                [$rx, $ry] = $this->cam->screen($point['x'], $point['y']);
+                $this->drawRange($r, $rx, $ry, 10);
+                $r->drawLine($x, $y, $rx, $ry, [255, 255, 255, 120]);
+            }
             $def = (array)$this->battle->hero?->def;
             $lines = [[Lang::t((string)($def['name'] ?? '')), [255, 220, 90]], [Lang::t('CHOOSE WHERE'), [240, 240, 230]],
                 [Lang::t((string)($def['skill']['name'] ?? '')) . ': ' . Lang::t((string)($def['skill']['desc'] ?? '')), [180, 200, 220]]];
         } else {
             $power = $this->battle->power();
-            $this->drawRange($r, $x, $y, (float)$power['radius']);
+            if (!$this->use3d) {
+                $this->drawRange($r, $x, $y, (float)$power['radius']);
+            }
             $lines = [[Lang::t($power['name']), [255, 220, 90]], [Lang::t($power['desc']), [240, 240, 230]], [Lang::t('CHOOSE WHERE'), [180, 200, 220]]];
         }
         $font = $this->font();
@@ -922,7 +1249,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
             $height += Text::height($font, $text, $panelW - 12) + 2;
         }
         $px = $x < $this->width() / 2 ? $this->width() - $panelW - 4 : 4;
-        $r->fillRect($px, self::MAP_Y + 4, $panelW, $height, [14, 12, 20, 225]);
+        $r->fillRect($px, self::MAP_Y + 4, $panelW, $height, [14, 12, 20]);
         $r->drawRect($px, self::MAP_Y + 4, $panelW, $height, $this->colors['main'] ?? [80, 160, 90]);
         $ty = self::MAP_Y + 9;
         foreach ($lines as [$text, $color]) {
@@ -1068,27 +1395,36 @@ final class PlayScene extends AbstractScene implements HotReloadable
         }
     }
 
-    private function drawRing(Renderer $r, int $slot): void
+    /** The range to show for a platform: of its tower, or of the tower about to be built / upgraded. */
+    private function rangeFor(int $slot): ?float
     {
         $tower = $this->battle->tower($slot);
-        $sx = $this->battle->slots[$slot]['x'];
-        $sy = $this->battle->slots[$slot]['y'] + self::MAP_Y;
-        // the range: of the tower, or of the tower about to be built / upgraded
-        $range = null;
         if ($this->choice !== null && str_starts_with($this->choice, 'build:')) {
-            $range = (float)$this->data->towerStats(substr($this->choice, 6), 1)['range'];
-        } elseif ($tower !== null) {
-            $range = $tower->range();
-            if ($this->choice === 'upgrade') {
-                $range = (float)$this->data->towerStats($tower->type, $tower->level + 1)['range'];
-            } elseif ($this->choice !== null && str_starts_with($this->choice, 'spec:')) {
-                $range = (float)$this->data->towerStats($tower->type, Tower::MAX_LEVEL, substr($this->choice, 5))['range'];
+            return (float)$this->data->towerStats(substr($this->choice, 6), 1)['range'];
+        }
+        if ($tower === null) {
+            return null;
+        }
+        if ($this->choice === 'upgrade') {
+            return (float)$this->data->towerStats($tower->type, $tower->level + 1)['range'];
+        }
+        if ($this->choice !== null && str_starts_with($this->choice, 'spec:')) {
+            return (float)$this->data->towerStats($tower->type, Tower::MAX_LEVEL, substr($this->choice, 5))['range'];
+        }
+        return $tower->range();
+    }
+
+    private function drawRing(Renderer $r, int $slot): void
+    {
+        // in 3D the range and the frame of the platform are drawn on the ground (indicators3d)
+        if (!$this->use3d) {
+            [$sx, $sy] = $this->cam->screen($this->battle->slots[$slot]['x'], $this->battle->slots[$slot]['y']);
+            $range = $this->rangeFor($slot);
+            if ($range !== null) {
+                $this->drawRange($r, $sx, $sy, $range);
             }
+            $r->drawRect($sx - 16, $sy - 14, 32, 30, [255, 255, 255, 120]);
         }
-        if ($range !== null) {
-            $this->drawRange($r, $sx, $sy, $range);
-        }
-        $r->drawRect($sx - 16, $sy - 14, 32, 30, [255, 255, 255, 120]);
         foreach ($this->ringOptions($slot) as $option) {
             $x = $option['x'];
             $y = $option['y'];
@@ -1107,7 +1443,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
                 $color = $option['id'] === 'sell' ? [160, 240, 140] : ($option['enabled'] ? [255, 220, 90] : [220, 80, 70]);
                 $ty = $y + 9;
                 $tw = $this->font()->width($text);
-                $r->fillRect($x - $tw / 2 - 2, $ty - 1, $tw + 4, $this->font()->lineHeight() + 1, [10, 8, 12, 200]);
+                $r->fillRect($x - $tw / 2 - 2, $ty - 1, $tw + 4, $this->font()->lineHeight() + 1, [10, 8, 12]);
                 $this->font()->draw($r, $text, $x, $ty, 1, $color, 'center');
             }
         }
@@ -1140,11 +1476,10 @@ final class PlayScene extends AbstractScene implements HotReloadable
             $height += Text::height($font, $text, $inner) + 2;
         }
         // on the other side of the map from the slot, so that it never hides the ring
-        $sx = $this->battle->slots[$slot]['x'];
-        $sy = $this->battle->slots[$slot]['y'];
+        [$sx, $sy] = $this->cam->screen($this->battle->slots[$slot]['x'], $this->battle->slots[$slot]['y']);
         $x = $sx < $this->width() / 2 ? $this->width() - $panelW - 4 : 4;
-        $y = $sy < 120 ? $this->height() - $height - 4 : self::MAP_Y + 4;
-        $r->fillRect($x, $y, $panelW, $height, [14, 12, 20, 225]);
+        $y = $sy < $this->height() / 2 ? $this->height() - $height - 4 : self::MAP_Y + 4;
+        $r->fillRect($x, $y, $panelW, $height, [14, 12, 20]);
         $r->drawRect($x, $y, $panelW, $height, $this->colors['main'] ?? [80, 160, 90]);
         $ty = $y + 5;
         foreach ($lines as [$text, $color]) {
@@ -1351,8 +1686,9 @@ final class PlayScene extends AbstractScene implements HotReloadable
         $scale = Text::fitScale($font, $title, $w - 40, max(1, round(16 / max(1, $font->height()))));
         $height = $font->lineHeight($scale) + ($line !== '' ? Text::height($font, $line, $w - 60) + 4 : 0) + 12;
         $y = self::MAP_Y + 56;
-        $r->fillRect(0, $y, $w, $height, [10, 8, 14, (int)(190 * $alpha)]);
-        $a = (int)(255 * $alpha);
+        $r->fillRect(0, $y, $w, $height, [0, 0, 0, (int)(190 * $alpha)]);   // black: it darkens the 3D under it
+        // opaque text: over the 3D (keyed by a colour) a translucent colour would be tinted by it
+        $a = 255;
         $font->draw($r, $title, $w / 2, $y + 6, $scale, [255, 225, 120, $a], 'center', [0, 0, 0, $a]);
         if ($line !== '') {
             Text::draw($r, $font, $line, $w / 2, $y + 8 + $font->lineHeight($scale), $w - 60, [220, 230, 240, $a], 'center', [0, 0, 0, $a]);
