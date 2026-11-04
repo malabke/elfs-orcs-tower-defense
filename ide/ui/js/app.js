@@ -15,6 +15,7 @@ import { PublishPanel } from './publish.js';
 import { createInstaller } from './installer.js';
 import { ClaudePanel } from './claude.js';
 import { DebugPanel } from './debug.js';
+import { GutterRun } from './gutter-run.js';
 import { TerminalPanel } from './terminal.js';
 import { showLocalHistory } from './localhistory.js';
 
@@ -124,6 +125,7 @@ class App {
     this.git.refreshSoon = debounce(() => this.git.refresh(), 800);
     this.runner = new Runner(this);
     if (this.project.capabilities?.run && this.project.capabilities?.debug) this.debugger = new DebugPanel(this);
+    if (this.project.capabilities?.run) this.gutterRun = new GutterRun(this);
     this.problems = new Problems(this);
     this.structure = new Structure(this);
     this.hierarchy = new Hierarchy(this);

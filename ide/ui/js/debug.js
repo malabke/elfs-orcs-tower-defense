@@ -66,6 +66,7 @@ export class DebugPanel {
       const model = editor.getModel();
       const line = e.target.position?.lineNumber;
       if (!model || !line || !this.debuggable(model)) return;
+      if (type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS && editor.__gutterRunAt?.(line)) return;     // the Run / Debug icon of a command (gutter-run.js)
       if (e.event.rightButton) {
         const bp = this.list(pathOf(model.uri)).find((b) => b.line === line);
         menu([

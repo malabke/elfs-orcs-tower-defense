@@ -134,8 +134,9 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   session, games/ and apps/, plain command and full-screen `ui` in a pty), but the IDE's Debug sent the run to the Run window (pipes: no terminal,
   the app prints plain text, the screen's code never runs) because ide/ui/js/run.js only used the Terminal when no env was given. Fixed:
   the env goes in front of the command line in the Terminal. NOT tried in the IDE itself yet: Debug a CLI app, break in src/Ui
-- a Run and a Debug (Xdebug) icon in the editor's gutter, on the line: run / debug the program from there with its
-  arguments (a CLI app's command and options typed or remembered per line), like the run configurations
+- Run / Debug icons on the line: done (2026-11-04, not tried in the IDE yet): ide/ui/js/gutter-run.js puts a ▶ in the gutter on every
+  `#[AsCommand(name: ...)]` line of a CLI app (menu: Run, Debug, Arguments… remembered per command, run in the Terminal). Left: the same on test
+  methods and on a game's / app's entry point
 
 - the debugger, what is left (done in IDE 0.1.13 and 0.1.31: Xdebug, breakpoints with conditions, the Debug window,
   steps, watches, Run to Cursor, a variable's new value, stop at exceptions, Claude's debug_* tools in the IDE and in a

@@ -636,3 +636,7 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .res-preview { image-rendering: pixelated; align-self: flex-start; background: repeating-conic-gradient(#3a3d42 0 25%, #2b2d31 0 50%) 0 0 / 16px 16px; }
 .res-status { color: var(--text-3); }
 .res-ai { display: flex; flex-direction: column; gap: 6px; min-width: 360px; } .res-ai textarea { width: 100%; resize: vertical; }
+
+/* Run / Debug icon on a command's line (gutter-run.js) */
+.monaco-editor .run-gutter { cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.monaco-editor .run-gutter::before { content: "\25B6"; color: var(--green, #5fb760); font-size: 10px; }
