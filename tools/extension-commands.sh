@@ -23,7 +23,7 @@ cmd_extension_new() {
 cmd_extension_add() {
   local game="${1:-}" pkg="${2:-}" dir local_ext="" f
   [ -n "$game" ] && [[ "$pkg" =~ ^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*$ ]] || die "usage: bin/jumphp extension:add <game> <vendor/package>"
-  dir="$(game_dir "$game")"
+  dir="$(project_dir "$game")"
   for f in "$ROOT"/extensions/*/composer.json; do
     [ -f "$f" ] && grep -qE "\"name\"[[:space:]]*:[[:space:]]*\"$pkg\"" "$f" && { local_ext="$(basename "$(dirname "$f")")"; break; }
   done

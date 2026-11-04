@@ -18,7 +18,7 @@ cmd_plugin_new() {
 }
 
 cmd_plugin_test() {
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   ensure_vendor "$dir"
   ensure_engine_tools
   if [ -n "${2:-}" ]; then
@@ -44,7 +44,7 @@ cmd_plugin_test() {
 
 # bin/jumphp plugin:pack <id>: dist/<id>-<version>.zip, what the IDE installs (Install from a File) and jumphp.net publishes
 cmd_plugin_pack() {
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   is_plugin "${1:-}" || die "$dir is not an IDE plugin (config/project.yaml kind: plugin)"
   ensure_vendor "$dir"
   php_run "$dir" -- php /workspace/tools/plugin-pack.php . || die "packaging failed"

@@ -5,7 +5,7 @@
 
 cmd_service() {
   local action="$1" id="${2:-}"; shift 2 || true
-  local dir; dir="$(game_dir "$id")"
+  local dir; dir="$(project_dir "$id")"
   local extra=() exe=""
   while [ $# -gt 0 ]; do
     case "$1" in

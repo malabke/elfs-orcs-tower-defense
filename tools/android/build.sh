@@ -206,9 +206,9 @@ icons() {
 }
 
 app() {
-  local game_dir="/workspace/games/$GAME"; [ -d "$game_dir" ] || game_dir="/workspace/apps/$GAME"
-  [ -d "$game_dir" ] || die "no games/$GAME nor apps/$GAME"
-  local cfg; cfg="$(game_config "$game_dir")"
+  local project_dir="/workspace/games/$GAME"; [ -d "$project_dir" ] || project_dir="/workspace/apps/$GAME"
+  [ -d "$project_dir" ] || die "no games/$GAME nor apps/$GAME"
+  local cfg; cfg="$(game_config "$project_dir")"
   local get; get() { printf '%s' "$cfg" | php -r '$c = json_decode(stream_get_contents(STDIN), true); echo $c[$argv[1]];' "$1"; }
   local name width height bg id
   name="$(get name)"; width="$(get width)"; height="$(get height)"; bg="$(get background)"; id="$(get id)"
@@ -231,11 +231,11 @@ app() {
   local escaped; escaped="$(printf '%s' "$name" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e "s/'/\\\\'/g")"
   sed -i "s|@NAME@|$escaped|" "$project/app/src/main/res/values/strings.xml"
   sed -i "s|@ORIENTATION@|$orientation|" "$project/app/src/main/AndroidManifest.xml"
-  icons "$game_dir" "$project/app/src/main/res" "$bg" "$name"
+  icons "$project_dir" "$project/app/src/main/res" "$bg" "$name"
 
   # the game: assets/game.tar + game.id (its build)
   local stage=/tmp/stage/game build
-  build="$(bash /workspace/tools/stage-game.sh "$game_dir" "$stage")"
+  build="$(bash /workspace/tools/stage-game.sh "$project_dir" "$stage")"
   mkdir -p "$project/app/src/main/assets"
   tar --format=gnu -cf "$project/app/src/main/assets/game.tar" -C "$stage" .
   printf '%s' "$build" > "$project/app/src/main/assets/game.id"
@@ -253,7 +253,7 @@ app() {
     ./gradlew --no-daemon -q $tasks > /tmp/gradle.out 2>&1 || { grep -vE "^\s*at |^\s*$" /tmp/gradle.out | tail -60; die "Gradle failed"; }
   )
 
-  local out="$game_dir/dist/android-native" file="$GAME-$VERSION_NAME"
+  local out="$project_dir/dist/android-native" file="$GAME-$VERSION_NAME"
   mkdir -p "$out"
   cp "$project/app/build/outputs/apk/release/app-release.apk" "$out/$file.apk"
   echo "APK=$out/$file.apk"
@@ -265,10 +265,10 @@ app() {
 
 # a desktop app (ui: webview): its browser build in a WebView (tools/android/webview), no PHP built here
 webview_app() {
-  local game_dir="/workspace/games/$GAME"; [ -d "$game_dir" ] || game_dir="/workspace/apps/$GAME"
-  [ -f "$game_dir/dist/web/index.html" ] || die "no browser build of $GAME: bin/jumphp build $GAME first"
+  local project_dir="/workspace/games/$GAME"; [ -d "$project_dir" ] || project_dir="/workspace/apps/$GAME"
+  [ -f "$project_dir/dist/web/index.html" ] || die "no browser build of $GAME: bin/jumphp build $GAME first"
   fetch sdl2 "$(registry_url sdl2)"   # Gradle's wrapper, from SDL's Android project (as the games' apps)
-  local cfg; cfg="$(game_config "$game_dir")"
+  local cfg; cfg="$(game_config "$project_dir")"
   local get; get() { printf '%s' "$cfg" | php -r '$c = json_decode(stream_get_contents(STDIN), true); echo $c[$argv[1]];' "$1"; }
   local name bg
   name="$(get name)"; bg="$(get background)"
@@ -283,9 +283,9 @@ webview_app() {
   printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$project/local.properties"
   local escaped; escaped="$(printf '%s' "$name" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e "s/'/\\\\'/g")"
   sed -i "s|@NAME@|$escaped|" "$project/app/src/main/res/values/strings.xml"
-  icons "$game_dir" "$project/app/src/main/res" "$bg" "$name"
+  icons "$project_dir" "$project/app/src/main/res" "$bg" "$name"
   mkdir -p "$project/app/src/main/assets/web"
-  cp -rL "$game_dir/dist/web/." "$project/app/src/main/assets/web/"
+  cp -rL "$project_dir/dist/web/." "$project/app/src/main/assets/web/"
 
   local tasks="assembleRelease"
   [ -n "${KEYSTORE:-}" ] && tasks="assembleRelease bundleRelease"
@@ -296,7 +296,7 @@ webview_app() {
       JUMPHP_KEY_ALIAS="${KEY_ALIAS:-}" JUMPHP_KEY_PASSWORD="${KEY_PASSWORD:-}"
     ./gradlew --no-daemon -q $tasks > /tmp/gradle.out 2>&1 || { grep -vE "^\s*at |^\s*$" /tmp/gradle.out | tail -60; die "Gradle failed"; }
   )
-  local out="$game_dir/dist/android-native" file="$GAME-$VERSION_NAME"
+  local out="$project_dir/dist/android-native" file="$GAME-$VERSION_NAME"
   mkdir -p "$out"
   cp "$project/app/build/outputs/apk/release/app-release.apk" "$out/$file.apk"
   echo "APK=$out/$file.apk"

@@ -4,7 +4,7 @@
 # games/<game>/dist/video/<id>-<template>-<seed>.mp4 (H.264 + AAC) + .png (the cover). docs/video-maker.md.
 
 cmd_video_make() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift || true
   local seed="" count=1 seconds="" template="" title="" keep=0 captions=() captions_file=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -89,7 +89,7 @@ video_make_one() {
 # sounds, music) and mixed offline, then ffmpeg in Docker: games/<game>/dist/video/<game>-replay[-name].mp4 + a .png cover.
 # The size is the game's view x --scale (default: the smallest side at least 720 pixels). docs/video-maker.md.
 cmd_video_replay() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift || true
   local input="" scene="" params="" seconds="" scale="" name="" keep=0
   while [ $# -gt 0 ]; do
     case "$1" in

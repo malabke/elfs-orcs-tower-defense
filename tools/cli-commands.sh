@@ -20,13 +20,13 @@ cmd_cli_new() {
 
 # bin/jumphp run <app> [arguments...]: the app in this terminal (its arguments: a command and its options)
 cmd_cli_run() {
-  local dir; dir="$(game_dir "${1:-}")"; shift || true
+  local dir; dir="$(project_dir "${1:-}")"; shift || true
   ensure_vendor "$dir"
   php_run "$dir" -e "TERM=${TERM:-xterm-256color}" -e "COLUMNS=$(tput cols 2>/dev/null || echo 80)" -e "LINES=$(tput lines 2>/dev/null || echo 24)" -- php app.php "$@"
 }
 
 cmd_cli_test() {
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   ensure_vendor "$dir"
   [ -d "$ROOT/$dir/tests" ] && ensure_engine_tools
   if [ -n "${2:-}" ]; then
@@ -57,7 +57,7 @@ cmd_cli_test() {
 # JUMPHP_KEYS='[[1,"a"],[1.5,"\r"]]' typed at those seconds, JUMPHP_ARGS its arguments; the screen as text
 # (a fresh var/ each time, as the headless runs of games: JUMPHP_VAR=<dir> to give one)
 cmd_cli_shot() {
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   local seconds="${2:-2}" out="${3:-var/screenshots/screen.txt}"
   ensure_vendor "$dir"
   local args=()

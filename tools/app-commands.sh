@@ -116,7 +116,7 @@ ensure_tauri_lib() {
 }
 
 app_dir() {
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$(project_yaml "$ROOT/$dir")" 2>/dev/null \
     || die "$dir is not a desktop app (config/project.yaml: ui: webview). A game: bin/jumphp run / test / shot"
   echo "$dir"
@@ -248,9 +248,9 @@ app_export_macos() {
     JUMPHP_STANDALONE_INI=$'ffi.enable=1\nmemory_limit=512M' \
       cmd_export_standalone "$app" "--macos-$arch"
   done
-  local out="$(game_dir "$app")/dist/standalone"
+  local out="$(project_dir "$app")/dist/standalone"
   docker run --rm --user "$(id -u):$(id -g)" "${WS[@]}" -w /workspace "$DESKTOP_IMAGE" \
-    php tools/macos-app.php "$(game_dir "$app")" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
+    php tools/macos-app.php "$(project_dir "$app")" "$out/$app-macos-arm64" "$out/$app-macos-x86_64" "$out/$app-macos.zip" >/dev/null \
     || die "the .app was not made (see above)"
   # the two executables stay beside it: app:release offers them as updates of the .app (each Mac replaces its own)
   say "done: $out/$app-macos.zip ($(du -h "$ROOT/$out/$app-macos.zip" | cut -f1)): the .app inside, Apple silicon + Intel"

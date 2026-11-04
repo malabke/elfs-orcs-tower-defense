@@ -210,7 +210,7 @@ all_projects() {
 
 # the project a command means when none is named: the folder of games/ or apps/ it is typed in, else JUMPHP_APP /
 # JUMPHP_GAME (.env), else the only project (none of these: empty)
-default_game() {
+default_project() {
   local p rest
   for p in games apps; do
     case "$CALLER_DIR/" in "$ROOT/$p/"*/*) rest="${CALLER_DIR#"$ROOT/$p/"}"; echo "${rest%%/*}"; return ;; esac
@@ -222,7 +222,7 @@ default_game() {
   return 0
 }
 
-game_dir() {
+project_dir() {
   local g="${1:-}" d
   [ -n "$g" ] || die "missing <project> (a folder of games/ or apps/)"
   d="$(project_path "$g")"
@@ -230,14 +230,19 @@ game_dir() {
   echo "$d"
 }
 
-# runtime of a game folder: JUMPHP_RUNTIME, else `runtime:` in its config/game.yaml, else "default"
-game_runtime() {
+# the old names (a script of yours that calls them keeps working)
+game_dir() { project_dir "$@"; }
+default_game() { default_project "$@"; }
+game_runtime() { project_runtime "$@"; }
+
+# runtime of a project folder: JUMPHP_RUNTIME, else `runtime:` in its config/game.yaml, else "default"
+project_runtime() {
   if [ -n "${JUMPHP_RUNTIME:-}" ]; then echo "$JUMPHP_RUNTIME"; return; fi
   local yaml; yaml="$(project_yaml "$ROOT/$1")"
   if [ -f "$yaml" ] && grep -qE '^[[:space:]]*runtime:[[:space:]]*["'"'"']?async' "$yaml"; then echo async; else echo default; fi
 }
 
-runtime_image() { [ "$(game_runtime "$1")" = async ] && echo "$ASYNC_IMAGE" || echo "$DESKTOP_IMAGE"; }
+runtime_image() { [ "$(project_runtime "$1")" = async ] && echo "$ASYNC_IMAGE" || echo "$DESKTOP_IMAGE"; }
 
 ensure_desktop_image() {
   docker image inspect "$DESKTOP_IMAGE" >/dev/null 2>&1 || { say "building $DESKTOP_IMAGE (first time, ~3 min)"; docker build -t "$DESKTOP_IMAGE" --build-context ext=docker/ext docker/desktop; }
@@ -487,7 +492,7 @@ cmd_gui_new() {
 
 # a film -> numbered pictures + its sound, for JumPHP\Gui\Video (SDL's binding decodes no video)
 cmd_video() {
-  local game="${1:-}" file="${2:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}" file="${2:-}"; local dir; dir="$(project_dir "$game")"
   [ -f "$file" ] || die "usage: bin/jumphp video <app> <film.mp4> [name] [fps]"
   local name="${3:-$(basename "${file%.*}" | tr '[:upper:] ' '[:lower:]-')}" fps="${4:-25}"
   video_frames "$file" "$dir/assets/videos/$name" "$fps"
@@ -532,7 +537,7 @@ video_frames() {
 # the game as an Android app (tools/twa.sh in docker/twa); asks what it does not know, remembers it in
 # games/<game>/android/twa-manifest.json (in git); the key and the Android SDK stay in ~/.jumphp (never in git)
 cmd_twa() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift
   local url="" package="" name="" bump=1
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -613,7 +618,7 @@ cmd_twa() {
 # .github/workflows/android.yml, from tools/android/workflow.yml; the release has the .apk and the .aab) or --local.
 # games/<game>/android/app.json (in git): package, version; the upload key: ~/.jumphp/android/keys (never in git).
 cmd_android() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift
   local local_build=0 package="" version_name=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -733,7 +738,7 @@ cmd_android() {
 # workflow .github/workflows/apple.yml, from tools/apple/workflow.yml, on a macOS runner; the release has the apps and
 # their screenshots) or --local on a Mac. games/<game>/apple/app.json (in git): bundle identifier, version, build.
 cmd_apple() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift
   local local_build=0 bundle="" version="" platforms=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -856,7 +861,7 @@ cmd_apple() {
 # + the game as a PHAR. The micro binaries are kept in ~/.jumphp/standalone (downloaded from JumPHP's releases, or
 # built here for Linux: ~15 min once)
 cmd_export_standalone() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift
   if is_cli "$game" && [ -z "${JUMPHP_STANDALONE_BOOT:-}" ]; then cmd_cli_export "$game" "$@"; return; fi
   local targets=()
   while [ $# -gt 0 ]; do
@@ -911,7 +916,7 @@ ensure_installer_bases() {
 
 # the installer of a game / app (tools/game-installer.php): GitHub release or a folder for any web host
 cmd_installer() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift || true
   local target="" url="" version="" build=1 platforms=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -1035,14 +1040,14 @@ cmd_cli_uninstall() {
 cmd_run() {
   # `bin/jumphp run` alone, or followed by the program's own arguments (a CLI app's command): the default game
   if [ -z "${1:-}" ] || [ -z "$(project_path "$1")" ]; then
-    local g; g="$(default_game)"
+    local g; g="$(default_project)"
     [ -n "$g" ] || die "which project? bin/jumphp run <id> (or run it inside games/<id>/ or apps/<id>/, or set JUMPHP_APP in .env)"
     set -- "$g" "$@"
   fi
   if is_app "${1:-}"; then cmd_app_run "$@"; return; fi
   if is_cli "${1:-}"; then cmd_cli_run "$@"; return; fi
   if is_plugin "${1:-}"; then cmd_plugin_run "$@"; return; fi
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   ensure_vendor "$dir"
   local flags=(--network host -e "JUMPHP_NET_URL=${JUMPHP_NET_URL:-}" -e "JUMPHP_DEBUG=${JUMPHP_DEBUG:-}"
                -e "JUMPHP_MAX_FRAMES=${JUMPHP_MAX_FRAMES:-}" -e "JUMPHP_SCENE=${JUMPHP_SCENE:-}" -e "JUMPHP_SCENE_PARAMS=${JUMPHP_SCENE_PARAMS:-}")
@@ -1091,7 +1096,7 @@ cmd_test() {
   if is_app "$target"; then cmd_app_test "$@"; return; fi
   if is_cli "$target"; then cmd_cli_test "$@"; return; fi
   if is_plugin "$target"; then cmd_plugin_test "$@"; return; fi
-  local dir; dir="$(game_dir "$target")"
+  local dir; dir="$(project_dir "$target")"
   ensure_vendor "$dir"
   live_announce
   # one test file (the IDE's Play on a test): only its PHPUnit tests
@@ -1125,7 +1130,7 @@ cmd_test() {
 cmd_shot() {
   if is_app "${1:-}"; then cmd_app_shot "$@"; return; fi
   if is_cli "${1:-}"; then cmd_cli_shot "$@"; return; fi
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   local frames="${2:-120}" out="${3:-var/screenshots/shot.png}"
   ensure_vendor "$dir"
   rm -f "$ROOT/$dir/${out%.png}"-[0-9]*.png   # frames of an earlier JUMPHP_SHOT_EVERY run
@@ -1139,7 +1144,7 @@ cmd_shot() {
 
 # a first web site for the game (games/<game>/site/, AGENTS.md §13) from its game.yaml and screenshots of its smoke demo
 cmd_site_new() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift || true
   ensure_vendor "$dir"
   local shots="var/screenshots/site" smoke
   rm -rf "${ROOT:?}/$dir/$shots" && mkdir -p "$ROOT/$dir/$shots"
@@ -1153,7 +1158,7 @@ cmd_site_new() {
 }
 
 cmd_build() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"
   is_cli "$game" && die "$dir is a CLI app: it runs in a terminal, not in a web page (bin/jumphp export:standalone $game)"
   [ -f "$ENGINE_DIR/php-web.mjs" ] && [ -f "$ENGINE_DIR/php-web.wasm" ] || die "no engine in build/engine: bin/jumphp engine:build first"
   ensure_videos "$dir"
@@ -1180,7 +1185,7 @@ assemble_site() {
 
 # The site + the game, as the server will get them, in dist/site ({{DOMAIN}} = localhost:<port>).
 cmd_build_site() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"
   [ -f "$ROOT/$dir/site/index.html" ] || die "no web site: $dir/site/index.html (AGENTS.md: A web site for the game)"
   cmd_build "$game"
   rm -rf "$ROOT/$dir/dist/site"
@@ -1191,7 +1196,7 @@ cmd_build_site() {
 # Headless Chrome on the site (dist/site): full-page screenshots, desktop and phone, every image loaded,
 # no JavaScript error, no sideways scrolling on a phone.
 cmd_siteshot() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"
   [ -f "$ROOT/$dir/dist/site/index.html" ] || cmd_build_site "$game" 18998
   local name="jumphp-siteshot-$game" port=18998
   docker rm -f "$name" >/dev/null 2>&1 || true
@@ -1210,7 +1215,7 @@ cmd_siteshot() {
 
 # A remote game (docs/remote.md) in dist/remote: the runtime in engine/, the game's files, manifest, page.
 cmd_build_remote() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"
   [ -f "$ROOT/build/runtime/version.json" ] || cmd_runtime_build
   [ -f "$ROOT/$dir/vendor/autoload.php" ] || php_run "$dir" -- composer install --no-interaction
   ensure_videos "$dir"
@@ -1221,7 +1226,7 @@ cmd_build_remote() {
 }
 
 cmd_serve() {
-  local dir; dir="$(game_dir "${1:-}")"
+  local dir; dir="$(project_dir "${1:-}")"
   local port="${2:-8080}" web="${JUMPHP_WEB:-web}"
   [ -f "$ROOT/$dir/dist/$web/index.html" ] || die "no browser build: bin/jumphp build ${1}"
   say "http://localhost:$port/  (Ctrl+C to stop)"
@@ -1230,7 +1235,7 @@ cmd_serve() {
 }
 
 cmd_webshot() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"
   local seconds="${2:-8}" keys="${3:-[]}" web="${JUMPHP_WEB:-web}"
   [ -f "$ROOT/$dir/dist/$web/index.html" ] || die "no browser build: bin/jumphp build $game"
   local name="jumphp-webshot-$game" port="${JUMPHP_WEBSHOT_PORT:-18999}"
@@ -1258,17 +1263,17 @@ cmd_relay() {
 }
 
 cmd_export_desktop() {
-  local game="${1:-}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-}"; local dir; dir="$(project_dir "$game")"
   ensure_desktop_image
   php_run "$dir" -- sh /workspace/tools/stage-web.sh "/workspace/$dir"
-  docker build -t "jumphp/game-$game" -f docker/desktop/Dockerfile.game --build-arg "BASE=$(runtime_image "$(game_dir "$game")")" ".build/$game"
+  docker build -t "jumphp/game-$game" -f docker/desktop/Dockerfile.game --build-arg "BASE=$(runtime_image "$(project_dir "$game")")" ".build/$game"
   say "image jumphp/game-$game. Run it with the same flags as bin/jumphp run (display + sound), e.g.:"
   echo "  docker run --rm -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix jumphp/game-$game"
 }
 
 cmd_deploy() {
   if [ -n "${JUMPHP_SERVER:-}" ]; then cmd_server_deploy "$@"; return; fi
-  local game="${1:-${JUMPHP_GAME:-}}"; local dir; dir="$(game_dir "$game")"
+  local game="${1:-${JUMPHP_GAME:-}}"; local dir; dir="$(project_dir "$game")"
   [ -n "${JUMPHP_DEPLOY_TARGET:-}" ] || die "no server: bin/jumphp deploy:setup (or JUMPHP_DEPLOY_TARGET in .env for a plain rsync)"
   [ -f "$ROOT/$dir/dist/web/index.html" ] || die "no browser build: bin/jumphp build $game"
   say "rsync $dir/dist/web -> $JUMPHP_DEPLOY_TARGET/$game/"
@@ -1294,7 +1299,7 @@ cmd_server_deploy() {
 
   local out="$ROOT/.build/server"
   rm -rf "$out" && mkdir -p "$out/site"
-  for game in "${games[@]}"; do game_dir "$game" >/dev/null; cmd_build "$game"; done
+  for game in "${games[@]}"; do project_dir "$game" >/dev/null; cmd_build "$game"; done
   local pages="$ROOT/$(project_path "${games[0]}")/site"
   if [ ${#games[@]} -eq 1 ] && [ -f "$pages/index.html" ]; then
     assemble_site "${games[0]}" "$out/site" "$JUMPHP_DOMAIN"
@@ -1424,7 +1429,7 @@ cmd_pages() {
   local site="$ROOT/.build/pages"
   rm -rf "$site" && mkdir -p "$site"
   for game in "${games[@]}"; do
-    game_dir "$game" >/dev/null
+    project_dir "$game" >/dev/null
     cmd_build "$game"
     cp -r "$ROOT/$(project_path "$game")/dist/web" "$site/$game"
   done
@@ -1548,8 +1553,8 @@ main() {
     new) cmd_new "$@" ;;
     gui:new) cmd_gui_new "$@" ;;
     video) cmd_video "$@" ;;
-    install) local d; d="$(game_dir "${1:-}")"; php_run "$d" -- composer install --no-interaction ;;
-    composer) local d; d="$(game_dir "${1:-}")"; shift; php_run "$d" -- composer "$@" ;;
+    install) local d; d="$(project_dir "${1:-}")"; php_run "$d" -- composer install --no-interaction ;;
+    composer) local d; d="$(project_dir "${1:-}")"; shift; php_run "$d" -- composer "$@" ;;
     run) cmd_run "$@" ;;
     test) cmd_test "$@" ;;
     shot) cmd_shot "$@" ;;

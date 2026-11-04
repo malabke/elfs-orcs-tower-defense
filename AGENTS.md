@@ -195,6 +195,17 @@ the player's files are never touched; `JUMPHP_VAR=<dir>` forces a folder). They 
 | `JUMPHP_DEBUG=1` | FPS / scene overlay (F3 toggles it too) |
 | `JUMPHP_XDEBUG=<port>` | step debugging: PHP runs with Xdebug (desktop image + Xdebug, built once) and connects to a debugger listening on that port of this computer (the JumPHP IDE's Debug sets it); composer, phpstan and `php -l` run without it |
 
+**Which project, what kind, what starts** (the same for a game, a desktop app, a graphic app, a CLI app, a plugin):
+- which project: its folder name, `games/<id>` or `apps/<id>`, given to the commands; without it: the folder of `games/` / `apps/`
+  the command is typed in, else `JUMPHP_APP` (`JUMPHP_GAME` is read too, `.env`), else the only project;
+- what kind: `config/project.yaml` (older projects: `config/game.yaml`) `kind:` (`gui`, `cli`, `plugin`; a game by default), or
+  `ui: webview` / `ui: hybrid` (desktop apps);
+- what starts: a game: `start_scene:`; a desktop app: `main: App\Main` (its `boot()`); a CLI app: `app.php` calls `App\Main::boot()`.
+  The PHP entry is always `app.php` on the desktop, `engine/bootstrap/wasm.php` in the browser (it reads the same project.yaml),
+  `tools/standalone-stub.php` in the one-file executables (it loads `app.php`);
+- the names that say "project": `JumPHP\Kernel\ProjectConfig` and `JumPHP\Testing\ProjectTestCase` are `GameConfig` and `GameTestCase`
+  under another name (both work forever).
+
 Three key-name formats, do not mix them:
 
 | Where | Format | Examples |
