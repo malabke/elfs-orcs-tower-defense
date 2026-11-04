@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false     # checkout's own token would win over the split token on github.com (403)
       - name: Split and push extensions/<id>
         env:
           TOKEN: ${{ secrets.EXTENSIONS_SPLIT_TOKEN }}
