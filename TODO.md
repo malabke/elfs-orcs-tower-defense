@@ -1,5 +1,7 @@
 # TODO
 
+**Later (on hold): [TODO-AFTER.md](TODO-AFTER.md)** (signing).
+
 **Urgent first: [TODO-URGENT.md](TODO-URGENT.md)** (what is left of the repository / publishing fixes), then [TODO-FIRST.md](TODO-FIRST.md).
 
 ## Desktop apps (Tauri): the next targets
@@ -13,7 +15,6 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
   `bin/jumphp android` and `bin/jumphp apple`, JumPHP 0.4.0; a webview app has its browser version, Android through `bin/jumphp twa`):
   Tauri's mobile loop is driven by the activity / UIKit, so PHP has to be embedded in the app (the PHP builds of
   `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
-- signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
 - the installers (jumphp2installer) offering a "start with the computer" box (the app does it: `$app->autostart()`,
   done; docs/tauri.md)
 - services / daemons in PHP: done 2026-11-04 (JumPHP 0.5.6): project.yaml `service:`, `JumPHP\Service\Daemon`,
@@ -49,19 +50,6 @@ Done (2026-11-04, JumPHP 0.5.6): questions, hidden answers, Ctrl+C and full-scre
   its own; try them for real
 - fibers in the WebAssembly engine (PHP's ucontext fallback: `getcontext` is missing) would let Revolt's own drivers run
 - an app making its own `new SymfonyStyle` / `new QuestionHelper` still shows hidden answers (no signal from Symfony)
-
-## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
-
-`bin/jumphp apple <game>` (docs/apple.md) builds the macOS app (.dmg, Apple silicon + Intel), the iPhone / iPad
-app (.ipa) and the simulator's app on GitHub's Macs, and tries them there; they are signed ad hoc. With the account
-(99 $ a year):
-
-- macOS: Developer ID certificate in the repository's secrets, `codesign --options runtime` + `notarytool` +
-  `stapler` in the workflow: opens without the right click
-- iOS: distribution certificate + provisioning profile (or automatic signing with an App Store Connect API key),
-  the .ipa signed, uploaded to TestFlight (`xcrun altool --upload-app` / the App Store Connect API), then the store
-  listing (screenshots: the simulator's, as check.sh takes them)
-- a playground "Apple" section (bundle id, as the Android one) when the App Store is reached
 
 ## Without PHP at run time: illegalstudio (to study)
 
