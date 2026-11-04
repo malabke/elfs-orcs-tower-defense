@@ -17,6 +17,20 @@ final class Templates
             $title = trim((string)preg_replace('/(?<!^)[A-Z]/', ' $0', preg_replace('/Form$/', '', basename($path, '.form.yaml')) ?: 'Form'));
             return "# A window of the app (JumPHP\\Gui): open it in Design view. The code behind it: src/Form/" . basename($path, '.form.yaml') . ".php\nform:\n  title: '$title'\n  children:\n    - {type: label, text: '$title', style: title}\n";
         }
+        if (str_ends_with($path, '.sfx.json')) {
+            // a sound effect of the resource editor (it writes the .wav next to it at each save)
+            return json_encode(['wave' => 'square', 'start' => 300, 'end' => 900, 'attack' => 0, 'sustain' => 60, 'decay' => 120,
+                'volume' => 6, 'vibrato' => 0, 'speed' => 0, 'repeat' => 1, 'gap' => 0], JSON_PRETTY_PRINT) . "\n";
+        }
+        if (str_ends_with($path, '.music.json')) {
+            // a tune of the resource editor: 4 voices, notes [step, MIDI pitch, length in steps], 16 steps a bar
+            $lead = [[0, 72, 2], [4, 76, 2], [8, 79, 2], [12, 76, 2], [16, 74, 2], [20, 77, 2], [24, 81, 4]];
+            return json_encode(['tempo' => 120, 'bars' => 2, 'voices' => [
+                ['volume' => 7, 'notes' => $lead], ['volume' => 5, 'notes' => []],
+                ['volume' => 7, 'notes' => [[0, 48, 4], [8, 43, 4], [16, 50, 4], [24, 45, 4]]],
+                ['volume' => 6, 'notes' => [[0, 0, 1], [8, 1, 1], [16, 0, 1], [24, 1, 1], [28, 2, 1]]],
+            ]]) . "\n";
+        }
         return match ($ext) {
             'php' => self::php($path, $name, $workspace),
             'html', 'htm' => "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>$name</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <main>\n    <h1>$name</h1>\n  </main>\n</body>\n</html>\n",

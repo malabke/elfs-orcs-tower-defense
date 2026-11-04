@@ -434,8 +434,12 @@ final class Ide
         $this->register('file.write', function (array $p) use ($history) {
             $path = Paths::clean((string)($p['path'] ?? ''));
             $history?->beforeWrite($path);
-            $this->workspace->write($path, (string)($p['content'] ?? ''));
-            $history?->saved($path, (string)($p['content'] ?? ''));
+            // base64: a binary file (a PNG, a WAV of the resource editors)
+            $content = isset($p['base64']) ? (string)base64_decode((string)$p['base64'], true) : (string)($p['content'] ?? '');
+            $this->workspace->write($path, $content);
+            if (!isset($p['base64'])) {
+                $history?->saved($path, $content);
+            }
             if (Paths::extension($path) === 'php') {
                 $this->index->update($path);
             }
@@ -447,7 +451,8 @@ final class Ide
             if ($this->workspace->exists($path)) {
                 throw new WorkspaceException("$path already exists");
             }
-            $content = array_key_exists('content', $p) ? (string)$p['content'] : Templates::forFile($path, $this->workspace);
+            $content = isset($p['base64']) ? (string)base64_decode((string)$p['base64'], true)
+                : (array_key_exists('content', $p) ? (string)$p['content'] : Templates::forFile($path, $this->workspace));
             $this->workspace->write($path, $content);
             if (Paths::extension($path) === 'php') {
                 $this->index->update($path);

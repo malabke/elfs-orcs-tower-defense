@@ -68,6 +68,8 @@ const SYMBOL = () => ({ class: monaco.languages.SymbolKind.Class, interface: mon
   function: monaco.languages.SymbolKind.Function, property: monaco.languages.SymbolKind.Property, constant: monaco.languages.SymbolKind.Constant,
   enumMember: monaco.languages.SymbolKind.EnumMember });
 
+const SOUND = /\.(sfx|music)\.json$/;
+
 export class Editors {
   constructor(root, app) {
     this.root = root;
@@ -80,6 +82,20 @@ export class Editors {
     this.navIndex = -1;
     this.autosave = debounce(() => this.saveAll(true), 1500);
     this.listeners = { active: new Set(), dirty: new Set(), saved: new Set(), cursor: new Set() };
+    // a sound effect / tune of the resource editors: its WAV (what the game plays) written next to it at each save
+    this.listeners.saved.add((path) => { if (SOUND.test(path)) this.writeSoundWav(path); });
+  }
+
+  async writeSoundWav(path) {
+    try {
+      const { wavOfFile, wavPathOf, base64 } = await import('./res-sound.js');
+      const wav = wavPathOf(path);
+      await backend.invoke('file.write', { path: wav, base64: base64(await wavOfFile(path, this.files.get(path)?.model?.getValue() ?? '{}')) });
+      this.files.delete(wav);
+      this.app.tree?.refresh?.();
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Cannot write the WAV of ' + basename(path) });
+    }
   }
 
   on(event, fn) { this.listeners[event].add(fn); return () => this.listeners[event].delete(fn); }
@@ -228,11 +244,13 @@ export class Editors {
       if (!group.textView.parentNode) host.append(group.textView);
       if (languageOf(tab.path) === 'html' && file) return this.renderHtml(group, tab, file);
       if (/\.form\.ya?ml$/.test(tab.path) && file) return this.renderHtml(group, tab, file, 'form');
+      if (SOUND.test(tab.path) && file) return this.renderSound(group, tab, file);
       group.textView.style.display = '';
       this.showModel(group, tab, file);
       return;
     }
     if (tab.kind === 'image') {
+      if (/\.png$/i.test(tab.path) && !this.app.project?.capabilities?.readOnly) return this.renderImage(group, tab, file);
       host.append(el('div.view.image-view', {}, el('img', { src: file.data.image, alt: tab.path }),
         el('div', {}, `${basename(tab.path)} · ${(file.data.size / 1024).toFixed(1)} KB`)));
       return;
@@ -261,6 +279,75 @@ export class Editors {
 
   activeTabModelState(group) {
     return group.modelTab ? { tab: group.modelTab, state: group.editor.saveViewState() } : null;
+  }
+
+  /** A PNG: the picture, or its pixels in the sprite editor (Edit). */
+  async renderImage(group, tab, file) {
+    const host = group.host;
+    const mode = tab.mode || 'view';
+    host.append(el('div.mode-switch', {}, ['view', 'edit'].map((m) => el(`button${m === mode ? '.on' : ''}`, {
+      onclick: () => { tab.mode = m; this.renderView(group, tab); },
+    }, { view: 'View', edit: 'Edit pixels' }[m]))));
+    if (mode === 'view') {
+      host.append(el('div.view.image-view', {}, el('img', { src: file.data.image, alt: tab.path }),
+        el('div', {}, `${basename(tab.path)} · ${(file.data.size / 1024).toFixed(1)} KB`)));
+      return;
+    }
+    const view = el('div.view');
+    host.append(view);
+    try {
+      const { SpriteEditor } = await import('./res-sprite.js');
+      group.designer = new SpriteEditor(view, {
+        path: tab.path,
+        src: file.data.image,
+        save: async (png) => {
+          await backend.invoke('file.write', { path: tab.path, base64: png });
+          file.data = { ...file.data, image: 'data:image/png;base64,' + png, size: Math.floor(png.length * 3 / 4) };
+          this.emit('saved', tab.path);
+        },
+      });
+    } catch (e) {
+      view.append(el('div.placeholder', {}, 'The sprite editor could not start: ' + e.message));
+    }
+  }
+
+  /** *.sfx.json / *.music.json: the sound editors over the JSON (Editor), or the JSON itself (Code). */
+  async renderSound(group, tab, file) {
+    const host = group.host;
+    const mode = tab.mode || 'design';
+    host.append(el('div.mode-switch', {}, ['code', 'design'].map((m) => el(`button${m === mode ? '.on' : ''}`, {
+      onclick: () => { tab.mode = m; this.renderView(group, tab); },
+    }, { code: 'Code', design: 'Editor' }[m]))));
+    if (mode === 'code') {
+      group.textView.style.display = '';
+      this.showModel(group, tab, file);
+      return;
+    }
+    const view = el('div.view');
+    host.append(view);
+    try {
+      const music = /\.music\.json$/.test(tab.path);
+      const { SfxEditor } = music ? {} : await import('./res-sfx.js');
+      const { MusicEditor } = music ? await import('./res-music.js') : {};
+      let syncing = false;
+      const editor = new (music ? MusicEditor : SfxEditor)(view, {
+        path: tab.path,
+        text: file.model.getValue(),
+        onChange: (text) => {
+          if (file.readOnly) return;
+          syncing = true;
+          file.model.pushEditOperations([], [{ range: file.model.getFullModelRange(), text }], () => null);
+          syncing = false;
+        },
+      });
+      group.designer = editor;
+      const sub = file.model.onDidChangeContent(debounce(() => { if (!syncing && group.designer === editor) editor.setText(file.model.getValue()); }, 600));
+      const destroy = editor.destroy.bind(editor);
+      editor.destroy = () => { sub.dispose(); destroy(); };
+      requestAnimationFrame(() => editor.node.focus());
+    } catch (e) {
+      view.append(el('div.placeholder', {}, 'The sound editor could not start: ' + e.message));
+    }
   }
 
   /** .html files (and forms of graphic apps, *.form.yaml): Code, Design (visual editor) or both side by side. */

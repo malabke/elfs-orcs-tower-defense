@@ -236,6 +236,10 @@ export class ProjectTree {
         { label: 'PHP Class…', action: () => this.newFile(dir, '.php', 'Class name (Hero, Scene/PlayScene, Entity/Coin…)') },
         { label: 'Directory…', icon: 'folder', action: () => this.newDirectory(dir) },
         { label: 'HTML Page…', action: () => this.newFile(dir, '.html') },
+        '-',
+        { label: 'Sprite (PNG)…', action: () => this.newSprite(dir) },
+        { label: 'Sound Effect…', action: () => this.newFile(dir, '.sfx.json', 'Name (jump, coin…): a .wav is written next to it') },
+        { label: 'Music…', action: () => this.newFile(dir, '.music.json', 'Name (level1, title…): a .wav is written next to it') },
         module ? '-' : null,
         module ? { label: 'Scene', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'src/Scene', '.php', 'Scene class name', 'Scene') } : null,
         module ? { label: 'Entity', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'src/Entity', '.php', 'Entity class name') } : null,
@@ -278,6 +282,27 @@ export class ProjectTree {
       this.files.push(path);
       this.reveal(path);
       this.app.editors.open(path);
+      this.app.git?.refresh();
+    } catch (e) { notify(e.message, 'error'); }
+  }
+
+  /** A blank PNG of the size asked (the sprite editor opens on it). */
+  async newSprite(dir) {
+    if (this.refuseReadOnly()) return;
+    const name = await prompt('New Sprite', { label: dir ? `In ${dir}/` : 'At the project root', placeholder: 'hero 16x16 (name, then the size of a frame)' });
+    if (!name) return;
+    const m = name.trim().match(/^(.*?)(?:\s+(\d+)\s*[x×]\s*(\d+))?$/);
+    const [w, h] = [Math.min(512, Number(m[2]) || 16), Math.min(512, Number(m[3]) || Number(m[2]) || 16)];
+    const path = (dir ? dir + '/' : '') + m[1].trim().replace(/\.png$/i, '') + '.png';
+    const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h });
+    const bytes = new Uint8Array(await (await new Promise((r) => canvas.toBlob(r, 'image/png'))).arrayBuffer());
+    try {
+      const { base64 } = await import('./res-sound.js');
+      await backend.invoke('file.create', { path, base64: base64(bytes) });
+      this.files.push(path);
+      this.reveal(path);
+      const tab = await this.app.editors.open(path);
+      if (tab) { tab.mode = 'edit'; this.app.editors.renderView(this.app.editors.focused, tab); }
       this.app.git?.refresh();
     } catch (e) { notify(e.message, 'error'); }
   }
