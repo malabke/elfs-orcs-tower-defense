@@ -9,6 +9,7 @@ import { Plugins } from './plugins.js';
 import { Extensions } from './extensions.js';
 import { LocalAi } from './local-ai.js';
 import { VideoPreview } from './video-preview.js';
+import { WhatsNew } from './whats-new.js';
 import { searchEverywhere, recentFiles, fileStructure, FindPanel } from './search.js';
 import { Git } from './git.js';
 import { Runner, Problems, Structure, Hierarchy } from './run.js';
@@ -134,6 +135,8 @@ class App {
     if (this.project.capabilities?.run) this.extensions = new Extensions(this);
     this.localAi = new LocalAi(this);
     this.videoPreview = new VideoPreview(this);
+    this.whatsNew = new WhatsNew(this);
+    if (this.updates?.current && !this.whatsNewChecked) { this.whatsNewChecked = true; this.whatsNew.check(this.updates.current); }
     this.problems = new Problems(this);
     this.structure = new Structure(this);
     this.hierarchy = new Hierarchy(this);
@@ -721,6 +724,7 @@ class App {
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },
         { label: 'JumPHP Documentation', action: () => this.openUrl('https://jumphp.net/docs') },
+        ...(backend.kind === 'native' ? [{ label: 'What\'s New…', icon: 'star', action: () => this.whatsNew.show() }] : []),
         ...(backend.kind === 'native' && this.updates && this.updates.state !== 'off' ? ['-',
           { label: 'Check for Updates…', icon: 'download', action: () => this.checkForUpdates() },
           { label: 'Update Automatically', checked: !!this.updates.auto, action: () => backend.invoke('update.auto', { on: !this.updates.auto }).then((st) => this.updateState(st)) },
@@ -749,6 +753,7 @@ class App {
   /** The IDE's own updates (games/ide/src/SelfUpdate.php): installed in the background, then one click to restart. */
   updateState(st, force = false) {
     const before = this.updates?.state;
+    if (st?.current && this.whatsNew && !this.whatsNewChecked) { this.whatsNewChecked = true; this.whatsNew.check(st.current); }
     this.updates = st;
     if (!st || (st.state === before && !force)) return;
     const restart = { label: 'Restart Now', action: () => this.restartForUpdate() };

@@ -195,6 +195,8 @@ final class Main implements AppMain
             ($p['via'] ?? '') === 'update' ? 'update' : 'install');
         // the engine extensions of Packagist (Tools > Engine Extensions…)
         $c['extensions.list'] = fn (array $p) => $this->extensionsList((string)($p['q'] ?? ''));
+        // what is new (jumphp.net/nouveautes), in the user's language: shown once after an update, then from Help > What's New
+        $c['whatsnew.get'] = fn (array $p) => $this->whatsNew((string)($p['lang'] ?? ''));
         // a mark (1 to 5) and, for the user's own plugins, their statistics
         $c['market.rate'] = fn (array $p) => self::deferred($this->playground->request('POST', '/api/ide/plugins/' . rawurlencode((string)($p['id'] ?? '')) . '/rating',
             ['score' => (int)($p['score'] ?? 0)]));
@@ -621,6 +623,21 @@ final class Main implements AppMain
     }
 
     /** jumphp.net's IDE plugins (its public API: no sign-in needed). */
+    /** @return Deferred resolved with the entries of jumphp.net's /api/whats-new in $lang (two letters; else the server's guess) */
+    private function whatsNew(string $lang): Deferred
+    {
+        $lang = preg_match('/^[a-z]{2}$/', $lang) ? $lang : '';
+        $url = $this->playground->server() . '/api/whats-new' . ($lang !== '' ? '?lang=' . $lang : '');
+        return $this->processes->start(['curl', '-sS', '--max-time', '15', '-H', 'Accept: application/json', '-A', 'jumphp-ide', $url], sys_get_temp_dir())['done']
+            ->then(function (array $r) {
+                $data = json_decode((string)$r['stdout'], true);
+                if ($r['code'] !== 0 || !is_array($data) || !isset($data['entries'])) {
+                    throw new \RuntimeException('jumphp.net cannot be reached: ' . trim((string)($r['stderr'] ?: $r['stdout'])));
+                }
+                return $data['entries'];
+            });
+    }
+
     /** Packagist's packages of type jumphp-extension (https://packagist.org/search.json), what jumphp.net/extensions lists too. */
     private function extensionsList(string $query): Deferred
     {
