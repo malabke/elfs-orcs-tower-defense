@@ -1,6 +1,7 @@
 // The tileset editor (*.tsj) and the level editor (*.tmj): Tiled's JSON formats, what the engine's TiledJsonLoader
 // reads. The JSON stays in the file (the tab's text); paths inside it are relative to the file, as Tiled writes them.
 import { el, clear, notify } from './ui.js';
+import { generateButton } from './res-ai.js';
 
 export const COLLISIONS = [
   ['', 'default (solid on the collision layer)'], ['full', 'full'], ['none', 'none'], ['oneway', 'one-way platform'],
@@ -247,7 +248,7 @@ export class TilesetEditor {
 
 export class LevelEditor {
   /** host: the view; text: the .tmj; onChange(text); readText(path) / readImage(path); files: the project's files */
-  constructor(host, { path, text, onChange, readText, readImage, files = [] }) {
+  constructor(host, { path, text, onChange, readText, readImage, files = [], ai = false }) {
     this.path = path;
     this.dir = dirOf(path);
     this.onChange = onChange;
@@ -289,7 +290,10 @@ export class LevelEditor {
         el('button.btn.small', { onclick: () => this.setZoom(this.zoom - 1), title: 'Zoom out' }, '−'),
         el('button.btn.small', { onclick: () => this.setZoom(this.zoom + 1), title: 'Zoom in' }, '+'),
         el('span.res-sep'),
-        el('span.res-inline', {}, 'Size', this.sizeW, '×', this.sizeH, 'tiles')),
+        el('span.res-inline', {}, 'Size', this.sizeW, '×', this.sizeH, 'tiles'),
+        ...(ai ? [el('span.res-sep'), generateButton('level', { apply: (d) => this.generated(d),
+          fields: () => [{ key: 'width', label: 'Width (tiles)', value: Math.min(200, this.map.width), min: 4, max: 200 },
+            { key: 'height', label: 'Height (tiles)', value: Math.min(60, this.map.height), min: 4, max: 60 }] })] : [])),
       el('div.res-body.res-level-body', {}, this.box,
         el('div.res-side.res-level-side', {},
           el('div.res-row', {}, el('span.res-label', {}, 'Tileset'), this.setSelect,
@@ -711,6 +715,43 @@ export class LevelEditor {
     Object.assign(this.map, { width: w, height: h });
     this.draw();
     this.changed();
+  }
+
+  /**
+   * A generated level ({width, height, tiles: 0 empty / 1 solid / 2 one-way, objects: [{type, x, y}] in tiles}): the map
+   * takes its size, its collision layer the tiles (a solid and a one-way tile of the tilesets, else gids 1 and 2), its
+   * object layer the objects; the other layers are emptied. Undo brings the old level back.
+   */
+  generated({ width, height, tiles, objects }) {
+    this.remember();
+    const find = (kind) => {
+      for (const s of this.sets) {
+        const t = (s.ts.tiles || []).find((t) => prop(t.properties, 'collision') === kind);
+        if (t) return s.firstgid + t.id;
+      }
+      return null;
+    };
+    const solid = find('full') ?? this.sets[0]?.firstgid ?? 1;
+    const oneway = find('oneway') ?? solid + 1;
+    const map = this.map;
+    map.width = width;
+    map.height = height;
+    let collision = map.layers.find((l) => l.type === 'tilelayer' && l.name === 'collision') || map.layers.find((l) => l.type === 'tilelayer');
+    if (!collision) map.layers.push(collision = this.newLayer(map, 'tilelayer', 'collision'));
+    let group = map.layers.find((l) => l.type === 'objectgroup');
+    if (!group) map.layers.push(group = this.newLayer(map, 'objectgroup', 'objects'));
+    for (const l of map.layers) {
+      if (l.type === 'tilelayer') { l.width = width; l.height = height; l.data = new Array(width * height).fill(0); }
+    }
+    collision.data = tiles.map((t) => (t === 1 ? solid : t === 2 ? oneway : 0));
+    const { tilewidth: tw, tileheight: th } = map;
+    group.objects = objects.map((o) => ({ id: map.nextobjectid++, name: o.type === 'start' ? 'start' : '', type: o.type,
+      x: o.x * tw, y: o.y * th, width: tw, height: th, rotation: 0, visible: true, properties: [] }));
+    this.object = null;
+    this.fields();
+    this.drawObject();
+    this.changed();
+    this.draw();
   }
 
   remember() {

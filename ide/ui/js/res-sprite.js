@@ -3,6 +3,7 @@
 // frames added / removed, and the animation played. Saved as PNG (Ctrl+S or Save), alpha kept.
 import { el, notify } from './ui.js';
 import { base64 } from './res-sound.js';
+import { generateButton } from './res-ai.js';
 
 const PALETTE = ['#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
   '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa'];
@@ -10,7 +11,7 @@ const TOOLS = [['pencil', '✎', 'Pencil (P)', 'p'], ['eraser', '⌫', 'Eraser (
 
 export class SpriteEditor {
   /** src: the PNG as a data URL (or null: a new one of width x height); save(base64Png): writes the file */
-  constructor(host, { path, src, width = 16, height = 16, save }) {
+  constructor(host, { path, src, width = 16, height = 16, save, ai = false }) {
     this.path = path;
     this.saveFile = save;
     this.tool = 'pencil';
@@ -40,7 +41,11 @@ export class SpriteEditor {
         el('label.res-inline', {}, el('input', { type: 'checkbox', checked: this.grid, onchange: (e) => { this.grid = e.target.checked; this.draw(); } }), 'Grid'),
         el('span.res-sep'),
         el('button.btn.small', { onclick: () => this.restore(this.undo, this.redo), title: 'Undo (Ctrl+Z)' }, '↶'),
-        el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷')),
+        el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷'),
+        ...(ai ? [el('span.res-sep'), generateButton('sprite', {
+          fields: () => [{ key: 'width', label: 'Width', value: this.frameW(), min: 1, max: 64 }, { key: 'height', label: 'Height', value: this.frameH(), min: 1, max: 64 },
+            { key: 'frames', label: 'Frames', value: Math.min(8, this.count()), min: 1, max: 8 }],
+          apply: (d) => this.generated(d) })] : [])),
       el('div.res-body', {},
         el('div.res-canvas-box', {}, this.view),
         el('div.res-side', {},
@@ -266,6 +271,26 @@ export class SpriteEditor {
       to++;
     }
     this.frame = Math.min(this.frame, keep - 1);
+    this.changed();
+    this.draw();
+  }
+
+  /** A generated sprite ({width, height, palette, frames: [rows]}): a new sheet of its frames side by side (Undo: the old one). */
+  generated({ width, height, palette, frames }) {
+    this.remember();
+    this.sheet.width = width * frames.length;
+    this.sheet.height = height;
+    const g = this.ctx();
+    g.clearRect(0, 0, this.sheet.width, this.sheet.height);
+    frames.forEach((rows, f) => rows.forEach((row, y) => [...row].forEach((c, x) => {
+      if (c === '.') return;
+      g.fillStyle = palette[c];
+      g.fillRect(f * width + x, y, 1, 1);
+    })));
+    this.fw.value = width;
+    this.fh.value = height;
+    this.frame = 0;
+    this.fillPalette();
     this.changed();
     this.draw();
   }

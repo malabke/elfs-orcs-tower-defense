@@ -3,6 +3,7 @@
 namespace JumPHP\Ide;
 
 use JumPHP\Ide\Agent\IdeAgent;
+use JumPHP\Ide\Ai\ResourceGenerator;
 use JumPHP\Ide\Config\ConfigCompletion;
 use JumPHP\Ide\Debug\Debugger;
 use JumPHP\Ide\Async\Deferred;
@@ -135,6 +136,12 @@ final class Ide
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
                 isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true, (string)($p['conv'] ?? 'main') ?: 'main'));
             $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
+            // "Generate…" in the resource editors: Claude (claude -p), or a picture service with the user's key
+            $ai = new ResourceGenerator($this->processes, $root);
+            $this->register('ai.providers', fn () => $ai->providers());
+            $this->register('ai.generate', fn (array $p) => $ai->generate((string)($p['kind'] ?? ''), (string)($p['prompt'] ?? ''),
+                (array)($p['options'] ?? []), (string)($p['provider'] ?? 'claude') ?: 'claude', (string)($p['key'] ?? ''),
+                isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null));
             $this->register('claude.close', function (array $p): bool {
                 $this->claude?->close((string)($p['conv'] ?? ''));
                 return true;

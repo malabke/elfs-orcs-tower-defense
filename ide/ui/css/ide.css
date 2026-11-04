@@ -635,3 +635,4 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .res-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .res-preview { image-rendering: pixelated; align-self: flex-start; background: repeating-conic-gradient(#3a3d42 0 25%, #2b2d31 0 50%) 0 0 / 16px 16px; }
 .res-status { color: var(--text-3); }
+.res-ai { display: flex; flex-direction: column; gap: 6px; min-width: 360px; } .res-ai textarea { width: 100%; resize: vertical; }

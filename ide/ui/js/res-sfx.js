@@ -2,10 +2,11 @@
 // change. The JSON stays in the file (the editor's source); saving it also writes the WAV the game plays next to it.
 import { el, copyText, notify } from './ui.js';
 import * as S from './res-sound.js';
+import { generateButton } from './res-ai.js';
 
 export class SfxEditor {
   /** host: the view; text: the file's JSON; onChange(text): the new JSON (the tab's model) */
-  constructor(host, { path, text, onChange }) {
+  constructor(host, { path, text, onChange, ai = false }) {
     this.path = path;
     this.onChange = onChange;
     this.sfx = S.sfxOf(parse(text));
@@ -33,7 +34,8 @@ export class SfxEditor {
         el('button.btn.small', { onclick: () => this.preset('random') }, 'random'),
         el('span.res-sep'),
         el('button.btn.small', { onclick: () => this.restore(this.undo, this.redo), title: 'Undo (Ctrl+Z)' }, '↶'),
-        el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷')),
+        el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷'),
+        ...(ai ? [el('span.res-sep'), generateButton('sfx', { apply: (d) => { this.remember(); this.sfx = S.sfxOf(d); this.fields(); this.changed(true); } })] : [])),
       el('div.res-body', {},
         el('div.res-fields', {}, el('label.res-row', {}, el('span.res-label', {}, 'Wave'), this.wave), ...rows),
         el('div.res-side', {}, this.canvas,

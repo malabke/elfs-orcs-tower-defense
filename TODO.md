@@ -176,10 +176,9 @@ later iOS).
   sandbox first)
 - done (2026-11-04, not released yet): the IDE's resource editors: sprites (PNG), sound effects (.sfx.json -> .wav), music
   (piano roll -> .wav), tilesets (.tsj with collisions) and levels (.tmj: layers, objects). Left: animated / flipped tiles
-- AI generation from these editors: for each kind (pictures, music, sound effects...) the online AIs that do it best
-  (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
-  effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
-  computer, never in the project)
+- done (2026-11-04, not released yet): AI generation in the resource editors ("Generate…": Claude through the local
+  `claude -p` for sprites, sounds, music and levels; OpenAI Images with the user's key for sprites). Left: other sound /
+  music services, tilesets
 - done (2026-11-04, not released yet): Claude's usage in the IDE's Claude pane: the open conversation's context, the 5-hour
   and the weekly limits with when they start again (from claude's rate_limit_event and its usage)
 

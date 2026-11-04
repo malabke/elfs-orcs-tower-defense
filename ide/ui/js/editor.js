@@ -2,6 +2,7 @@
 // PHP language features answered by the IDE's PHP side (completion, definition, usages, rename, hover...).
 import { backend } from './backend.js';
 import { showLocalHistory } from './localhistory.js';
+import { aiAvailable } from './res-ai.js';
 import { el, clear, icon, colorIcon, basename, dirname, extension, fileIcon, notify, debounce, prefs, menu, kbd, copyText, pasteText } from './ui.js';
 
 export let monaco = null;
@@ -300,6 +301,7 @@ export class Editors {
       const { SpriteEditor } = await import('./res-sprite.js');
       group.designer = new SpriteEditor(view, {
         path: tab.path,
+        ai: aiAvailable(this.app.project?.capabilities),
         src: file.data.image,
         save: async (png) => {
           await backend.invoke('file.write', { path: tab.path, base64: png });
@@ -336,6 +338,7 @@ export class Editors {
       let syncing = false;
       const editor = new Editor(view, {
         path: tab.path,
+        ai: aiAvailable(this.app.project?.capabilities),
         text: file.model.getValue(),
         files: this.app.tree?.files || [],
         readText: async (p) => this.files.get(p)?.model?.getValue() ?? (await backend.invoke('file.read', { path: p })).content ?? '',

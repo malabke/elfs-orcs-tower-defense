@@ -3,6 +3,7 @@
 // make it longer); click a note or right click: remove it. Saving also writes the WAV the game loops, next to it.
 import { el } from './ui.js';
 import * as S from './res-sound.js';
+import { generateButton } from './res-ai.js';
 
 const LOW = 24;
 const HIGH = 96;
@@ -14,7 +15,7 @@ const RULER = 18;
 const COLOURS = ['#ffd400', '#3fd0ff', '#ff6b9a', '#9cff6b'];
 
 export class MusicEditor {
-  constructor(host, { path, text, onChange }) {
+  constructor(host, { path, text, onChange, ai = false }) {
     this.path = path;
     this.onChange = onChange;
     this.music = S.musicOf(parse(text));
@@ -37,6 +38,9 @@ export class MusicEditor {
         el('label.res-inline', {}, 'Volume of this voice', this.volume), el('span.res-sep'),
         el('button.btn.small', { onclick: () => this.restore(this.undo, this.redo), title: 'Undo (Ctrl+Z)' }, '↶'),
         el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷'),
+        ...(ai ? [generateButton('music', {
+          fields: () => [{ key: 'bars', label: 'Bars', value: Math.min(16, this.music.bars), min: 1, max: 16 }],
+          apply: (d) => { this.remember(); this.music = S.musicOf(d); this.fields(); this.layout(); this.changed(); this.scrollToNotes(); } })] : []),
         el('span.res-note', {}, `Saving (Ctrl+S) also writes ${S.wavPathOf(path).split('/').pop()}: $this->sound()->loadMusic('${name(path)}', '${S.wavPathOf(path)}')`)),
       this.box);
     host.append(this.node);
