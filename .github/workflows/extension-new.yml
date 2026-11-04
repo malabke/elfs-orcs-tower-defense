@@ -1,0 +1,38 @@
+# `bin/jumphp extension:new` for real (skeleton-extension/): makes an extension and its example game, then the same
+# checks a user runs: install, test (php -l, phpunit with the game tests, 600 frames), a screenshot, and the game in
+# the browser (the prebuilt WebAssembly engine, build + webshot: the extension's classes are packed in vendor/).
+# Runs when what extension:new copies or the extension loader changes, or by hand (Actions > extension-new).
+name: extension-new
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['skeleton-extension/**', 'engine/src/Extension/**', 'extensions/particles/**', 'tools/extension*', 'bin/jumphp', '.github/workflows/extension-new.yml']
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: bin/jumphp extension:new
+        run: |
+          bin/jumphp extension:new ci-fx "CI Fx"
+          bin/jumphp install ci-fx-demo
+      - name: bin/jumphp test (desktop)
+        run: |
+          bin/jumphp test ci-fx-demo
+          bin/jumphp shot ci-fx-demo 60
+      - name: the same game in the browser
+        run: |
+          bin/jumphp engine:download
+          bin/jumphp build ci-fx-demo
+          bin/jumphp webshot ci-fx-demo 6 '[[1,"Enter"]]'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extension-new
+          path: |
+            games/ci-fx-demo/var/screenshots/*.png
+            games/ci-fx-demo/dist/webshot.png
