@@ -2,6 +2,7 @@
 
 namespace JumPHP\Kernel;
 
+use JumPHP\Extension\Extensions;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -51,7 +52,13 @@ final class GameConfig
     {
         $file = self::yamlFile($root);
         $data = is_file($file) ? (Yaml::parseFile($file) ?? []) : [];
-        return new self($data['project'] ?? $data['game'] ?? [], $root);
+        $values = $data['project'] ?? $data['game'] ?? [];
+        // keys declared by the engine extensions (composer.json extra.jumphp.config): their defaults under the game's
+        foreach (Extensions::configDefaults($root) as $key => $default) {
+            $values[$key] = is_array($default) && is_array($values[$key] ?? null) ? array_replace_recursive($default, $values[$key])
+                : ($values[$key] ?? $default);
+        }
+        return new self($values, $root);
     }
 
     /** config/project.yaml (under project:), else the older config/game.yaml (under game:): both are read. */

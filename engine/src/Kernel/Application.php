@@ -25,6 +25,7 @@ use JumPHP\Tile\TileMapRenderer;
 use JumPHP\Util\Lang;
 use React\EventLoop\Loop;
 use Symfony\Component\Config\FileLocator;
+use JumPHP\Extension\Extensions;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
@@ -86,6 +87,9 @@ final class Application
         $container = self::loadContainer($root, $config);
         $app = new self($container, $config);
         $app->engine = $container->get(Engine::class);
+        $extensions = $container->get(Extensions::class);
+        $app->engine->setExtensions($extensions);
+        $extensions->attach($app->engine);
         $app->engine->scenes->setResolver(static function (string $class) use ($container): Scene {
             if ($container->has($class)) {
                 return $container->get($class);
@@ -287,6 +291,8 @@ final class Application
         $c->autowire(EntityManager::class)->setShared(false)->setPublic(true);
         $c->autowire(Engine::class)->setPublic(true);
 
+        // the engine extensions the game requires (Composer type jumphp-extension), before its own services
+        Extensions::register($c, $root);
         if (is_file($root . '/config/services.yaml')) {
             (new YamlFileLoader($c, new FileLocator($root . '/config')))->load('services.yaml');
         }

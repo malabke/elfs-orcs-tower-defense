@@ -1,0 +1,26 @@
+{
+    "name": "jumphp/particles",
+    "description": "Particle engine for JumPHP games: emitters (rate, bursts, lifetime, speed and angle spread, gravity, colour and size over life), seeded",
+    "type": "jumphp-extension",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "jumphp/engine": "*"
+    },
+    "autoload": {
+        "psr-4": { "JumPHP\\Particles\\": "src/" }
+    },
+    "extra": {
+        "jumphp": {
+            "name": "Particles",
+            "services": ["JumPHP\\Particles\\ParticleSystem"],
+            "loaders": { ".particles.json": "JumPHP\\Particles\\EmitterLoader" },
+            "config": {
+                "particles": {
+                    "default": { "max": 4000, "seed": 1 },
+                    "doc": "Particles: max = particles alive at once in a ParticleSystem, seed = its random seed (same seed, same show)"
+                }
+            }
+        }
+    }
+}

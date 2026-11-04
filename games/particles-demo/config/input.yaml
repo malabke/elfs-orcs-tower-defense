@@ -1,0 +1,4 @@
+# Actions of the game => keys / pad / touch. The engine already defines up, down, left, right, confirm, back, pause.
+actions:
+  boom: [Space, Return, pad0:a, touch:tap, mouse:1]
+  quit: [Escape, pad0:start]

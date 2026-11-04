@@ -12,6 +12,7 @@ use JumPHP\Device\Device;
 use JumPHP\Device\Lifecycle;
 use JumPHP\Device\Pwa;
 use JumPHP\Audio\Audio3d;
+use JumPHP\Extension\Extensions;
 use JumPHP\Gl\OpenGl;
 use JumPHP\Gl\WebGl;
 use JumPHP\Http\Http;
@@ -48,6 +49,7 @@ class Engine extends EventEmitter
     private bool $running = false;
     private bool $debug = false;
     private ?TextDrawer $font = null;
+    private ?Extensions $extensions = null;
     private ?NetSession $net = null;
     private ?Tasks $tasks = null;
     private ?Http $http = null;
@@ -78,6 +80,18 @@ class Engine extends EventEmitter
         public readonly FpsCounter $fps,
     ) {
         self::$instance = $this;
+    }
+
+    /** The engine extensions the game requires (Composer type jumphp-extension): all(), has(), load($file). */
+    public function extensions(): Extensions
+    {
+        return $this->extensions ??= new Extensions();
+    }
+
+    /** @internal Application sets it at boot */
+    public function setExtensions(Extensions $extensions): void
+    {
+        $this->extensions = $extensions;
     }
 
     /** The running engine, for code that has no access to it (entities created with new). */
