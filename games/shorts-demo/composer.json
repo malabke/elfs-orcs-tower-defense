@@ -1,0 +1,32 @@
+{
+    "name": "jumphp-games/shorts-demo",
+    "description": "SHORTS: satisfying physics videos (TikTok, Shorts) made with jumphp/physics, jumphp/shorts and jumphp/particles",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "jumphp/engine": "@dev",
+        "jumphp/particles": "@dev",
+        "jumphp/physics": "@dev",
+        "jumphp/shorts": "@dev"
+    },
+    "repositories": [
+        { "type": "path", "url": "../../extensions/particles" },
+        { "type": "path", "url": "../../extensions/physics" },
+        { "type": "path", "url": "../../extensions/shorts" },
+        { "type": "path", "url": "../../engine" },
+        { "type": "vcs", "url": "https://github.com/davidnurdin/php-wasm-network" }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": { "App\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Tests\\": "tests/" }
+    },
+    "config": {
+        "sort-packages": true,
+        "platform-check": false
+    }
+}

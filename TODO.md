@@ -38,6 +38,11 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
   an editor with a live preview), a 3D engine (meshes, cameras, lights on OpenGL / WebGL), an SDL effects engine
   (transitions, screen shakes, palettes, scanlines, distortions), a video maker for TikTok / Shorts, a tile engine
   with its level editor
+- done (2026-11-04, not released yet): the TikTok / Shorts video maker: extensions/physics (rings with gaps, pegs,
+  walls, seeded fixed step), extensions/shorts (Recorder, Melody with a MIDI reader, offline Mixer, Draw),
+  `bin/jumphp video:make` (frames at 60 FPS -> MP4 1080x1920 H.264 + AAC + cover), games/shorts-demo (growing circle,
+  escape the rings, ball race); docs/video-maker.md. Left: captions beyond the title / caption / timer, a replay of a
+  game to MP4, the IDE previewing the templates live
 - the TikTok / Shorts video maker, above all for viral "satisfying" videos: simulations that make their own
   music (coloured balls bouncing inside circles that grow, shrink, open or rotate, each bounce plays the next
   note of a melody; balls that multiply, rings that break, races, marbles on a track, a timer and a question at

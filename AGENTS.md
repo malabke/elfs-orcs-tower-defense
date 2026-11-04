@@ -1161,6 +1161,8 @@ guide: `docs/ide-plugins.md`. Example: `games/hello-plugin`.
 A subsystem a game can require (particles, physics, a tile editor's format...): a Composer package of **type
 `jumphp-extension`**. The engine finds it in the game's `vendor/composer/installed.json` at boot: nothing to wire.
 Full guide: `docs/extensions.md`. Example: `extensions/particles` (+ `games/particles-demo`).
+Also `extensions/physics` + `extensions/shorts` (+ `games/shorts-demo`): vertical videos for TikTok / Shorts, each bounce a
+note, `bin/jumphp video:make <game> [--seed N] [--count N] [--seconds S]` -> MP4 1080x1920 (`docs/video-maker.md`).
 
 - `composer.json` `extra.jumphp`: `services` (classes autowired, public: scenes ask for them in their constructor),
   `services_file` (a Symfony services file of the package), `boot` (a class implementing `JumPHP\Extension\Extension`:

@@ -141,6 +141,9 @@ CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; doc
   plugin:pack <id>          the plugin as apps/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
   extension:new <id> [title] an engine extension (Composer type jumphp-extension): extensions/<id> + its example
                             game games/<id>-demo (docs/extensions.md)
+  video:make <game> [--seed N] [--count N] [--seconds S] [--template T]
+                            vertical videos (TikTok, Shorts: 1080x1920, 60 FPS, H.264 + AAC) of project.yaml video: scene,
+                            each bounce a note (jumphp/shorts): dist/video/*.mp4 + a cover (docs/video-maker.md)
   service:install <id> [--system] [--exe <file>]
                             the exported executable (export:standalone) as a service of this computer, from
                             project.yaml `service:` (systemd / launchd / WinSW; docs/services.md); also
@@ -1458,6 +1461,9 @@ cmd_doctor() {
 # shellcheck source=../tools/extension-commands.sh
 . "$ROOT/tools/extension-commands.sh"
 
+# shellcheck source=../tools/video-make-commands.sh
+. "$ROOT/tools/video-make-commands.sh"
+
 # shellcheck source=../tools/service-commands.sh
 . "$ROOT/tools/service-commands.sh"
 
@@ -1558,6 +1564,7 @@ main() {
     service:install|service:uninstall|service:status|service:logs|service:start|service:stop|service:print) cmd_service "${cmd#service:}" "$@" ;;
     plugin:pack) cmd_plugin_pack "$@" ;;
     extension:new) cmd_extension_new "$@" ;;
+    video:make) cmd_video_make "$@" ;;
     debug) cmd_debug "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;

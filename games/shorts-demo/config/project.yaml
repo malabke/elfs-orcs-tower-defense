@@ -1,0 +1,29 @@
+# The game. Every key is optional (defaults: JumPHP\Kernel\GameConfig::DEFAULTS).
+project:
+  id: shorts-demo
+  title: "SHORTS"
+  version: 0.1.0
+  description: "Satisfying physics videos: a ball in a growing circle, escape the rings, a ball race; each bounce plays the next note"
+  descriptions: {}
+  width: 270                    # vertical: 270 x 480, x4 = 1080 x 1920 (the video)
+  height: 480
+  scale: 2
+  background: [10, 10, 18]
+  start_scene: App\Scene\TitleScene
+  lang: en
+  online: false
+  smoke:
+    scene: App\Scene\ShortScene
+    params: { template: rings, seed: 3 }
+  physics:
+    gravity: 650
+    restitution: 1.0
+    hz: 240
+  particles:
+    max: 2500
+  # bin/jumphp video:make shorts-demo: this scene, its params (+ seed, seconds), x4 = 1080 x 1920
+  video:
+    scene: App\Scene\ShortScene
+    params: { template: rings }
+    seconds: 30
+    scale: 4
