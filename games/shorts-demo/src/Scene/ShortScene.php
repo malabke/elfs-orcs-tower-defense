@@ -11,6 +11,7 @@ use JumPHP\Physics2d\Wall;
 use JumPHP\Physics2d\World;
 use JumPHP\Renderer\Renderer;
 use JumPHP\Scene\AbstractScene;
+use JumPHP\Shorts\Captions;
 use JumPHP\Shorts\Draw;
 use JumPHP\Shorts\Melody;
 use JumPHP\Shorts\Recorder;
@@ -39,6 +40,7 @@ final class ShortScene extends AbstractScene
     private int $seed = 1;
     private int $round = 0;
     private Melody $melody;
+    private Captions $captions;
     private Emitter $sparks;
     /** @var array<string, int> race: wins per colour */
     private array $wins = [];
@@ -53,6 +55,8 @@ final class ShortScene extends AbstractScene
     {
         $this->template = in_array($params['template'] ?? 'rings', self::TEMPLATES, true) ? (string)$params['template'] : 'rings';
         $this->seed = (int)($params['seed'] ?? 1);
+        // timed captions over the video (project.yaml video.captions, video:make --caption): Captions
+        $this->captions = Captions::fromList((array)($params['captions'] ?? []));
         $this->time = 0;
         $this->lastNote = -1;
         $this->bounces = 0;
@@ -258,6 +262,7 @@ final class ShortScene extends AbstractScene
             $r->fillRect(0, 205, 270, 40, [0, 0, 0, 170]);
             $font->draw($r, $this->banner, $this->width() / 2, 218, 2, [255, 230, 90], 'center', [0, 0, 0]);
         }
+        $this->captions->render($r, $font, $this->time, $this->width(), $this->height());
     }
 
     /** @return array{0: int, 1: int, 2: int} a bright colour around the colour wheel (0..1) */

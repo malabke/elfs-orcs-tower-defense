@@ -5,7 +5,7 @@
 
 cmd_video_make() {
   local game="${1:-}"; local dir; dir="$(game_dir "$game")"; shift || true
-  local seed="" count=1 seconds="" template="" title="" keep=0
+  local seed="" count=1 seconds="" template="" title="" keep=0 captions=() captions_file=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --seed) seed="$2"; shift ;;
@@ -13,8 +13,10 @@ cmd_video_make() {
       --seconds) seconds="$2"; shift ;;
       --template) template="$2"; shift ;;
       --title) title="$2"; shift ;;
+      --caption) captions+=("$2"); shift ;;
+      --captions) captions_file="$2"; shift ;;
       --keep-frames) keep=1 ;;
-      *) die "unknown option $1 (bin/jumphp video:make <game> [--seed N] [--count N] [--seconds S] [--template T] [--title T])" ;;
+      *) die "unknown option $1 (bin/jumphp video:make <game> [--seed N] [--count N] [--seconds S] [--template T] [--title T] [--caption \"TEXT@FROM-TO[@place[@style]]\"]... [--captions file.json])" ;;
     esac
     shift
   done
@@ -26,13 +28,13 @@ cmd_video_make() {
   mkdir -p "$ROOT/$dir/dist/video"
   local i
   for ((i = 0; i < count; i++)); do
-    video_make_one "$dir" "$((seed + i))" "$seconds" "$template" "$title" "$keep" || return 1
+    video_make_one "$dir" "$((seed + i))" "$seconds" "$template" "$title" "$keep" "$captions_file" "${captions[@]+"${captions[@]}"}" || return 1
   done
 }
 
-# one video (view width x height x project.yaml video.scale: 270x480 x 4 = 1080x1920): $1 game folder, $2 seed, $3 seconds ("" = project.yaml), $4 template, $5 title, $6 keep the frames
+# one video (view width x height x project.yaml video.scale: 270x480 x 4 = 1080x1920): $1 game folder, $2 seed, $3 seconds ("" = project.yaml), $4 template, $5 title, $6 keep the frames, $7 captions file (JSON list, "" = none), $8... --caption specs
 video_make_one() {
-  local dir="$1" seed="$2" seconds="$3" template="$4" title="$5" keep="$6" plan
+  local dir="$1" seed="$2" seconds="$3" template="$4" title="$5" keep="$6" cfile="$7" plan; shift 7
   # project.yaml video: {scene, params, seconds, scale, title} + the options -> scene \t params \t seconds \t scale \t name
   plan="$(php_run "$dir" -- php -r '
     require "vendor/autoload.php";
@@ -44,12 +46,17 @@ video_make_one() {
     if ($argv[3] !== "") { $params["template"] = $argv[3]; }
     $title = $argv[4] !== "" ? $argv[4] : (string)($v["title"] ?? "");
     if ($title !== "") { $params["title"] = $title; }
+    // captions: project.yaml video.captions, then the file, then --caption specs
+    $captions = (array)($v["captions"] ?? []);
+    if ($argv[5] !== "") { $file = json_decode((string)@file_get_contents($argv[5]), true); if (!is_array($file)) { fwrite(STDERR, "cannot read captions from $argv[5]\n"); exit(1); } array_push($captions, ...array_values($file)); }
+    foreach (array_slice($argv, 6) as $spec) { $captions[] = JumPHP\Shorts\Captions::parseSpec($spec); }
+    if ($captions) { $params["captions"] = $captions; }
     $seconds = $argv[2] !== "" ? (float)$argv[2] : (float)($v["seconds"] ?? 30);
     $params["seconds"] = $seconds;
     $name = $c->get("id") . (isset($params["template"]) ? "-" . $params["template"] : "") . "-" . $params["seed"];
     $size = (int)$c->get("width") * (int)($v["scale"] ?? 4) . "x" . (int)$c->get("height") * (int)($v["scale"] ?? 4);
     echo $scene, "\t", json_encode($params), "\t", $seconds, "\t", $size, "\t", preg_replace("/[^a-z0-9-]/", "-", strtolower($name));
-  ' "$seed" "$seconds" "$template" "$title")" || die "cannot read the video settings of $dir (project.yaml video:)"
+  ' "$seed" "$seconds" "$template" "$title" "$cfile" "$@")" || die "cannot read the video settings of $dir (project.yaml video:)"
   local scene params secs size name
   IFS=$'\t' read -r scene params secs size name <<<"$plan"
   [ -n "$scene" ] || die "no scene to film: project.yaml video: {scene: App\\Scene\\...}"
