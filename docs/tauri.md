@@ -249,6 +249,11 @@ decides, e.g. a check box of the app's menu or settings); `hidden: true` starts 
 computer started it, for an app that lives in the tray (`$app->tray()`: its menu shows the window). A page asks with
 `native.autostart`. `games/hello-desktop` has View > Start with the computer.
 
+The installers (`bin/jumphp installer <app>`, jumphp2installer 0.2.9+) show a box "Start <App> with the computer" when
+project.yaml has `app: {autostart: ...}`, ticked from its `default`. They write the same entry as `$app->autostart()`, the
+uninstaller takes it out, and the app's own first start leaves that choice alone (the installer's `.jumphp-autostart`
+file beside the executable).
+
 ### The command line (no window): `AppCli`
 
 A main class that also implements `JumPHP\Tauri\AppCli` gets `static cli(array $args, string $root): ?int` first,

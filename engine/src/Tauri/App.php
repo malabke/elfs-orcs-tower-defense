@@ -124,7 +124,10 @@ final class App extends EventEmitter
         }
         $app->createWindow('main', $window + ['title' => $config->title()]);
         // game.yaml app.autostart: true: on by default, once (the first start of the exported app); the user decides then
-        if ($start['default'] && $app->options->get('autostart_set') === null && $app->autostart()->isSupported()) {
+        // installed by an installer that asked the user (its "start with the computer" box): that choice stands
+        $exe = $app->updater()->executable();
+        $asked = $exe !== null && (is_file(dirname($exe) . '/.jumphp-autostart') || is_file(dirname($exe, 4) . '/.jumphp-autostart'));
+        if ($start['default'] && !$asked && $app->options->get('autostart_set') === null && $app->autostart()->isSupported()) {
             $app->autostart()->enable();
             $app->options->set('autostart_set', true);
         }

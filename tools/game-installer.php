@@ -27,7 +27,7 @@ $bases = rtrim((string)($argv[2] ?? ''), '/');
 if ($dir === '' || $bases === '' || !is_dir($dir)) {
     $fail('usage: php tools/game-installer.php <games/id> <bases folder> --target github|dir [--repo owner/repo] [--url https://...] [--version X] [--platforms windows,linux,macos] [--publisher Name]');
 }
-$opts = ['target' => 'dir', 'repo' => '', 'url' => '', 'version' => '', 'platforms' => 'windows,linux,macos', 'publisher' => ''];
+$opts = ['target' => 'dir', 'repo' => '', 'url' => '', 'version' => '', 'platforms' => 'windows,linux,macos', 'publisher' => '', 'autostart' => '0'];
 for ($i = 3; $i < count($argv); $i++) {
     $key = ltrim($argv[$i], '-');
     array_key_exists($key, $opts) || $fail("unknown option {$argv[$i]}");
@@ -120,8 +120,15 @@ foreach (['assets/icon.png', 'assets/thumbnail.png'] as $candidate) {
     }
 }
 
+// a desktop app with project.yaml app.autostart: a "start with the computer" box (bin/jumphp gives --autostart 1 when the base installers know the step: 0.2.9+)
+$appConfig = (array)($config['app'] ?? []);
+$autostart = $appConfig['autostart'] ?? false;
+$autostartDefault = is_array($autostart) ? (bool)($autostart['default'] ?? false) : (bool)$autostart;
+$autostart = !$cli && $autostart !== false && $autostart !== null && $opts['autostart'] === '1';
+$identifier = (string)($appConfig['identifier'] ?? 'net.jumphp.' . preg_replace('/[^a-z0-9]+/', '', strtolower($id)));
+
 // the script: what the playground writes for a game, with the package's own files
-$scriptOf = static function (array $found, ?array $versionRule) use ($id, $title, $publisher, $names, $version, $cli, &$icon): array {
+$scriptOf = static function (array $found, ?array $versionRule) use ($id, $title, $publisher, $names, $version, $cli, &$icon, $autostart, $autostartDefault, $identifier): array {
     $desktop = array_values(array_intersect(['windows', 'linux'], array_keys($found)));
     $steps = [];
     $run = [];
@@ -150,13 +157,22 @@ $scriptOf = static function (array $found, ?array $versionRule) use ($id, $title
         $steps[] = ['download' => $names['macos'], 'os' => 'macos'];
         $steps[] = ['extract' => '{folder}', 'os' => 'macos'];
     }
+    if ($autostart) {
+        // the app's own first start leaves the choice alone when this file is beside it (JumPHP\Tauri\App)
+        $steps[] = ['write' => ['file' => "{folder}/.jumphp-autostart", 'text' => "the installer asked\n"], 'os' => array_keys($found)];
+        foreach (array_keys($found) as $os) {
+            $target = $os === 'macos' ? '{folder}' : "{folder}/$id" . ($os === 'windows' ? '.exe' : '');
+            $steps[] = ['autostart' => ['target' => $target, 'id' => $id, 'identifier' => $identifier, 'name' => '{app}'], 'if' => 'autostart', 'os' => $os];
+        }
+    }
     $steps[] = 'uninstaller';
+    $options = ['desktop' => 'A shortcut on the desktop'] + ($autostart ? ['autostart' => ['label' => "Start $title with the computer", 'default' => $autostartDefault]] : []);
     return [
         'installer' => 1,
         'app' => ['name' => $title, 'publisher' => $publisher] + ($icon !== null ? ['icon' => $icon] : []),
         'version' => $versionRule ?? $version,
         'pages' => $cli ? ['welcome', ['folder' => '{programs}/{app}'], 'install', 'finish']
-            : ['welcome', ['folder' => '{programs}/{app}'], ['options' => ['desktop' => 'A shortcut on the desktop']], 'install',
+            : ['welcome', ['folder' => '{programs}/{app}'], ['options' => $options], 'install',
                 $run !== [] ? ['finish' => ['run' => $run]] : 'finish'],
         'steps' => $steps,
     ];

@@ -16,8 +16,8 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
   `bin/jumphp android <app>` (tools/android/webview; tried in an emulator with hello-desktop: PHP answers, Save as opens
   the system dialog) and `bin/jumphp ios <app>` (tools/apple/webview/main.m, a WKWebView; NOT tried yet: run the
   apple workflow once on a webview app and fix). docs/tauri.md, android-native.md, apple.md.
-- the installers (jumphp2installer) offering a "start with the computer" box (the app does it: `$app->autostart()`,
-  done; docs/tauri.md)
+- done (2026-11-04, not released): the installers offer a "start with the computer" box (project.yaml app.autostart;
+  jumphp2installer's `autostart` step, needs its 0.2.9 release: bin/jumphp only shows the box when the base installers have it)
 - services / daemons in PHP: done 2026-11-04 (JumPHP 0.5.6): project.yaml `service:`, `JumPHP\Service\Daemon`,
   `bin/jumphp service:install / uninstall / status / logs / start / stop / print` (tools/service.sh: systemd user or
   system units, launchd plists, WinSW on Windows), docs/services.md. Tried on Linux in a systemd container (user and
