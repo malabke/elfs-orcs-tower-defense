@@ -120,6 +120,12 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
+- reported by David (2026-11-04): a TUI project (CLI app) runs, but started under Xdebug it does not stop at a breakpoint:
+  find why (the CLI app's run path with JUMPHP_XDEBUG: `bin/jumphp run` of a cli app, the Terminal's Run, path mapping
+  of apps/<id>, xdebug.start_with_request in that container) and fix it, tested with a real DBGp session
+- a Run and a Debug (Xdebug) icon in the editor's gutter, on the line: run / debug the program from there with its
+  arguments (a CLI app's command and options typed or remembered per line), like the run configurations
+
 - the debugger, what is left (done in IDE 0.1.13 and 0.1.31: Xdebug, breakpoints with conditions, the Debug window,
   steps, watches, Run to Cursor, a variable's new value, stop at exceptions, Claude's debug_* tools in the IDE and in a
   terminal through `bin/jumphp debug`; 2026-11-04: the async runtime (`jumphp/desktop-async-xdebug`, Xdebug's
