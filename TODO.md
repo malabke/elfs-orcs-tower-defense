@@ -175,13 +175,10 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## Release follow-ups (2026-11-04)
 
-- iOS app of a desktop (HTML) app: the first trial on GitHub's Macs (run 41811259637, hello-desktop) failed to link for
-  ios-arm64: the WebKit symbols of tools/apple/webview/main.m are not found (the framework not linked: add
-  `-framework WebKit` in tools/apple/build.sh's webview path), then run it again (`gh workflow run apple.yml -f
-  game=hello-desktop -f platforms=ios`)
-- jumphp2installer 0.2.9: its release workflow built everything but `gh release create` failed (GitHub API error, like
-  the other 500s that day): run it again (the tag installer-v0.2.9 exists); until then the installers stay 0.2.8 and
-  the "start with the computer" box does not show
+- iOS app of a desktop (HTML) app: done (2026-11-04): the link needed `-framework CoreGraphics` (tools/apple/build.sh); run 41907004407 on
+  hello-desktop passes and the simulator shot shows the app with PHP answering. Left: the HTML menu bar sits under the notch / status bar
+  (use `env(safe-area-inset-top)` in jumphp-app.js's bar on phones), try the .ipa on a real iPhone (needs the Apple account)
+- jumphp2installer 0.2.9: released (2026-11-04, the workflow re-run): the "start with the computer" box should show now; check it in an installer
 
 ## jumphp.net: big downloads, to watch
 
