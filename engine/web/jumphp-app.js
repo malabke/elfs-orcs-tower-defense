@@ -38,6 +38,7 @@ if (shell && !navigator.share) navigator.share = (d = {}) => Promise.resolve(she
 
 const css = `
 #jumphp-app { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; color: #222;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); box-sizing: border-box;
   font: 14px/1.4 system-ui, sans-serif; z-index: 1; }
 #jumphp-app[hidden] { display: none; }
 #jumphp-menubar { display: flex; gap: 2px; padding: 2px 6px; background: #f3f3f3; border-bottom: 1px solid #ddd;
@@ -93,6 +94,9 @@ export function install(api) {
 
   const style = el('style', {textContent: css});
   document.head.append(style);
+  // phones: let the page reach the screen's edges, the padding above keeps it out of the notch / status bar
+  const vp = document.querySelector('meta[name=viewport]');
+  if (vp && !/viewport-fit/.test(vp.content)) vp.content += ', viewport-fit=cover';
   const root = el('div', {id: 'jumphp-app', hidden: true});
   const menubar = el('div', {id: 'jumphp-menubar'});
   const area = el('div', {id: 'jumphp-windows'});
