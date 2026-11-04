@@ -68,8 +68,9 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
 - a project kind of its own: "JumPHP extension" (New Project in the IDE, `bin/jumphp extension:new`: a repository
   ready for Packagist, its example game, its tests, its IDE plugin), next to games, apps and IDE plugins
 - done (2026-11-04, not released yet): the playground's shared engine loads the extensions a published game requires
-  (installed at publish, no scripts / plugins, served beside the game; build:remote joins them). Left: the extensions'
-  directory on jumphp.net, bin/jumphp extension:add, run_tests installing them
+  (installed at publish, no scripts / plugins, served beside the game; build:remote joins them). The extensions' directory on
+  jumphp.net (/extensions), bin/jumphp extension:add and run_tests installing them: done too. Left: JumPHP's own extensions
+  on Packagist
 - hidden answers (Symfony's `askHidden`: `stty -echo`) are shown as typed: a way for the app to tell the page
 - browsers without Document-Isolation-Policy (Firefox, Safari): inside the playground's frame they get a link to a tab of
   its own; try them for real

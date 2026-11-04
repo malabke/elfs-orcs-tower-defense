@@ -144,6 +144,8 @@ CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; doc
   plugin:pack <id>          the plugin as apps/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
   extension:new <id> [title] an engine extension (Composer type jumphp-extension): extensions/<id> + its example
                             game games/<id>-demo (docs/extensions.md)
+  extension:add <game> <pkg>  add an engine extension to a game (Packagist, or one of extensions/ here), then
+                            show what it adds
   video:make <game> [--seed N] [--count N] [--seconds S] [--template T]
                             vertical videos (TikTok, Shorts: 1080x1920, 60 FPS, H.264 + AAC) of project.yaml video: scene,
                             each bounce a note (jumphp/shorts): dist/video/*.mp4 + a cover (docs/video-maker.md)
@@ -1567,6 +1569,7 @@ main() {
     service:install|service:uninstall|service:status|service:logs|service:start|service:stop|service:print) cmd_service "${cmd#service:}" "$@" ;;
     plugin:pack) cmd_plugin_pack "$@" ;;
     extension:new) cmd_extension_new "$@" ;;
+    extension:add) cmd_extension_add "$@" ;;
     video:make) cmd_video_make "$@" ;;
     debug) cmd_debug "$@" ;;
     app:run) cmd_app_run "$@" ;;
