@@ -240,6 +240,8 @@ export class ProjectTree {
         { label: 'Sprite (PNG)…', action: () => this.newSprite(dir) },
         { label: 'Sound Effect…', action: () => this.newFile(dir, '.sfx.json', 'Name (jump, coin…): a .wav is written next to it') },
         { label: 'Music…', action: () => this.newFile(dir, '.music.json', 'Name (level1, title…): a .wav is written next to it') },
+        { label: 'Tileset…', action: () => this.newFile(dir, '.tsj', 'Name (tiles…): then choose its PNG and each tile\'s collision') },
+        { label: 'Level…', action: () => this.newFile(dir, '.tmj', 'Name (level1…): a Tiled map, loaded with TiledJsonLoader') },
         module ? '-' : null,
         module ? { label: 'Scene', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'src/Scene', '.php', 'Scene class name', 'Scene') } : null,
         module ? { label: 'Entity', action: () => this.newFile((module.dir ? module.dir + '/' : '') + 'src/Entity', '.php', 'Entity class name') } : null,

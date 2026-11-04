@@ -169,11 +169,8 @@ later iOS).
   IDE's MCP server, updates: checked every 6 hours,
   installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE (they would run on the server: a
   sandbox first)
-- editors for a game's resources, inside the IDE: done (2026-11-04, not released yet): sprites (a PNG's Edit pixels: palette,
-  pencil, eraser, fill, picker, zoom, grid, frames of a sheet added / removed, the animation played), sound effects
-  (*.sfx.json: presets, random, 10 settings, the wave drawn, the engine's Synth line; saving writes the .wav next to it)
-  and tunes (*.music.json: a piano roll on 4 voices, tempo, bars, loop; saving writes the .wav the game loops); New >
-  Sprite / Sound Effect / Music in the Project tree. Left: tiles and levels (Tiled .tmj) editors
+- done (2026-11-04, not released yet): the IDE's resource editors: sprites (PNG), sound effects (.sfx.json -> .wav), music
+  (piano roll -> .wav), tilesets (.tsj with collisions) and levels (.tmj: layers, objects). Left: animated / flipped tiles
 - AI generation from these editors: for each kind (pictures, music, sound effects...) the online AIs that do it best
   (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's

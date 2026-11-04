@@ -69,6 +69,7 @@ const SYMBOL = () => ({ class: monaco.languages.SymbolKind.Class, interface: mon
   enumMember: monaco.languages.SymbolKind.EnumMember });
 
 const SOUND = /\.(sfx|music)\.json$/;
+const TILED = /\.(tsj|tmj)$/i;
 
 export class Editors {
   constructor(root, app) {
@@ -244,7 +245,7 @@ export class Editors {
       if (!group.textView.parentNode) host.append(group.textView);
       if (languageOf(tab.path) === 'html' && file) return this.renderHtml(group, tab, file);
       if (/\.form\.ya?ml$/.test(tab.path) && file) return this.renderHtml(group, tab, file, 'form');
-      if (SOUND.test(tab.path) && file) return this.renderSound(group, tab, file);
+      if ((SOUND.test(tab.path) || TILED.test(tab.path)) && file) return this.renderSound(group, tab, file);
       group.textView.style.display = '';
       this.showModel(group, tab, file);
       return;
@@ -311,7 +312,7 @@ export class Editors {
     }
   }
 
-  /** *.sfx.json / *.music.json: the sound editors over the JSON (Editor), or the JSON itself (Code). */
+  /** *.sfx.json / *.music.json / *.tsj / *.tmj: the resource editors over the JSON (Editor), or the JSON itself (Code). */
   async renderSound(group, tab, file) {
     const host = group.host;
     const mode = tab.mode || 'design';
@@ -327,12 +328,18 @@ export class Editors {
     host.append(view);
     try {
       const music = /\.music\.json$/.test(tab.path);
-      const { SfxEditor } = music ? {} : await import('./res-sfx.js');
+      const tiled = TILED.test(tab.path);
+      const { SfxEditor } = music || tiled ? {} : await import('./res-sfx.js');
       const { MusicEditor } = music ? await import('./res-music.js') : {};
+      const { TilesetEditor, LevelEditor } = tiled ? await import('./res-tiles.js') : {};
+      const Editor = tiled ? (/\.tsj$/i.test(tab.path) ? TilesetEditor : LevelEditor) : music ? MusicEditor : SfxEditor;
       let syncing = false;
-      const editor = new (music ? MusicEditor : SfxEditor)(view, {
+      const editor = new Editor(view, {
         path: tab.path,
         text: file.model.getValue(),
+        files: this.app.tree?.files || [],
+        readText: async (p) => this.files.get(p)?.model?.getValue() ?? (await backend.invoke('file.read', { path: p })).content ?? '',
+        readImage: async (p) => (await backend.invoke('file.read', { path: p })).image,
         onChange: (text) => {
           if (file.readOnly) return;
           syncing = true;
@@ -346,7 +353,7 @@ export class Editors {
       editor.destroy = () => { sub.dispose(); destroy(); };
       requestAnimationFrame(() => editor.node.focus());
     } catch (e) {
-      view.append(el('div.placeholder', {}, 'The sound editor could not start: ' + e.message));
+      view.append(el('div.placeholder', {}, 'The editor could not start: ' + e.message));
     }
   }
 

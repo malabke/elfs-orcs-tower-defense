@@ -613,6 +613,18 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .res-roll-box { flex: 1; min-height: 0; overflow: auto; }
 .res-roll { display: block; cursor: crosshair; }
 .res-canvas-box { flex: 1 1 auto; overflow: auto; display: flex; align-items: flex-start; justify-content: center; }
+.res-tiles-canvas, .res-level-canvas, .res-palette { display: block; image-rendering: pixelated; cursor: crosshair; }
+.res-level-body { align-items: stretch; }
+.res-level-box { justify-content: flex-start; background: var(--bg-2, #2b2d30); border-radius: 4px; }
+.res-level-side { flex: 0 0 280px; overflow: auto; }
+.res-level-side > * { flex: none; }
+.res-palette-box { max-height: 260px; overflow: auto; background: var(--bg-2, #2b2d30); border-radius: 4px; }
+.res-layers { display: flex; flex-direction: column; gap: 2px; }
+.res-layer { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+.res-layer.on { background: var(--accent); color: #fff; }
+.res-layer-tools { margin-left: auto; display: flex; gap: 2px; }
+.res-layer-tools .btn { padding: 0 4px; min-width: 0; }
+.res-object textarea { flex: 1; font-family: var(--mono, monospace); }
 .res-pixels { image-rendering: pixelated; cursor: crosshair; box-shadow: 0 0 0 1px var(--border); }
 .res-palette { display: flex; flex-wrap: wrap; gap: 2px; max-width: 240px; }
 .res-swatch { width: 18px; height: 18px; border: 1px solid var(--border); border-radius: 3px; padding: 0; cursor: pointer; }

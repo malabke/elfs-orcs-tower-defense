@@ -31,6 +31,24 @@ final class Templates
                 ['volume' => 6, 'notes' => [[0, 0, 1], [8, 1, 1], [16, 0, 1], [24, 1, 1], [28, 2, 1]]],
             ]]) . "\n";
         }
+        if ($ext === 'tsj') {
+            // a tileset of the resource editor (Tiled's JSON): its picture and each tile's collision are set in the editor
+            return json_encode(['type' => 'tileset', 'version' => '1.10', 'tiledversion' => '1.10.2', 'name' => $name, 'tilewidth' => 16,
+                'tileheight' => 16, 'margin' => 0, 'spacing' => 0, 'columns' => 0, 'tilecount' => 0, 'image' => '', 'imagewidth' => 0,
+                'imageheight' => 0, 'tiles' => []], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        }
+        if ($ext === 'tmj') {
+            // a level of the resource editor (a Tiled map): a decor layer, the collision layer, an object layer
+            [$w, $h] = [40, 12];
+            $tiles = fn (int $id, string $layer) => ['id' => $id, 'name' => $layer, 'type' => 'tilelayer', 'width' => $w, 'height' => $h,
+                'opacity' => 1, 'visible' => true, 'x' => 0, 'y' => 0, 'data' => array_fill(0, $w * $h, 0)];
+            $json = json_encode(['type' => 'map', 'version' => '1.10', 'tiledversion' => '1.10.2', 'orientation' => 'orthogonal',
+                'renderorder' => 'right-down', 'infinite' => false, 'width' => $w, 'height' => $h, 'tilewidth' => 16, 'tileheight' => 16,
+                'nextlayerid' => 4, 'nextobjectid' => 1, 'tilesets' => [], 'layers' => [$tiles(1, 'background'), $tiles(2, 'collision'),
+                ['id' => 3, 'name' => 'objects', 'type' => 'objectgroup', 'draworder' => 'topdown', 'opacity' => 1, 'visible' => true,
+                    'x' => 0, 'y' => 0, 'objects' => []]]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            return preg_replace_callback('/\[\s*(-?\d+(?:\s*,\s*-?\d+)*)\s*\]/', fn ($m) => '[' . preg_replace('/\s+/', '', $m[1]) . ']', $json) . "\n";
+        }
         return match ($ext) {
             'php' => self::php($path, $name, $workspace),
             'html', 'htm' => "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>$name</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <main>\n    <h1>$name</h1>\n  </main>\n</body>\n</html>\n",
