@@ -9,13 +9,14 @@ windows, or the game inside the Tauri window: `app.embed`), one-file export for 
 macOS (workflow `app-export` opens it on two Macs), updates (`app:release`, `JumPHP\Tauri\Updater`), the same app
 in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRuntime`). docs/tauri.md.
 
-- Android / iOS as native Tauri apps (the browser version runs there already, Android through `bin/jumphp twa`):
+- Android / iOS as native apps for DESKTOP (HTML) apps, `ui: webview` (games and graphic apps already have native apps:
+  `bin/jumphp android` and `bin/jumphp apple`, JumPHP 0.4.0; a webview app has its browser version, Android through `bin/jumphp twa`):
   Tauri's mobile loop is driven by the activity / UIKit, so PHP has to be embedded in the app (the PHP builds of
   `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
 - signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
 - the installers (jumphp2installer) offering a "start with the computer" box (the app does it: `$app->autostart()`,
   done; docs/tauri.md)
-- services / daemons in PHP: done 2026-11-04 (not released): project.yaml `service:`, `JumPHP\Service\Daemon`,
+- services / daemons in PHP: done 2026-11-04 (JumPHP 0.5.6): project.yaml `service:`, `JumPHP\Service\Daemon`,
   `bin/jumphp service:install / uninstall / status / logs / start / stop / print` (tools/service.sh: systemd user or
   system units, launchd plists, WinSW on Windows), docs/services.md. Tried on Linux in a systemd container (user and
   system units, restart after kill -9, clean stop, logs, uninstall). Left: try macOS (launchd) and Windows (WinSW) for
@@ -23,58 +24,31 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
 
 ## Engine extensions (Composer packages that extend JumPHP, mostly for games)
 
-Done (2026-11-04, not committed / released yet): the contract (`type: jumphp-extension`, `extra.jumphp`: services,
-services_file, boot, loaders, config defaults; `JumPHP\Extension\Extensions`, found from installed.json at boot, in the
-browser build too), `bin/jumphp extension:new` (skeleton-extension/: extensions/<id> + games/<id>-demo), the first
-extension `extensions/particles` + `games/particles-demo` (game tests, browser build checked), docs/extensions.md,
-AGENTS.md §20. Left below: the other extensions, IDE completion of their config keys, editors, the marketplace,
-Packagist publishing of extensions/particles, the playground's shared engine loading them.
+Done (2026-11-04, JumPHP 0.5.6): the contract (`type: jumphp-extension`, `extra.jumphp`: services, services_file, boot,
+loaders, config defaults; found from installed.json at boot, in the browser build too), `bin/jumphp extension:new`
+(skeleton-extension/) and `extension:add`, extensions/particles (+ games/particles-demo), extensions/physics and
+extensions/shorts with `bin/jumphp video:make` (the TikTok / Shorts video maker, games/shorts-demo), published games on
+jumphp.net getting their extensions (also for run_tests), the directory https://jumphp.net/extensions; docs/extensions.md,
+docs/video-maker.md, AGENTS.md §20.
 
-Packages a game requires (`bin/jumphp composer <id> require vendor/pkg`) that add a whole subsystem to the engine,
-with their own data format and, often, their own editor: a tile engine with its level editor and its map format, a
-particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest system, a particle editor...
-- first extensions to make (each one a package, its example game, its editor if it has data): a collision engine
-  (shapes, polygons, broad phase), a gravity / physics engine (bodies, joints, forces), a particle engine (emitters,
-  an editor with a live preview), a 3D engine (meshes, cameras, lights on OpenGL / WebGL), an SDL effects engine
-  (transitions, screen shakes, palettes, scanlines, distortions), a video maker for TikTok / Shorts, a tile engine
-  with its level editor
-- done (2026-11-04, not released yet): the TikTok / Shorts video maker: extensions/physics (rings with gaps, pegs,
-  walls, seeded fixed step), extensions/shorts (Recorder, Melody with a MIDI reader, offline Mixer, Draw),
-  `bin/jumphp video:make` (frames at 60 FPS -> MP4 1080x1920 H.264 + AAC + cover), games/shorts-demo (growing circle,
-  escape the rings, ball race); docs/video-maker.md. Left: captions beyond the title / caption / timer, a replay of a
-  game to MP4, the IDE previewing the templates live
-- the TikTok / Shorts video maker, above all for viral "satisfying" videos: simulations that make their own
-  music (coloured balls bouncing inside circles that grow, shrink, open or rotate, each bounce plays the next
-  note of a melody; balls that multiply, rings that break, races, marbles on a track, a timer and a question at
-  the top: "will it escape?"). Made of: the physics (the collision / gravity extensions), a melody read from a
-  MIDI file or notes (each collision = a note, Synth or samples), trails, glow and particles (the effects
-  extensions), a vertical 1080×1920 view at 60 FPS, a seed so a video can be made again, many variations from
-  one scene (colours, speeds, seeds) to post several. Rendered headless frame by frame (never in real time), the
-  sound mixed from the collision log, out as an MP4 ready to post (H.264 + AAC, ffmpeg in Docker) with a title,
-  captions and a cover; `bin/jumphp video:make <id> [--seed N] [--count 10]`. Also: a game's replay or a scripted
-  scene to the same vertical MP4. Templates to start from (bouncing ball in a circle, escape the rings, ball
-  race, colour fight); the IDE previews them live
-- the contract: `"type": "jumphp-extension"` + `extra.jumphp` (services to register in the game's container, scenes,
-  asset loaders for their formats, `config/*.yaml` keys with their schema, stubs), discovered by the engine at boot
-  (no manual wiring), pure PHP so they run in the browser too (WebAssembly: no extensions of their own)
-- their editors inside the IDE: an extension can ship an IDE plugin (docs/ide-plugins.md) that opens its files
-  (its level format in a tool window / editor tab), its completion for its config keys, its run configurations
-- `bin/jumphp extension:new <id>` (a skeleton with an example game and tests: GameTestCase), tested in CI on the
-  desktop and in the browser build (webshot)
-- published first as what they are: a GitHub repository and a Packagist package (versions = git tags, `composer
-  require` works anywhere); jumphp.net only indexes them: a marketplace (like /ide-plugins: search, stats, marks,
-  "Add to my project" = `composer require` + its config, from the site, the IDE's Plugins / Extensions window and
-  `bin/jumphp extension:add <game> <vendor/pkg>`), filled from Packagist by their type (`jumphp-extension`)
-- a project kind of its own: "JumPHP extension" (New Project in the IDE, `bin/jumphp extension:new`: a repository
-  ready for Packagist, its example game, its tests, its IDE plugin), next to games, apps and IDE plugins
-- done (2026-11-04, not released yet): the playground's shared engine loads the extensions a published game requires
-  (installed at publish, no scripts / plugins, served beside the game; build:remote joins them). The extensions' directory on
-  jumphp.net (/extensions), bin/jumphp extension:add and run_tests installing them: done too. Left: JumPHP's own extensions
-  on Packagist
-- hidden answers (Symfony's `askHidden`: `stty -echo`) are shown as typed: a way for the app to tell the page
+Left:
+- the other extensions: a collision engine (shapes, polygons, broad phase), a 3D engine (meshes, cameras, lights on
+  OpenGL / WebGL), an SDL effects engine (transitions, shakes, palettes, scanlines, distortions), a tile engine with its
+  level editor, a dialogue / quest system; a particle editor with a live preview
+- JumPHP's own extensions on Packagist (jumphp/particles, physics, shorts: 404 there today; each its own repository or a
+  split of extensions/), so `composer require` works outside a JumPHP checkout
+- an extension shipping its IDE plugin (its files in a tool window / editor tab, completion of its config keys)
+- "JumPHP extension" as a project kind in the IDE's New Project; extension:new tested in CI (desktop + webshot)
+- the video maker: captions beyond title / caption / timer, a game's replay to MP4, the IDE previewing templates live
+
+## CLI apps on jumphp.net: what is left
+
+Done (2026-11-04, JumPHP 0.5.6): questions, hidden answers, Ctrl+C and full-screen symfony/tui screens in the web terminal
+(PHP in a Web Worker waiting on a SharedArrayBuffer).
 - browsers without Document-Isolation-Policy (Firefox, Safari): inside the playground's frame they get a link to a tab of
   its own; try them for real
 - fibers in the WebAssembly engine (PHP's ucontext fallback: `getcontext` is missing) would let Revolt's own drivers run
+- an app making its own `new SymfonyStyle` / `new QuestionHelper` still shows hidden answers (no signal from Symfony)
 
 ## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
 
@@ -139,7 +113,12 @@ pure parts (physics, tile collisions) as a PHP extension (`--emit phpext`), PHP 
 ## Full native apps in PHP: every system's APIs, an optional HTML / JS / CSS layer, an IDE (likely, by David)
 
 Beyond games: any kind of app written in PHP, with the same packaging (`bin/jumphp android`, `export:standalone`,
-later iOS).
+`bin/jumphp apple`).
+
+Done already: the HTML / JS / CSS layer on the desktop and in the browser (desktop apps, Tauri: WebKitGTK, WebView2,
+WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps (§18), services, and the IDE itself
+(JumPHP IDE, a JumPHP app with Claude inside). Left: the systems' own APIs through FFI, and the HTML layer on phones
+(Android WebView / WKWebView: the "native Tauri apps" item above).
 
 - every system's APIs reachable from PHP through FFI: Android (JNI / NDK: sensors, camera, notifications, files,
   sharing...), Windows (Win32, WinRT), Linux (D-Bus, GTK...), macOS / iOS (Objective-C runtime, UIKit / AppKit),
@@ -163,14 +142,14 @@ later iOS).
 - plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
   PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
   IDE's MCP server, updates: checked every 6 hours,
-  installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE: done (2026-11-04, not released yet), run in the visitor's
+  installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE: done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38), run in the visitor's
   browser on the WebAssembly PHP (a Web Worker), writes through the web IDE's commands; MCP tools stay desktop only
-- done (2026-11-04, not released yet): the IDE's resource editors: sprites (PNG), sound effects (.sfx.json -> .wav), music
+- done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): the IDE's resource editors: sprites (PNG), sound effects (.sfx.json -> .wav), music
   (piano roll -> .wav), tilesets (.tsj with collisions) and levels (.tmj: layers, objects). Left: animated / flipped tiles
-- done (2026-11-04, not released yet): AI generation in the resource editors ("Generate…": Claude through the local
+- done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): AI generation in the resource editors ("Generate…": Claude through the local
   `claude -p` for sprites, sounds, music and levels; OpenAI Images with the user's key for sprites). Left: other sound /
   music services, tilesets
-- done (2026-11-04, not released yet): Claude's usage in the IDE's Claude pane: the open conversation's context, the 5-hour
+- done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): Claude's usage in the IDE's Claude pane: the open conversation's context, the 5-hour
   and the weekly limits with when they start again (from claude's rate_limit_event and its usage)
 
 ## Windows: Docker through WSL, and a composer install that seemed to loop
@@ -198,9 +177,10 @@ transient (David). The executables stay behind Cloudflare. If it comes back: a c
 
 ## Projects: progress, branches, sharing
 
-- done (2026-11-03, not released yet): a project's progress set by its owner (`stage`: dev / beta / done; jumphp.net
+- done (2026-11-03, JumPHP 0.5.6 / IDE 0.1.38): a project's progress set by its owner (`stage`: dev / beta / done; jumphp.net
   Studio, `update_project stage`, the IDE's Publish > Settings); "ready" is now shown as "published"
-- done (2026-11-03, not released yet): `/rc` (or `/remote-control`) in the IDE's Claude pane: the conversation goes on
+- done (2026-11-03, JumPHP 0.5.6 / IDE 0.1.38): `/rc` (or `/remote-control`) in the IDE's Claude pane: the conversation goes on
   in the Terminal as `claude --remote-control --resume <session>`
-- the IDE: branches and merges (create, switch, merge, conflicts)
-- a project shared with several users, each with read or read + write rights (jumphp.net and the IDE)
+- done (2026-11-04, IDE 0.1.38): the IDE: branches and merges (create, switch, merge, conflicts: ours / theirs / both)
+- done (2026-11-04, JumPHP 0.5.6): a project shared with several users, each with read or read + write rights
+  (jumphp.net Studio, web IDE read only, MCP, the IDE). Left: try it with the real GitHub sign-in

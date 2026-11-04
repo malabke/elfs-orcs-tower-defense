@@ -20,7 +20,7 @@ Measured on 2026-11-03, the places that assume `games/`:
 | `engine/src` | 1 |
 | jumphp-playground `src/` (it publishes only `games/<id>/` of a repository) | 37 |
 
-Done (2026-11-03, not committed / released yet): `bin/jumphp` finds a project in `games/` then `apps/` (`project_path`,
+Done (2026-11-03, JumPHP 0.5.5): `bin/jumphp` finds a project in `games/` then `apps/` (`project_path`,
 `game_dir`, `default_game`, the Docker mounts of linked projects), `app:new` / `gui:new` / `cli:new` / `plugin:new` create
 in `apps/`, `bin/jumphp update` and the IDE's updater leave `apps/` alone, `JUMPHP_APP` (JUMPHP_GAME still read), the
 standalone / twa / android / apple scripts and workflows, the IDE (modules, stubs, New Project of a plugin), jumphp.net
@@ -55,7 +55,9 @@ apps. Then a JumPHP release (VERSION, runtime, Packagist) and an IDE release.
 ## Same work: names that say "game" for every kind of project, backward compatible
 
 Counted (2026-11-03, JumPHP + jumphp.net): `game.yaml` 266 hits in 118 files, `GameConfig` 57 / 31, `GameTestCase` 43 / 23,
-`JUMPHP_GAME` 54 / 20 (`JUMPHP_APP` now read first), `game.json` 15 / 9. Waiting for David's choices.
+`JUMPHP_GAME` 54 / 20 (`JUMPHP_APP` now read first), `game.json` 15 / 9. Done (JumPHP 0.5.5): config/project.yaml under project: (config/game.yaml under game: still read everywhere),
+JUMPHP_APP read before JUMPHP_GAME. Kept on purpose: GameTestCase (AppTestCase is the desktop apps' one), GameConfig,
+game.json (read by other sites).
 
 Asked by David (2026-11-03) with the above: what is named after games but holds any project gets a neutral name, the old
 one still read (nothing breaks):
