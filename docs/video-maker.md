@@ -43,6 +43,13 @@ play: a tap shorter than one frame is not seen), then `bin/jumphp video:replay <
 `JUMPHP_INPUT=$(cat session.json) bin/jumphp shot <game>` and for a game test. The game must be deterministic for the film to
 look like the session (a seeded random, the fixed step).
 
+## Preview in the IDE
+
+Tools > **Video Preview…** (the JumPHP IDE): the games of the project that have a `video:` block (project.yaml: `scene`, `params`,
+`seconds`, and `templates: [growing, rings, race]` to list the templates). Choose the template, the seed, the seconds, the title and
+the captions (one a line, `TEXT@FROM-TO@place@style`), **Preview** plays the scene live at the video's speed (the engine rewrites
+`var/live/frame.png`, `JUMPHP_LIVE`; the preview is silent) and **Make the MP4** runs `bin/jumphp video:make` with the same choices.
+
 ## How it works
 
 1. project.yaml `video: {scene, params, seconds, scale, title}` says which scene; video:make starts it with its params

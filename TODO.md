@@ -43,7 +43,10 @@ Left:
   packages say "auto-updated")
 - an extension shipping its IDE plugin (its files in a tool window / editor tab, completion of its config keys)
 - "JumPHP extension" as a project kind in the IDE's New Project; extension:new tested in CI (desktop + webshot)
-- the video maker: captions beyond title / caption / timer, a game's replay to MP4, the IDE previewing templates live
+- done (2026-11-04): the video maker: timed captions (Captions: plain / box / pop / type), `video:replay` (a film of any game from scripted or
+  recorded input, `JUMPHP_INPUT_RECORD`, its sound logged by `JUMPHP_AUDIO_LOG` and mixed offline), Tools > Video Preview… in the IDE (live frames).
+  Left: captions in the generic replay (only scenes that draw them show them), an input recorder that sees taps shorter than a frame,
+  the preview with sound, a film of a network game
 
 ## CLI apps on jumphp.net: what is left
 

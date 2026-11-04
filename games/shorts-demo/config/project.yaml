@@ -25,5 +25,6 @@ project:
   video:
     scene: App\Scene\ShortScene
     params: { template: rings }
+    templates: [growing, rings, race]       # the IDE's Video Preview lists them
     seconds: 30
     scale: 4

@@ -413,6 +413,8 @@ final class Ide
 
     private function registerCore(): void
     {
+        // the games that make videos (project.yaml video:), for Tools > Video Preview…
+        $this->register('video.settings', fn () => (new \JumPHP\Ide\Video\VideoSettings($this->workspace))->all($this->project->describe()['modules']));
         $this->register('project.info', fn () => (fn (array $d) => ['run' => [...$d['run'], ...($this->plugins?->runConfigurations() ?? [])]] + $d)($this->project->describe()) + [
             // what the interface shows; the web IDE's host answers its own (gitMode 'drafts', preview, tests)
             'capabilities' => $this->capabilities + [
