@@ -21,15 +21,17 @@ Dernière mise à jour : 2026-11-04.
   écrans de choix avec de vraies images de la 3D (`assets/sprites/cards/`). La 3D est composée par la transparence
   de la 2D (plus de couleur clé magenta).
 - **Publication** : le dépôt GitHub `malabke/elfs-orcs-tower-defense` est celui du playground : **pousser sur `main`
-  publie le jeu**. Premier push le 2026-11-04 (« pousse tout »). Le jeu n'est pas encore listé dans l'annuaire du
-  playground (`update_project listed=true` : seulement sur demande). Ne pousser qu'avec l'accord de l'utilisateur ;
-  pour un état de travail sans publier : une autre branche (ex. `travail`). Sur un autre PC : `git pull`.
+  publie le jeu**. Le 2026-11-04 l'utilisateur a demandé de tout pousser, mais **GitHub a refusé (403)** : sur ce PC
+  git se connecte avec le compte `clement-cdy`, qui n'a pas les droits sur `malabke/...`. Rien n'est donc encore sur
+  GitHub depuis la création du dépôt : à pousser (`git push origin main`) une fois le bon compte connecté ou
+  `clement-cdy` ajouté comme collaborateur. Le jeu n'est pas listé dans l'annuaire du playground
+  (`update_project listed=true` : seulement sur demande). Pour un état de travail sans publier : une autre branche.
+  Sur un autre PC : `git pull` (après le push).
 
 ## En cours / à faire
 
-1. Interface HD faite et vérifiée (tests du jeu 161 + test de fumée, moteur 74 + phpstan, version navigateur dans
-   Chrome) ; poussée sur `main` le 2026-11-04 à la demande de l'utilisateur (« pousse tout ») : le playground la
-   publie.
+1. Interface HD faite, vérifiée (tests du jeu 161 + test de fumée, moteur 74 + phpstan, version navigateur dans
+   Chrome) et commitée (`7e773b9` moteur, `44f43d7` jeu). **Push refusé (403)** : voir « Publication ».
 2. Encore en pixel art : les créatures des cartes de peuple, les icônes de tours du menu en anneau, le portrait du
    héros et l'aperçu de la vague dans la barre du haut.
 3. Idées proposées, pas encore demandées : vignettes 3D vivantes dans les menus, animations d'attaque, particules.
@@ -62,4 +64,5 @@ Dernière mise à jour : 2026-11-04.
 
 - 2026-11-02 / 03 : jalons 1 à 4, site, équilibrage ; passage à la 3D WebGL.
 - 2026-11-04 : style peint « livre d'images » (commits `9edac44`, `8ff2691`) ; correctif moteur des textures
-  (`GL_UNPACK_ROW_LENGTH`) ; interface HD avec Nunito et `Paint` ; fichier de suivi `SUIVI.md` ; premier push.
+  (`GL_UNPACK_ROW_LENGTH`) ; interface HD avec Nunito et `Paint` ; fichier de suivi `SUIVI.md` ; push refusé
+  (403, compte `clement-cdy` sans droits sur le dépôt).
