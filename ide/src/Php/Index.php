@@ -542,6 +542,7 @@ final class Index
     private function findLibraries(): void
     {
         $this->psr4 = [];
+        $this->packages = [];
         $this->classmap = [];
         $this->autoloadFiles = [];
         $this->autoloadFilesLoaded = false;
@@ -557,6 +558,7 @@ final class Index
             }
             $base = dirname($vendor) === '.' ? '' : dirname($vendor);
             $this->readComposerLists($vendor, $base);
+            $this->readPackages($vendor, $root);
             $text = $this->workspace->read($path);
             if (!preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'\s*=>\s*array\((.*?)\),?\n/s", $text, $entries, PREG_SET_ORDER)) {
                 continue;
@@ -590,6 +592,41 @@ final class Index
             $this->psr4[$prefix] = array_values(array_unique($dirs));
         }
         uksort($this->psr4, fn ($a, $b) => strlen($b) <=> strlen($a));
+    }
+
+    /** @var array<string, array{package: string, extension: bool, version: string}> package folder => what installed.json says of it */
+    private array $packages = [];
+
+    /** The packages of a vendor/composer/installed.json by their folder (the same spelling as the PSR-4 folders), to name the libraries. */
+    private function readPackages(string $vendor, ?string $root): void
+    {
+        $path = "$vendor/composer/installed.json";
+        $data = $this->workspace->exists($path) ? json_decode($this->workspace->read($path), true) : null;
+        foreach (is_array($data) ? ($data['packages'] ?? $data) : [] as $p) {
+            if (!is_array($p) || !is_string($p['name'] ?? null)) {
+                continue;
+            }
+            $dir = ltrim("$vendor/composer/" . ($p['install-path'] ?? "../{$p['name']}"), '/');
+            if ($root !== null && ($real = realpath("$root/$dir")) !== false) {
+                $real = str_replace('\\', '/', $real);
+                $dir = str_starts_with($real, "$root/") ? substr($real, strlen($root) + 1) : $real;
+            } else {
+                $dir = ltrim((string)preg_replace('#[^/]+/\.\./#', '', $dir), '/');
+            }
+            $this->packages[rtrim($dir, '/')] = ['package' => $p['name'], 'extension' => ($p['type'] ?? '') === 'jumphp-extension', 'version' => (string)($p['version'] ?? '')];
+        }
+    }
+
+    /** @return array{package: string, extension: bool, version: string}|null the package a library folder is in (the longest folder wins) */
+    private function packageOf(string $dir): ?array
+    {
+        $best = null;
+        foreach ($this->packages as $folder => $info) {
+            if (($dir === $folder || str_starts_with($dir, $folder . '/')) && ($best === null || strlen($folder) > strlen($best[0]))) {
+                $best = [$folder, $info];
+            }
+        }
+        return $best[1] ?? null;
     }
 
     /** Composer's autoload_classmap.php and autoload_files.php of a vendor/ folder (read, never run). */
@@ -710,7 +747,7 @@ final class Index
      * The libraries the project's classes come from (PSR-4 folders outside its own sources): the engine, vendor/
      * packages, what the host added.
      *
-     * @return list<array{prefix: string, dir: string, external: bool}>
+     * @return list<array{prefix: string, dir: string, external: bool, package?: string, extension?: bool, version?: string}>
      */
     public function libraries(): array
     {
@@ -723,7 +760,9 @@ final class Index
                 if (str_starts_with($prefix, 'App\\') || str_starts_with($prefix, 'Tests\\')) {
                     continue;
                 }
-                $out[] = ['prefix' => rtrim($prefix, '\\'), 'dir' => $dir, 'external' => str_starts_with($dir, '/')];
+                $package = $this->packageOf($dir);
+                $out[] = ['prefix' => rtrim($prefix, '\\'), 'dir' => $dir, 'external' => str_starts_with($dir, '/')]
+                    + ($package !== null ? ['package' => $package['package'], 'extension' => $package['extension'], 'version' => $package['version']] : []);
             }
         }
         usort($out, fn ($a, $b) => [!str_starts_with($a['prefix'], 'JumPHP'), $a['prefix']] <=> [!str_starts_with($b['prefix'], 'JumPHP'), $b['prefix']]);

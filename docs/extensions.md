@@ -41,6 +41,32 @@ Rules: pure PHP, as in a game (AGENTS.md §2): the browser build packs the game'
 with the extensions' services, so an extension works in the browser without anything more. Not on jumphp.net yet: its
 shared engine does not load a game's own Composer packages.
 
+## Samples and documentation
+
+What an extension brings into a game besides its code (`bin/jumphp extension:add <game> <vendor/package>` does it, `extension:remove` undoes it):
+
+| in the package | in the game | what for |
+|---|---|---|
+| `doc/` (`doc/index.md`, else its `README.md`) | `extensions/<name>/doc/` | its documentation, opened by the IDE |
+| `samples/*.php` | `src/Extensions/<Name>/` | scenes of the game that play and build with it, also in the browser |
+| | `extensions/<name>/extension.json` | what the IDE reads: the documentation and the samples |
+
+- A sample is a scene in the namespace `App\Extensions\<Name>` (`<Name>` = the package name in StudlyCase: `jumphp/particles` -> `Particles`);
+  `public const LABEL = '...'` is what the IDE shows. A sample the game already has (maybe edited) is not overwritten.
+- Play one: `JUMPHP_SCENE='App\Extensions\Particles\FireSample' bin/jumphp run <game>`; in the IDE the documentation opens after
+  the install (Tools > Engine Extensions…) with a **Play** button for each sample, and from the External Libraries (the extension
+  has its package name and a **Docs** button there).
+- `extra.jumphp.samples` / `extra.jumphp.doc` name other folders than `samples/` and `doc/`.
+- JumPHP's own three (`particles`, `physics`, `shorts`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
+
+## A clean project
+
+A new project (composer create-project, the IDE's New Project, jumphp.net's) does not keep JumPHP's own development files: its
+extensions (they are on Packagist: `extension:add`), its examples of `games/` and `apps/`, its notes (`TODO*.md`), its tooling for its own
+releases. `tools/project-clean.list` says what, `tools/project-clean.sh` does it, `bin/jumphp tidy` does it again in an older project
+(`--examples` also takes JumPHP's example games out; your own games and apps are never touched). What was removed is listed in
+`.jumphp/excluded`: `bin/jumphp update` does not bring it back, and a merge that touches those files raises no conflict.
+
 ## Its page on jumphp.net
 
 https://jumphp.net/extensions lists every Packagist package of type `jumphp-extension`; each has a page

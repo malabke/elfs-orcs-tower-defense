@@ -15,7 +15,7 @@ cmd_extension_new() {
   cp skeleton/app.php skeleton/phpstan.neon "games/$name-demo/" 2>/dev/null || cp skeleton/app.php "games/$name-demo/"
   php_run . -- php /workspace/tools/new-extension.php "$name" "$title"
   say "extensions/$name (the package) and games/$name-demo (its example game) created."
-  say "Next: bin/jumphp install $name-demo && bin/jumphp test $name-demo (docs/extensions.md)"
+  say "Next: bin/jumphp install $name-demo && bin/jumphp test $name-demo (docs/extensions.md). Its doc/ and samples/ reach a game with bin/jumphp extension:add <game> <vendor>/$name"
 }
 
 # extension:add <game> <vendor/package>: composer require in the game (one of extensions/ of this repository: through
@@ -44,5 +44,25 @@ cmd_extension_add() {
     echo $list("services", $x["services"] ?? []), $list("services file", isset($x["services_file"]) ? [$x["services_file"]] : []),
         $list("boot", isset($x["boot"]) ? [$x["boot"]] : []), $list("asset loaders", $x["loaders"] ?? []), $list("project.yaml keys", $x["config"] ?? []);
   ' "$pkg"
+  # its samples (scenes that play and build with the game) and its documentation come into the game (tools/extension-adopt.php)
+  local adopted; adopted="$(php_run "$dir" -- php /workspace/tools/extension-adopt.php "$pkg")" && echo "$adopted"
   say "added to $dir: the engine finds it at boot (docs/extensions.md)"
+  local first; first="$(sed -n 's/^sample: \([^ ]*\) .*/\1/p' <<<"$adopted" | head -1)"
+  if [ -n "$first" ]; then
+    say "play a sample: JUMPHP_SCENE='$first' bin/jumphp run ${dir##*/}   (the IDE's Engine Extensions window opens the documentation with a Play button)"
+  fi
+}
+
+# bin/jumphp extension:remove <game> <vendor/package>: the extension out of the game, with the samples and the documentation it brought
+cmd_extension_remove() {
+  local game="${1:-}" pkg="${2:-}" dir name pascal
+  [ -n "$game" ] && [[ "$pkg" =~ ^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*$ ]] || die "usage: bin/jumphp extension:remove <game> <vendor/package>"
+  dir="$(project_dir "$game")"
+  name="${pkg#*/}"
+  pascal="$(php -r 'echo str_replace(" ", "", ucwords(str_replace(["-", "_", "."], " ", $argv[1])));' "$name" 2>/dev/null || true)"
+  [ -n "$pascal" ] || pascal="$(echo "$name" | sed -E 's/(^|[-_.])([a-z])/\U\2/g')"
+  php_run "$dir" -- composer remove "$pkg" || die "composer remove $pkg failed"
+  rm -rf "${ROOT:?}/$dir/src/Extensions/$pascal" "${ROOT:?}/$dir/extensions/$name"
+  rmdir "$ROOT/$dir/src/Extensions" "$ROOT/$dir/extensions" 2>/dev/null || true
+  say "$pkg removed from $dir (its samples src/Extensions/$pascal and its documentation extensions/$name too)"
 }

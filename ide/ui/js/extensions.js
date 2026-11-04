@@ -51,7 +51,17 @@ export class Extensions {
     const target = el('select.input', {}, ...games.map((id) => el('option', { value: id }, id)));
     const search = el('input.input', { type: 'search', placeholder: 'Search the extensions (particles, physics…)', value: this.query });
     const results = el('div.plugins-market');
-    const body = el('div', {},
+    const installed = el('div.plugins-market');
+    const showInstalled = async () => {
+      const list = await this.app.extensionDocs.list();
+      installed.replaceChildren(...(list.length ? [el('h4', {}, 'In your games')] : []), ...list.map((e) => el('div.plugin-row', {},
+        el('div.plugin-main', {}, el('b', {}, e.name), el('span.muted', {}, ` ${e.package} ${e.version || ''} · ${e.gameId}`),
+          el('div.muted', {}, `${e.samples.length} sample(s)${e.hasDoc ? ' · documentation' : ''}`)),
+        el('div.plugin-buttons', {},
+          el('button.btn.small.primary', { onclick: () => this.app.extensionDocs.open(e.package, e.game) }, 'Documentation'),
+          el('button.btn.small', { onclick: () => this.app.extensionDocs.remove(e) }, 'Remove')))));
+    };
+    const body = el('div', {}, installed,
       el('p', { class: 'muted' }, 'Composer packages that add to the JumPHP engine. Installing one runs bin/jumphp extension:add in the game you choose.'),
       games.length ? el('label.field', {}, el('span', {}, 'Add to the game'), target) : el('p', {}, 'This project has no game to add an extension to.'),
       search, results);
@@ -74,11 +84,21 @@ export class Extensions {
     };
     search.addEventListener('keydown', (e) => { if (e.key === 'Enter') show(); });
     dialog({ title: 'Engine Extensions', body, wide: true, buttons: [{ label: 'Close' }] });
+    showInstalled();
     show();
   }
 
   async install(pkg, game) {
     if (!game || !/^[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*$/.test(pkg)) { notify('Not an installable package name.', 'error', { title: 'Engine Extensions' }); return; }
-    await this.app.runner.start({ id: 'adhoc', kind: 'tool', label: `extension:add ${game} ${pkg}`, command: ['bin/jumphp', 'extension:add', game, pkg] });
+    const id = await this.app.runner.start({ id: 'adhoc', kind: 'tool', label: `extension:add ${game} ${pkg}`, command: ['bin/jumphp', 'extension:add', game, pkg] });
+    // added: its documentation opens, with a Play button for each sample it brought into the game
+    if (id === null || id === undefined) return;
+    for (let i = 0; i < 1200; i++) {
+      const run = this.app.runner.runs?.find((r) => r.id === id);
+      if (!run || run.code !== undefined) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    const added = (await this.app.extensionDocs.list()).find((e) => e.package === pkg && e.gameId === game);
+    if (added) this.app.extensionDocs.open(pkg, added.game);
   }
 }

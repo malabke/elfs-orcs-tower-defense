@@ -414,6 +414,10 @@ final class Ide
 
     private function registerCore(): void
     {
+        // the extensions added to the project's games, their documentation and samples (extensions/<name>/extension.json)
+        $this->register('extensions.installed', fn () => (new \JumPHP\Ide\Extension\InstalledExtensions($this->workspace))->all());
+        $this->register('extension.docs', fn (array $p) => (new \JumPHP\Ide\Extension\InstalledExtensions($this->workspace))->docs((string)($p['package'] ?? ''), isset($p['game']) ? (string)$p['game'] : null)
+            ?? throw new \InvalidArgumentException('This extension is not in a game of this project (bin/jumphp extension:add <game> ' . ($p['package'] ?? '<package>') . ').'));
         // the games that make videos (project.yaml video:), for Tools > Video Preview…
         $this->register('video.settings', fn () => (new \JumPHP\Ide\Video\VideoSettings($this->workspace))->all($this->project->describe()['modules']));
         $this->register('project.info', fn () => (fn (array $d) => ['run' => [...$d['run'], ...($this->plugins?->runConfigurations() ?? [])]] + $d)($this->project->describe()) + [

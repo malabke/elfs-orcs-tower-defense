@@ -103,7 +103,8 @@ export class ProjectTree {
       const libKey = key + lib.dir;
       const isOpen = this.open.has(libKey);
       this.node.append(el(`div.row.ext${isOpen ? '.open' : ''}`, { style: { paddingLeft: '22px' }, title: lib.dir, onclick: () => this.toggleLibrary(lib) },
-        el('span.twisty'), icon('package'), el('span.label', {}, lib.prefix === 'JumPHP' ? 'JumPHP (engine)' : lib.prefix), el('span.hint', {}, lib.external ? '' : lib.dir)));
+        el('span.twisty'), icon('package'), el('span.label', {}, lib.prefix === 'JumPHP' ? 'JumPHP (engine)' : (lib.extension ? `${lib.package} · ${lib.prefix}` : lib.prefix)), el('span.hint', {}, lib.extension ? 'extension' : (lib.external ? '' : lib.dir)),
+        ...(lib.extension ? [el('button.btn.small', { title: 'The documentation and the samples of this extension', onclick: (e) => { e.stopPropagation(); this.app.extensionDocs?.open(lib.package); } }, 'Docs')] : [])));
       if (isOpen && lib.files) this.renderLibraryDir(lib, this.libraryTree(lib), 2);
     }
   }

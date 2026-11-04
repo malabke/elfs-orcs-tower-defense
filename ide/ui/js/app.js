@@ -7,6 +7,7 @@ import { Editors, loadMonaco, monaco } from './editor.js';
 import { ProjectTree } from './tree.js';
 import { Plugins } from './plugins.js';
 import { Extensions } from './extensions.js';
+import { ExtensionDocs } from './extension-docs.js';
 import { LocalAi } from './local-ai.js';
 import { VideoPreview } from './video-preview.js';
 import { WhatsNew } from './whats-new.js';
@@ -132,6 +133,7 @@ class App {
     this.runner = new Runner(this);
     if (this.project.capabilities?.run && this.project.capabilities?.debug) this.debugger = new DebugPanel(this);
     if (this.project.capabilities?.run) this.gutterRun = new GutterRun(this);
+    this.extensionDocs = new ExtensionDocs(this);
     if (this.project.capabilities?.run) this.extensions = new Extensions(this);
     this.localAi = new LocalAi(this);
     this.videoPreview = new VideoPreview(this);
