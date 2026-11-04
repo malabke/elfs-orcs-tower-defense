@@ -107,7 +107,13 @@ abstract class GameMenuScene extends MenuScene
         }
         // the selected row gets a band behind it
         [$rx, $ry, $rw, $rh] = $this->rowRect($this->menu->selected);
-        $r->fillRect($rx, $ry, $rw, $rh, [255, 255, 255, 28]);
+        $r->fillRect($rx, $ry, $rw, $rh, $this->rowBand());
         $this->menu->render($r, $font, $w / 2, $this->height() * $this->menuTop);
+    }
+
+    /** The colour of the band behind the selected row (over a 3D background: pure black, see renderBackground()). */
+    protected function rowBand(): array
+    {
+        return [255, 255, 255, 28];
     }
 }

@@ -56,8 +56,11 @@ ridge); `bin/jumphp test <game> --filter X` runs only phpunit (with OpenGL on Xv
 Engine fix made for this game (engine/src/Gl/OpenGl.php `textureFromRgba`): desktop GL kept SDL's `GL_UNPACK_ROW_LENGTH`,
 so a texture made after SDL had updated one of its own was read with wrong rows (the second battle of a session had a
 scrambled ground); it is reset to 0 around the upload now.
-Still pixel art (to redo): the menus' background maps (`Sprites::drawMap`), the ring menu's tower icons, the hero / power
-buttons, the HUD icons and the font (Press Start 2P).
+The title screen is 3D too (`TitleScene::render3d()`: the first map, elf towers, the horde walking the road, a camera
+drifting with `Rig::orbit()`; flat 2D without WebGL or with `view: flat`); its veil and the selected row's band are pure
+black translucent (`GameMenuScene::rowBand()`).
+Still pixel art (to redo): the side and map screens' background maps (`Sprites::drawMap`) and card pictures, the ring
+menu's tower icons, the hero / power buttons, the HUD icons and the font (Press Start 2P).
 
 Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
 `bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the

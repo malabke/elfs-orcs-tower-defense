@@ -79,6 +79,16 @@ final class Rig implements Projection
         $this->update(0.0);
     }
 
+    /** Looks at $target from $distance away, $pitchDeg above the ground, turned by $yaw about y (0: from the south). */
+    public function orbit(array $target, float $distance, float $pitchDeg, float $yaw = 0.0): void
+    {
+        $p = deg2rad($pitchDeg);
+        $this->target = [(float)$target[0], (float)$target[1], (float)$target[2]];
+        $this->eye = [$this->target[0] + sin($yaw) * cos($p) * $distance, $this->target[1] + sin($p) * $distance,
+            $this->target[2] + cos($yaw) * cos($p) * $distance];
+        $this->update(0.0);
+    }
+
     /** The matrices for this frame; $shake: how far (map pixels) the camera trembles. */
     public function update(float $shake, float $time = 0.0): void
     {
