@@ -37,8 +37,10 @@ Left:
 - the other extensions: a collision engine (shapes, polygons, broad phase), a 3D engine (meshes, cameras, lights on
   OpenGL / WebGL), an SDL effects engine (transitions, shakes, palettes, scanlines, distortions), a tile engine with its
   level editor, a dialogue / quest system; a particle editor with a live preview
-- JumPHP's own extensions on Packagist (jumphp/particles, physics, shorts: 404 there today; each its own repository or a
-  split of extensions/), so `composer require` works outside a JumPHP checkout
+- JumPHP's own extensions on Packagist: done (2026-11-04): jumphp/particles, physics, shorts submitted on packagist.org (repos
+  davidnurdin/jumphp-<id>, tag v0.5.6; Packagist account = "Log in with GitHub"). Left: the secret EXTENSIONS_SPLIT_TOKEN (fine-grained
+  token, Contents read/write on the 3 repos; David creates it) so extensions-split.yml pushes each new tag; Packagist's GitHub hook on the 3
+  packages ("not auto-updated" banner: Manage / GitHub Hook), else new versions need a manual Update
 - an extension shipping its IDE plugin (its files in a tool window / editor tab, completion of its config keys)
 - "JumPHP extension" as a project kind in the IDE's New Project; extension:new tested in CI (desktop + webshot)
 - the video maker: captions beyond title / caption / timer, a game's replay to MP4, the IDE previewing templates live
