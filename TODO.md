@@ -202,6 +202,11 @@ transient (David). The executables stay behind Cloudflare. If it comes back: a c
 
 ## Projects: progress, branches, sharing
 
+- done (2026-11-04, jumphp.net, deployed): the Studio list: badges clickable in AJAX (published -> not published with a warning popup, the
+  directory, the stage in turn dev / beta / done), the thumbnail in the list (click: its settings; 📷: upload one, cut to 16:9; the
+  project page has a Vignette panel with a reset), an unpublished project stays offline (project.suspended: the push webhook and the
+  IDE's sync leave it alone until the owner publishes again). Left: the same badges on the project page itself, a "published" filter,
+  unpublishing in the IDE / MCP (update_project), the old published files of an unpublished project are not deleted
 - done (2026-11-03, JumPHP 0.5.6 / IDE 0.1.38): a project's progress set by its owner (`stage`: dev / beta / done; jumphp.net
   Studio, `update_project stage`, the IDE's Publish > Settings); "ready" is now shown as "published"
 - done (2026-11-03, JumPHP 0.5.6 / IDE 0.1.38): `/rc` (or `/remote-control`) in the IDE's Claude pane: the conversation goes on
