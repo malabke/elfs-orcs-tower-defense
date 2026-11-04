@@ -120,6 +120,16 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
+- in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
+  on the line (the two items below); its scratch app is apps/zz-tui (delete it when done)
+- detailed logs, readable inside the IDE: a Logs view (e.g. under Help) following them live like `tail -f -s 0`, but
+  visual: every source (the IDE itself, bin/jumphp runs, Docker, Claude, plugins, the game / app run), levels, filter,
+  search, pause / follow, copy, open the file; the same logs kept on disk for bug reports
+- "What's new": a section in the IDE linked to the site (and a page on jumphp.net), filled at each new feature (a
+  changelog entry written with the feature: title, short text, picture or GIF, the version), shown once after an
+  update, then reachable from Help; the site's page in the 14 languages. Make it part of the definition of done
+- an IDE for phones: a light version (maybe a "soft" one) that drives Claude, either on the phone itself (not sure it
+  can) or a computer's Claude through Remote Control (`/rc`): to study
 - reported by David (2026-11-04): a TUI project (CLI app) runs, but started under Xdebug it does not stop at a breakpoint:
   find why (the CLI app's run path with JUMPHP_XDEBUG: `bin/jumphp run` of a cli app, the Terminal's Run, path mapping
   of apps/<id>, xdebug.start_with_request in that container) and fix it, tested with a real DBGp session
@@ -162,6 +172,16 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   ran it), and before that it waited for Docker (up to 4 min while Docker Desktop starts). Fixed in IDE 0.1.30: bin/jumphp
   and `sh -c` go through Git for Windows' bash, a stopped run ends its whole tree. Left: try it on a real PC with
   Docker Desktop (GitHub's Windows has no Linux containers): the first `composer install` of a new project, Run, Test.
+
+## Release follow-ups (2026-11-04)
+
+- iOS app of a desktop (HTML) app: the first trial on GitHub's Macs (run 41811259637, hello-desktop) failed to link for
+  ios-arm64: the WebKit symbols of tools/apple/webview/main.m are not found (the framework not linked: add
+  `-framework WebKit` in tools/apple/build.sh's webview path), then run it again (`gh workflow run apple.yml -f
+  game=hello-desktop -f platforms=ios`)
+- jumphp2installer 0.2.9: its release workflow built everything but `gh release create` failed (GitHub API error, like
+  the other 500s that day): run it again (the tag installer-v0.2.9 exists); until then the installers stay 0.2.8 and
+  the "start with the computer" box does not show
 
 ## jumphp.net: big downloads, to watch
 
