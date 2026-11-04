@@ -45,6 +45,9 @@ final class ClaudeCode
      */
     private array $lives = [];
 
+    /** the other assistant of the window (agent: 'opencode'), made when first asked */
+    private ?OpenCode $opencode = null;
+
     /** @param callable(string $event, array $payload): void $emit */
     public function __construct(private Processes $processes, private string $root, private $emit, private ?IdeAgent $agent = null)
     {
@@ -60,7 +63,12 @@ final class ClaudeCode
             @exec(escapeshellarg($path) . ' --version 2>/dev/null', $out);
             $version = trim(implode(' ', $out)) ?: null;
         }
-        return ['available' => $path !== null, 'path' => $path, 'version' => $version];
+        return ['available' => $path !== null, 'path' => $path, 'version' => $version, 'opencode' => $this->opencode()->status()];
+    }
+
+    private function opencode(): OpenCode
+    {
+        return $this->opencode ??= new OpenCode($this->processes, $this->root, $this->emit);
     }
 
     /**
@@ -68,10 +76,14 @@ final class ClaudeCode
      * @return array{id: int}
      */
     public function send(string $prompt, ?string $session = null, string $mode = 'acceptEdits', ?string $model = null, ?string $effort = null,
-        bool $conversation = false, string $conv = 'main'): array
+        bool $conversation = false, string $conv = 'main', string $agent = 'claude'): array
     {
         if (trim($prompt) === '') {
             throw new \InvalidArgumentException('Nothing to send.');
+        }
+        if ($agent === 'opencode') {
+            // OpenCode's own run, its events told in Claude's words (OpenCode::translate): the window shows them the same way
+            return $this->opencode()->send($prompt, $session, $model, $conv);
         }
         $settings = json_encode([$mode, $model, $effort]);
         $live = $this->lives[$conv] ?? null;
@@ -152,6 +164,9 @@ final class ClaudeCode
         if ($live !== null) {
             unset($this->lives[$conv]);
             $live['busy'] ? $this->processes->stop($live['id']) : $this->processes->closeInput($live['id']);
+        }
+        foreach ($this->opencode?->turnsOf($conv) ?? [] as $id) {
+            $this->processes->stop($id);
         }
     }
 

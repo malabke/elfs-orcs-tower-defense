@@ -189,9 +189,13 @@ what the server has (`<server>/models`). Models without structured output get th
 wherever the model put it, and an answer the editor cannot use is sent back once with what is wrong (small local models
 often need that second try). The core checks every answer before an editor gets it.
 
-**Code**: Tools > **OpenCode (code assistant, local models)** opens `opencode` in the Terminal, in the project's folder;
-**Ask OpenCode…** sends one request (`opencode run -m <model> "<prompt>"`). With a local model set up in OpenCode, the code
-stays on your computer too. Claude stays the Claude window's assistant (Alt+8).
+**Code**: the Claude window (Alt+8) has an **assistant** selector, **Claude** or **OpenCode**. With OpenCode each message is an
+`opencode run --format json` in the project's folder (`--session` goes on with the conversation, `--model provider/model` from the
+list of `opencode models` or typed), and its answer, the files it reads and edits, the commands it runs appear in the window as
+Claude's do. With a local model set up in OpenCode (Ollama, LM Studio), the code stays on your computer. It answers one message at a
+time and edits files directly (there is no "ask first" mode): review its changes with Git. Switching assistant starts a session
+of its own. Tools > **OpenCode (code assistant, local models)** still opens its full interface in the Terminal, and
+**Ask OpenCode…** sends one request there.
 
 ## Debugging from a terminal's Claude Code
 

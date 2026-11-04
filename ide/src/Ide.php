@@ -137,7 +137,8 @@ final class Ide
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
-                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true, (string)($p['conv'] ?? 'main') ?: 'main'));
+                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true, (string)($p['conv'] ?? 'main') ?: 'main',
+                ($p['agent'] ?? '') === 'opencode' ? 'opencode' : 'claude'));
             $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
             // "Generate…" in the resource editors: Claude (claude -p), or a picture service with the user's key
             $ai = new ResourceGenerator($this->processes, $root);

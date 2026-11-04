@@ -43,22 +43,30 @@ export class ClaudePanel {
     this.mode = prefs.get('claudeMode', 'acceptEdits');
     this.model = prefs.get('claudeModel', '');
     this.effort = prefs.get('claudeEffort', '');
+    // the assistant: Claude Code, or OpenCode (https://opencode.ai: any model it has, a local one included), same window
+    this.agent = backend.kind === 'native' ? prefs.get('claudeAgent', 'claude') : 'claude';
+    this.opencodeModel = prefs.get('opencodeModel', '');
+    this.opencodeModels = [];
     this.status = el('span.claude-status');
     // Follow (the editors show what Claude does) and the IDE's tools for Claude: the main window's (a conversation in a
     // window of its own has no editors)
     this.watch = detached ? { on: false, use() {}, result() {}, done() {}, toggle() {}, marks: { clearAll() {} } } : new ClaudeWatch(app, this);
     if (backend.kind === 'native' && !detached) this.tools = new AgentTools(app, this.watch);
-    this.modelSelect = el('select.input.small.claude-select', { title: 'The model Claude uses (claude --model)', onchange: () => this.pickModel() });
+    this.agentSelect = el('select.input.small.claude-select', { title: 'Who answers: Claude Code, or OpenCode (any model it is set up for, local ones too)', onchange: () => this.setAgent(this.agentSelect.value) },
+      el('option', { value: 'claude' }, 'Claude'), el('option', { value: 'opencode' }, 'OpenCode'));
+    this.agentSelect.value = this.agent;
+    this.modelSelect = el('select.input.small.claude-select', { title: 'The model (claude --model, or opencode --model)', onchange: () => this.pickModel() });
     this.effortSelect = el('select.input.small.claude-select', { title: 'How hard Claude thinks (claude --effort)',
       onchange: () => { this.effort = this.effortSelect.value; prefs.set('claudeEffort', this.effort); } },
       ...EFFORTS.map(([v, label]) => el('option', { value: v, selected: v === this.effort }, label)));
     this.fillModels();
+    if (this.agent === 'opencode') backend.invoke('ai.models', { provider: 'opencode' }).then((l) => { this.opencodeModels = l; this.fillModels(); }).catch(() => null);
     this.mcpBanner = el('div.claude-mcp', { hidden: true });
     this.tabsNode = el('div.claude-tabs');
     this.body = el('div.claude-body');
     this.usage = new UsageGauges();
     this.node = el('div.claude-panel', {}, this.tabsNode, this.mcpBanner, this.body, this.usage.node,
-      el('div.claude-bar.claude-settings', {}, this.modelSelect, this.effortSelect, this.status));
+      el('div.claude-bar.claude-settings', {}, ...(backend.kind === 'native' ? [this.agentSelect] : []), this.modelSelect, this.effortSelect, this.status));
     this.remote = !!app.project.capabilities?.claudeRemote;     // the web IDE: the Claude of the user's computer
     this.historyLocal = backend.kind === 'native' && !this.remote;
     this.convs = [];
@@ -235,6 +243,16 @@ export class ClaudePanel {
   /** The model list, with the one typed in "Other…" when it is not a known one. */
   fillModels() {
     clear(this.modelSelect);
+    if (this.agent === 'opencode') {
+      this.effortSelect.hidden = true;
+      this.modelSelect.append(el('option', { value: '' }, 'Model: OpenCode\'s default'));
+      const names = [...new Set([...(this.opencodeModel ? [this.opencodeModel] : []), ...this.opencodeModels])];
+      for (const n of names) this.modelSelect.append(el('option', { value: n }, n));
+      this.modelSelect.append(el('option', { value: '?' }, 'Other…'));
+      this.modelSelect.value = this.opencodeModel;
+      return;
+    }
+    this.effortSelect.hidden = false;
     const known = MODELS.flatMap(([v, g]) => (Array.isArray(g) ? g.map(([id]) => id) : [v]));
     for (const [v, group] of MODELS) {
       if (!Array.isArray(group)) { this.modelSelect.append(el('option', { value: v }, group)); continue; }
@@ -245,8 +263,33 @@ export class ClaudePanel {
     this.modelSelect.value = this.model;
   }
 
+  /** Claude or OpenCode answers from now on: the model list changes, and the conversation starts a session of its own with it. */
+  async setAgent(agent) {
+    this.agent = agent === 'opencode' ? 'opencode' : 'claude';
+    prefs.set('claudeAgent', this.agent);
+    if (this.agent === 'opencode') {
+      const s = await backend.invoke('claude.status').catch(() => null);
+      if (s && s.opencode && !s.opencode.available) notify('OpenCode was not found on this computer. Install it: https://opencode.ai', 'error', { title: 'OpenCode' });
+      this.opencodeModels = await backend.invoke('ai.models', { provider: 'opencode' }).catch(() => []);
+    }
+    this.fillModels();
+    const c = this.current?.();
+    if (c) {
+      c.session = null;           // a session of one assistant does not exist for the other
+      c.add({ role: 'note', text: this.agent === 'opencode' ? 'OpenCode answers now (it edits files directly, review the changes with Git).' : 'Claude answers now.' });
+    }
+  }
+
   async pickModel() {
     let value = this.modelSelect.value;
+    if (this.agent === 'opencode') {
+      if (value === '?') value = ((await prompt('Another model', { value: this.opencodeModel, label: 'As opencode --model wants it: provider/model, e.g. ollama/qwen2.5-coder', placeholder: 'provider/model' })) || '').trim();
+      if (!/^[A-Za-z0-9._:/@-]{0,100}$/.test(value)) value = this.opencodeModel;
+      this.opencodeModel = value;
+      prefs.set('opencodeModel', value);
+      this.fillModels();
+      return;
+    }
     if (value === '?') {
       value = ((await prompt('Another model', { value: this.model, label: 'Its name for claude --model, e.g. claude-opus-4-1 or claude-sonnet-5-5[1m]:', placeholder: 'claude-…' })) || '').trim();
       if (!/^[A-Za-z0-9._[\]-]{1,60}$/.test(value)) value = this.model;
@@ -462,7 +505,7 @@ class Conversation {
     this.input.value = '';
     p.renderTabs();
     try {
-      const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: p.mode, model: p.model, effort: p.effort, conv: this.key });
+      const { id } = await backend.invoke('claude.send', { prompt, session: this.session, mode: p.mode, model: p.agent === 'opencode' ? p.opencodeModel : p.model, effort: p.effort, conv: this.key, agent: p.agent });
       if (!p.remote) this.live = id;
       if (this.run && this.run.id === id) return;       // read by Claude in the turn in progress
       this.startTurn(id);
