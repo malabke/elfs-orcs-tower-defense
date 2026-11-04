@@ -54,6 +54,29 @@ final class Sprites
         return true;
     }
 
+    /**
+     * Draws the portrait of a 3D model (assets/sprites/portraits/$name.png: unit-<sprite> or tower-<sprite>,
+     * photographed by tests/PortraitShotsTest.php) centred on ($cx, $cy), $size wide and tall, smoothed;
+     * $flip: turned to face left. False when it is not there: draw something else.
+     */
+    public function drawPortrait(Renderer $r, string $name, float $cx, float $cy, float $size, bool $flip = false): bool
+    {
+        $sdl = $this->sdl ?? throw new \LogicException('Sprites::attach() first');
+        $key = "portrait:$name";
+        if (!$sdl->hasTexture($key)) {
+            $png = "assets/sprites/portraits/$name.png";
+            if (isset($this->missing[$key]) || !is_file($this->root . '/' . $png)) {
+                $this->missing[$key] = true;
+                return false;
+            }
+            \SDL_SetHint(\SDL_HINT_RENDER_SCALE_QUALITY, '1');
+            $sdl->loadTexture($key, $png);
+            \SDL_SetHint(\SDL_HINT_RENDER_SCALE_QUALITY, '0');
+        }
+        $r->copy($sdl->getTexture($key)['texture'], null, $cx - $size / 2, $cy - $size / 2, $size, $size, $flip);
+        return true;
+    }
+
     /** Draws a texture made by $make() the first time (or loaded from assets/sprites/$file). */
     private function texture(string $name, string $file, callable $make): array
     {

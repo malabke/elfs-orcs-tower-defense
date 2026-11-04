@@ -37,8 +37,10 @@ Dernière mise à jour : 2026-11-04.
    (police pixel) faute du moteur à jour, voir « Publication ». Le premier push a cassé le jeu sur le playground
    (constante `TtfFont::BOLD` absente de son moteur) : corrigé par `Hd` et le repli, à garder en tête (toujours
    vérifier avec le moteur partagé avant de pousser).
-2. Encore en pixel art : les créatures des cartes de peuple, les icônes de tours du menu en anneau, le portrait du
-   héros et l'aperçu de la vague dans la barre du haut.
+2. **Fait (2026-11-04, 2e PC), commité, pas poussé** : le pixel art qui restait dans l'interface (créatures des
+   cartes de peuple, icônes de tours du menu en anneau, bouton du héros, aperçu de la vague) est remplacé par des
+   **portraits photographiés des modèles 3D** (`assets/sprites/portraits/`, faits par `tests/PortraitShotsTest.php` :
+   voir `AGENTS.md` « Portraits »). Tests complets + lint OK. Pousser = publier : seulement sur demande.
 3. Idées proposées, pas encore demandées : vignettes 3D vivantes dans les menus, animations d'attaque, particules.
 4. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (voir les pièges).
 
@@ -72,3 +74,8 @@ Dernière mise à jour : 2026-11-04.
   (`GL_UNPACK_ROW_LENGTH`) ; interface HD avec Nunito et `Paint` ; fichier de suivi `SUIVI.md` ; premier push (après
   un refus 403 : mauvais compte GitHub) ; le jeu plantait sur le playground (moteur partagé sans les ajouts) :
   repli compatible (`Hd`, police pixel, couleur clé) et nouveau push.
+- 2026-11-04 (2e PC, `C:\JUMPHP\elfs-orcs-tower-defense`) : `git pull`, portraits 3D écrits (voir « En cours » 2).
+  Sur ce PC, lancer Docker Desktop avant `bin/jumphp` (sinon `install` attend sans fin). Le clone avait des fins
+  de ligne CRLF (`core.autocrlf=true`) : `docker/ext/php-opengl.patch` ne s'appliquait plus et l'image Docker ne se
+  construisait pas. Corrigé par `git config core.autocrlf false` (ce dépôt) + réécriture des fichiers en LF.
+  **Sur un nouveau PC Windows : `git config core.autocrlf false` juste après le clone.**

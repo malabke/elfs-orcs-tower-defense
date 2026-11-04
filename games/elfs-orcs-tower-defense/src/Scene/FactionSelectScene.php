@@ -170,7 +170,11 @@ final class FactionSelectScene extends AbstractScene
         $ty += Text::draw($r, $font, $enemy, $x + $w / 2, $ty, $inner, [250, 160, 140], 'center', [40, 14, 10]) + 4;
         $sprites = $faction['enemy'] === 'alliance' ? ['elf', 'dwarf', 'rider'] : ['grunt', 'goblin', 'warg'];
         foreach ($sprites as $k => $sprite) {
-            $this->sprites->drawEnemy($r, $sprite, (int)($this->time * 4) + $k, $x + $w / 2 + ($k - 1) * 22, $ty + 8, true, 0.9);
+            // a little bob, each in its own time
+            $bob = abs(sin($this->time * 3.0 + $k * 1.3)) * 1.5;
+            if (!$this->sprites->drawPortrait($r, "unit-$sprite", $x + $w / 2 + ($k - 1) * 23, $ty + 13 - $bob, 30, true)) {
+                $this->sprites->drawEnemy($r, $sprite, (int)($this->time * 4) + $k, $x + $w / 2 + ($k - 1) * 22, $ty + 8, true, 0.9);
+            }
         }
 
         // the best stars won on the map

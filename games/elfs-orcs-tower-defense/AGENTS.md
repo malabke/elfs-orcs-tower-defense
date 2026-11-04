@@ -73,8 +73,13 @@ and header bars, round medallions, an evening-sky backdrop, and icons drawn with
 lock, pause / play, up, target, sell): sharp at any size in HD. The side and map screens show pictures of the 3D game
 (`assets/sprites/cards/side-<side>.png`, `map-<map>.png`, drawn smoothed by `Sprites::drawPicture()`), cut by
 `tools/site/make.php` from the test frames (ModelShotsTest writes where the towers stand: `towers-<side>.json`).
-Still pixel art (to redo): the creatures on the side cards, the ring menu's tower icons, the hero's portrait and the next
-wave's preview in the top bar.
+**Portraits** (the ring menu's towers, the hero's button, the next wave's preview, the creatures under the side cards):
+pictures of the 3D models, `assets/sprites/portraits/unit-<sprite>.png` / `tower-<sprite>.png` (128 px, transparent),
+drawn smoothed by `Sprites::drawPortrait()` (false when missing: the old pixel drawing is used). They are made by
+`tests/PortraitShotsTest.php`: `PortraitScene` (a photo studio, not a screen of the game) draws one model alone
+through `World3d::studio()` (no land, plain background), over black then white; the difference gives the alpha. Re-run
+it after changing a model (`bin/jumphp test <id> --filter PortraitShotsTest`): it rewrites the PNGs. The 2D fallback
+battle (no WebGL) still draws the pixel sprites of `Sprites`.
 
 Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
 `bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the

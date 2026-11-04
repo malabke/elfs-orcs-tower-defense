@@ -1215,7 +1215,9 @@ final class PlayScene extends AbstractScene implements HotReloadable
             $hero = $this->battle->hero;
             if ($b['id'] === 'hero' && $hero !== null) {
                 $def = $hero->def;
-                $this->sprites->drawEnemy($r, (string)$def['sprite'], 0, $x, $y, false);
+                if (!$this->sprites->drawPortrait($r, 'unit-' . $def['sprite'], $x, $y, $b['r'] * 1.9)) {
+                    $this->sprites->drawEnemy($r, (string)$def['sprite'], 0, $x, $y, false);
+                }
                 $wait = $hero->isAlive() ? $hero->skillTimer / max(1.0, (float)$def['skill']['cooldown']) : 1.0;
             } else {
                 Paint::icon($r, 'star', $x, $y, 15);
@@ -1441,7 +1443,9 @@ final class PlayScene extends AbstractScene implements HotReloadable
             Paint::medallion($r, $x, $y, 12, $option['id'] === $this->choice, $option['enabled']);
             if ($option['tower'] !== null) {
                 $def = $this->data->tower($option['tower']);
-                $this->sprites->drawTower($r, (string)$def['sprite'], 1, null, $x, $y + 9, 0.5);
+                if (!$this->sprites->drawPortrait($r, 'tower-' . $def['sprite'], $x, $y - 1, 22)) {
+                    $this->sprites->drawTower($r, (string)$def['sprite'], 1, null, $x, $y + 9, 0.5);
+                }
             } else {
                 Paint::icon($r, $option['icon'], $x, $y, 13);
             }
@@ -1672,9 +1676,11 @@ final class PlayScene extends AbstractScene implements HotReloadable
         $x = $right - $width;
         foreach ($preview as $type => $count) {
             $sprite = (string)$this->data->enemy($type)['sprite'];
-            [$w, $h] = $this->sprites->enemySize($sprite);
-            $scale = min(1.0, 14 / max($w, $h));
-            $this->sprites->drawEnemy($r, $sprite, 0, $x + 7, 15, false, $scale);
+            if (!$this->sprites->drawPortrait($r, "unit-$sprite", $x + 7, 15, 18)) {
+                [$w, $h] = $this->sprites->enemySize($sprite);
+                $scale = min(1.0, 14 / max($w, $h));
+                $this->sprites->drawEnemy($r, $sprite, 0, $x + 7, 15, false, $scale);
+            }
             $font->draw($r, 'x' . $count, $x + 15, 15 - $font->height() / 2, 1, [220, 220, 220], 'left', [0, 0, 0]);
             $x += 14 + $font->width('x' . $count) + 4;
         }

@@ -286,6 +286,8 @@ final class World3d
         if ($this->gl === null || $this->scene === null) {
             return;
         }
+        $this->inStudio = false;
+        $this->pending = [];
         $fog = $this->scene['fog'];
         [$rx, $rz, $rw, $rh] = MapModel::RECT;
         $this->gl->clear([(int)($fog[0] * 255), (int)($fog[1] * 255), (int)($fog[2] * 255), 255]);
@@ -314,6 +316,40 @@ final class World3d
     }
 
     /**
+     * Starts a frame without any land: the layer cleared with $background, the same light (no fog, no clouds).
+     * For pictures of single models (PortraitScene: the portraits of the interface).
+     * @param int[] $background
+     */
+    public function studio(Rig $rig, array $background): void
+    {
+        if ($this->gl === null) {
+            return;
+        }
+        $this->inStudio = true;
+        $this->gl->clear([$background[0], $background[1], $background[2], 255]);
+        // the uniforms shared by the frame's draws go with its first one (begin() sends them with the land)
+        $this->pending = [
+            'u_vp' => $rig->viewProj(),
+            'u_eye' => $rig->eye(),
+            'u_time' => 0.0,
+            'u_rect' => [0.0, 0.0, 1.0, 1.0],
+            'u_cloud' => [0.0, 0.0],
+            'u_flow' => [0.0, 0.0],
+            'u_light' => $this->light,
+            'u_sun' => self::SUN_COLOUR,
+            'u_sky' => self::SKY_COLOUR,
+            'u_bounce' => self::BOUNCE_COLOUR,
+            'u_fog' => self::SKY_COLOUR,
+            'u_fogRange' => [90000.0, 99000.0],
+            'u_lava' => 0.0,
+        ];
+    }
+
+    /** @var array<string, mixed> uniforms for the next draw (studio()) */
+    private array $pending = [];
+    private bool $inStudio = false;
+
+    /**
      * A model (built by $build the first time) at ($x, $y, $z), turned by $yaw about y, scaled.
      * @param callable(): Mesh $build
      * @param float|array{0: float, 1: float, 2: float} $scale
@@ -323,7 +359,7 @@ final class World3d
     public function draw(string $key, callable $build, float $x, float $y, float $z, float $yaw = 0.0, float|array $scale = 1.0,
                          array $tint = [1.0, 1.0, 1.0], float $alpha = 1.0, float $emit = 0.0, float $ao = 1.0): void
     {
-        if ($this->gl === null || $this->scene === null) {
+        if ($this->gl === null || ($this->scene === null && !$this->inStudio)) {
             return;
         }
         [$buffer, $count] = $this->model($key, $build);
@@ -331,13 +367,15 @@ final class World3d
             return;
         }
         [$sx, $sy, $sz] = is_array($scale) ? $scale : [$scale, $scale, $scale];
-        $this->gl->draw($this->prog, $this->options($buffer, $count, [
+        $textures = $this->pending !== [] ? ['u_ground' => $this->noise, 'u_noise' => $this->noise] : [];
+        $this->gl->draw($this->prog, $this->options($buffer, $count, $this->pending + [
             'u_model' => self::matrix($x, $y, $z, $yaw, $sx, $sy, $sz),
             'u_tint' => $tint,
             'u_alpha' => $alpha,
             'u_emit' => $emit,
             'u_ao' => $ao,
-        ], $alpha < 1.0));
+        ], $alpha < 1.0, $textures));
+        $this->pending = [];
     }
 
     /**
