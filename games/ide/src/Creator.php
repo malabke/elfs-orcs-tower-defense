@@ -143,7 +143,7 @@ final class Creator
             })
             ->then(function () use ($root, $id, $title, $extension) {
                 $command = $extension ? 'extension:new' : 'plugin:new';
-                $this->progress("bin/jumphp $command…");
+                $this->progress("bin/jumphp {$command}…");
                 return $this->run(['bin/jumphp', $command, $id, $title], $root);
             })
             ->then(function () use ($root, $id, $p, $extension) {

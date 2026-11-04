@@ -66,7 +66,9 @@ final class Main implements AppMain
         // jumphp.net's "Install in my IDE" (plugins, engine extensions): a listener on 127.0.0.1, the interface asks before it installs
         if (getenv('JUMPHP_IDE_LINK') !== '0') {
             $origins = array_values(array_unique(['https://jumphp.net', rtrim($this->playground->server(), '/')]));
-            $this->link = new LocalLink($origins, (string)$app->config->get('version'), fn (string $kind, string $id) => $app->send('link.install', ['kind' => $kind, 'id' => $id]));
+            $this->link = new LocalLink($origins, (string)$app->config->get('version'), function (string $kind, string $id) use ($app): void {
+                $app->send('link.install', ['kind' => $kind, 'id' => $id]);
+            });
         }
         // the plugins installed from jumphp.net: a check a little after the start, then every 6 hours (event
         // plugins.updates; with "Update plugins automatically" they are installed at once, used at the next start)

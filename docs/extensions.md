@@ -41,6 +41,28 @@ Rules: pure PHP, as in a game (AGENTS.md §2): the browser build packs the game'
 with the extensions' services, so an extension works in the browser without anything more. Not on jumphp.net yet: its
 shared engine does not load a game's own Composer packages.
 
+## Its page on jumphp.net
+
+https://jumphp.net/extensions lists every Packagist package of type `jumphp-extension`; each has a page
+(`/extensions/<vendor>/<package>`): its README, how to add it, and what its `composer.json` `extra.jumphp` says about it
+(the page reads them, nothing to upload):
+
+| key | what the page shows |
+|---|---|
+| `summary` | one line under the title (else the Composer `description`) |
+| `engine` | "Works with JumPHP ^0.5" (see below) |
+| `features` | a list of what it brings (12 lines of 160 characters at most) |
+| `screenshots` | pictures: https addresses or paths in the repository (`docs/shot.png`; png, jpg, gif, webp; 8 at most) |
+| `example` | a code example (4000 characters at most) |
+| `docs` | the address of its documentation |
+| `demo` | its example game |
+| `services`, `config` | read as they are: the services it adds, the project.yaml keys it reads |
+
+**Install in my IDE**: the page's button asks the JumPHP IDE running on the visitor's computer (it listens on `127.0.0.1`,
+ports 47321-47325, only for pages of jumphp.net). The IDE asks its user to confirm, and for an extension which game of the
+project gets it (`bin/jumphp extension:add`); for an IDE plugin it installs it. Nothing is installed without the yes.
+In the IDE: Tools > **Engine Extensions…** searches the same list. `JUMPHP_IDE_LINK=0` turns the listener off.
+
 ## Which JumPHP it works with
 
 `extra.jumphp.engine` is a version constraint on JumPHP (`"^0.5"`, `">=0.5 <0.7"`, `"0.5.*"`, `"^0.5 || ^0.9"`). At boot the engine
