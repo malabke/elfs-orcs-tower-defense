@@ -139,6 +139,12 @@ CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; doc
   cli:new <app> [title]     create apps/<app> from skeleton-cli/ (config/project.yaml: kind: cli)
   plugin:new <id> [title]   a plugin of the JumPHP IDE, in PHP: apps/<id> from skeleton-plugin/ (docs/ide-plugins.md)
   plugin:pack <id>          the plugin as apps/<id>/dist/<id>-<version>.zip (to install in the IDE, to publish on jumphp.net)
+  extension:new <id> [title] an engine extension (Composer type jumphp-extension): extensions/<id> + its example
+                            game games/<id>-demo (docs/extensions.md)
+  service:install <id> [--system] [--exe <file>]
+                            the exported executable (export:standalone) as a service of this computer, from
+                            project.yaml `service:` (systemd / launchd / WinSW; docs/services.md); also
+                            service:uninstall, service:status, service:logs [-f], service:start, service:stop, service:print
   debug                     the IDE's debugger for Claude Code in a terminal (MCP on stdin / stdout):
                             claude mcp add jumphp-debug -- bin/jumphp debug; then JUMPHP_XDEBUG=9003 bin/jumphp test <game>
                             then run <app> [command...] / test <app> / shot <app> (the screen as text: JUMPHP_KEYS)
@@ -1449,6 +1455,11 @@ cmd_doctor() {
 # IDE plugins (kind: plugin): plugin:new, plugin:pack, and test of their folders (docs/ide-plugins.md)
 # shellcheck source=../tools/plugin-commands.sh
 . "$ROOT/tools/plugin-commands.sh"
+# shellcheck source=../tools/extension-commands.sh
+. "$ROOT/tools/extension-commands.sh"
+
+# shellcheck source=../tools/service-commands.sh
+. "$ROOT/tools/service-commands.sh"
 
 # Docker must answer before anything runs in it: else every command hangs or fails with Docker's own words (the IDE
 # showed a composer install that never ended). Docker Desktop (Windows, macOS) is started when it is installed but
@@ -1544,7 +1555,9 @@ main() {
     app:new) cmd_app_new "$@" ;;
     cli:new) cmd_cli_new "$@" ;;
     plugin:new) cmd_plugin_new "$@" ;;
+    service:install|service:uninstall|service:status|service:logs|service:start|service:stop|service:print) cmd_service "${cmd#service:}" "$@" ;;
     plugin:pack) cmd_plugin_pack "$@" ;;
+    extension:new) cmd_extension_new "$@" ;;
     debug) cmd_debug "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;

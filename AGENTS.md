@@ -56,6 +56,8 @@ skeleton-app/           template of a desktop app (Tauri), copied by `bin/jumphp
 skeleton-gui/           template of a graphic app (forms, JumPHP\Gui), copied by `bin/jumphp gui:new` (§17)
 skeleton-cli/           template of a CLI app (terminal: Symfony Console + symfony/tui), copied by `bin/jumphp cli:new` (§18)
 skeleton-plugin/        template of a plugin of the JumPHP IDE (PHP), copied by `bin/jumphp plugin:new` (§19)
+skeleton-extension/     template of an engine extension + its example game, copied by `bin/jumphp extension:new` (§20)
+extensions/<id>/        engine extensions (Composer type jumphp-extension; extensions/particles: particles), §20
 tauri/                  the desktop apps' native runtime (Rust + Tauri 2, a C library PHP loads with FFI; §16)
 ide/                    JumPHP IDE: package jumphp/ide, PHP core (JumPHP\Ide\) + HTML interface, shared by games/ide
                         (the desktop app) and jumphp.net/ide (docs/ide.md)
@@ -151,6 +153,7 @@ games/<id>/
 | `bin/jumphp gui:new <id> ["Title"] [--mobile]` | a **graphic app** (forms made in the IDE's visual editor, `JumPHP\Gui`, no HTML; §17); then run / test / shot / build / export as a game |
 | `bin/jumphp cli:new <id> ["Title"]` | a **CLI app** (commands + full-screen text screens in the terminal, §18); then run / test / shot (the screen as text) / export:standalone as a game |
 | `bin/jumphp plugin:new <id> ["Title"]` / `plugin:pack <id>` | a **plugin of the JumPHP IDE** in PHP (§19); `test` on its folder; `pack` = `dist/<id>-<version>.zip` |
+| `bin/jumphp extension:new <id> ["Title"]` | an **engine extension** (§20): the package `extensions/<id>` + its example game `games/<id>-demo` (install / test / shot / build it) |
 | `bin/jumphp video <id> <film.mp4> [name] [fps]` | a film as frames + sound for the `video` widget (`assets/videos/<name>/`) |
 | `bin/jumphp app:new / app:run / app:test / app:shot / app:export <id>` | **desktop apps** (HTML pages + PHP, Tauri; §16, docs/tauri.md). `run` / `test` / `shot` on an app's folder hand over to them; `app:export --windows --macos`; `app:release` (updates); `build` = the app in the browser |
 | `bin/jumphp tauri:setup` / `tauri:build` / `tauri:download` | the Tauri image / the runtime library `build/tauri/linux-x86_64/libjumphp_tauri.so`, built or downloaded (done automatically when needed) |
@@ -1016,6 +1019,7 @@ background), then ~10.
 - `games/hello-gui/` — a graphic app (§17): a form made in the visual editor (responsive grid of two panels), its code
   behind, saved contacts, game tests.
 - `games/hello-plugin/` — a plugin of the JumPHP IDE (§19): a tool window, an action, problems, completion, its tests.
+- `extensions/particles/` + `games/particles-demo/` — the particle engine, an engine extension (§20), and its showcase.
 - `games/hello-cli/` — a CLI app (§18): a task list, commands and a full-screen screen, tested on a virtual terminal.
 - `games/hello-desktop/` — a desktop app (Tauri, §16): a notepad, HTML page + PHP (files, native dialogs, PHP clock,
   drag and drop, quit confirmation), tested with `AppTestCase`.
@@ -1076,6 +1080,10 @@ bin/jumphp build notes               # dist/web/: the same app in a web page (we
   game that also gets all this and HTML windows beside its own (`games/hello-hybrid`). Headless / browser / phones:
   a plain game, so scenes must check `Native::supports()` and use `App::current()?->send(...)`. `app: {embed: true}`:
   the game drawn **inside** the Tauri window (one window, `JumPHP\Tauri\EmbeddedGame`; not for OpenGL games).
+- **Services** (a program in the background, started at boot / login, restarted on failure): project.yaml `service:
+  {name, args: [serve], restart: on-failure, user: true}`, `JumPHP\Service\Daemon::loop()` in the program,
+  `bin/jumphp service:install / status / logs / uninstall <id>` on the exported executable (systemd, launchd, WinSW;
+  docs/services.md).
 - Platforms: Linux (Docker commands), Windows and macOS (the workflow `tauri` builds and tries the library there,
   `app-export` opens the exported .app on two Macs). `tauri:download` fetches the library of these sources. In the
   browser: windows become frames, menus a bar, dialogs HTML, save = download, no tray / global shortcuts.
@@ -1146,3 +1154,23 @@ guide: `docs/ide-plugins.md`. Example: `games/hello-plugin`.
 - Tests as you go: `tests/*Test.php` extend `JumPHP\Ide\Testing\PluginTestCase` (`project()`, `action()`,
   `toolText()`, `click()`, `submit()`, `complete()`, `problems()`, `save()`, `mcp()`). `bin/jumphp test <id>` must pass.
 - Don'ts: never block (the IDE's frame), no network waits, nothing written outside the project / its settings.
+
+
+## 20. Engine extensions (Composer packages that add to the engine)
+
+A subsystem a game can require (particles, physics, a tile editor's format...): a Composer package of **type
+`jumphp-extension`**. The engine finds it in the game's `vendor/composer/installed.json` at boot: nothing to wire.
+Full guide: `docs/extensions.md`. Example: `extensions/particles` (+ `games/particles-demo`).
+
+- `composer.json` `extra.jumphp`: `services` (classes autowired, public: scenes ask for them in their constructor),
+  `services_file` (a Symfony services file of the package), `boot` (a class implementing `JumPHP\Extension\Extension`:
+  `boot(Engine $engine)` before the first scene), `loaders` (`{".particles.json": "Class"}` implementing
+  `JumPHP\Extension\AssetLoader`: `$this->engine->extensions()->load('assets/fx/x.particles.json')`), `config` (project.yaml
+  keys with their `default`, merged under the game's own values).
+- `bin/jumphp extension:new <id> "Title"`: `extensions/<id>` (namespace `JumphpExtensions\<Id>\`) + `games/<id>-demo`
+  requiring it through a path repository; its game tests are the extension's tests (`bin/jumphp test <id>-demo`).
+- Pure PHP (the browser build packs vendor/ and compiles the container with it): rules of §2 apply. Not on jumphp.net
+  yet (its shared engine ignores a game's own packages).
+- Particles (`jumphp/particles`): `ParticleSystem` (one per scene: `add(new Emitter([...]))`, `burst()`, `update($dt)`,
+  `render($r, $camX, $camY)`, `reset($seed)`), `Emitter` settings `rate life speed angle spread gravity drag colors size
+  shape area duration`, project.yaml `particles: {max, seed}`, `.particles.json` files of named emitters.

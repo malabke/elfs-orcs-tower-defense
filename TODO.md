@@ -15,12 +15,20 @@ in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRun
 - signed apps: Authenticode (Windows), Developer ID + notarization (macOS) with the developer's certificates
 - the installers (jumphp2installer) offering a "start with the computer" box (the app does it: `$app->autostart()`,
   done; docs/tauri.md)
-- services / daemons in PHP: an app (or a CLI app) that runs in the background without a user session: Windows
-  service (SCM: start / stop / status, a service wrapper around the executable), macOS LaunchDaemon, Linux systemd
-  unit (user or system); `bin/jumphp service:install / uninstall / status <id>`, the installers' step `service`,
-  logs, restart on failure; the async runtime (threads) and JumPHP\Http for servers, tested on the three systems in CI
+- services / daemons in PHP: done 2026-11-04 (not released): project.yaml `service:`, `JumPHP\Service\Daemon`,
+  `bin/jumphp service:install / uninstall / status / logs / start / stop / print` (tools/service.sh: systemd user or
+  system units, launchd plists, WinSW on Windows), docs/services.md. Tried on Linux in a systemd container (user and
+  system units, restart after kill -9, clean stop, logs, uninstall). Left: try macOS (launchd) and Windows (WinSW) for
+  real, the installers' step `service`
 
 ## Engine extensions (Composer packages that extend JumPHP, mostly for games)
+
+Done (2026-11-04, not committed / released yet): the contract (`type: jumphp-extension`, `extra.jumphp`: services,
+services_file, boot, loaders, config defaults; `JumPHP\Extension\Extensions`, found from installed.json at boot, in the
+browser build too), `bin/jumphp extension:new` (skeleton-extension/: extensions/<id> + games/<id>-demo), the first
+extension `extensions/particles` + `games/particles-demo` (game tests, browser build checked), docs/extensions.md,
+AGENTS.md §20. Left below: the other extensions, IDE completion of their config keys, editors, the marketplace,
+Packagist publishing of extensions/particles, the playground's shared engine loading them.
 
 Packages a game requires (`bin/jumphp composer <id> require vendor/pkg`) that add a whole subsystem to the engine,
 with their own data format and, often, their own editor: a tile engine with its level editor and its map format, a
@@ -161,10 +169,11 @@ later iOS).
   IDE's MCP server, updates: checked every 6 hours,
   installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE (they would run on the server: a
   sandbox first)
-- editors for a game's resources, inside the IDE: sprites (sheets, animations, palettes), music, sound effects (and
-  tiles / levels): see how David's game site with editors does it (its public/js/editor-sprites.js, editor-music.js,
-  editor-sfx.js, editor-tiles.js, editor-level.js, templates/editor/; ask David for the repository), made into IDE tool windows / editor
-  tabs that read and write the game's assets/
+- editors for a game's resources, inside the IDE: done (2026-11-04, not released yet): sprites (a PNG's Edit pixels: palette,
+  pencil, eraser, fill, picker, zoom, grid, frames of a sheet added / removed, the animation played), sound effects
+  (*.sfx.json: presets, random, 10 settings, the wave drawn, the engine's Synth line; saving writes the .wav next to it)
+  and tunes (*.music.json: a piano roll on 4 voices, tempo, bars, loop; saving writes the .wav the game loops); New >
+  Sprite / Sound Effect / Music in the Project tree. Left: tiles and levels (Tiled .tmj) editors
 - AI generation from these editors: for each kind (pictures, music, sound effects...) the online AIs that do it best
   (Claude among them), the user giving their own token / API key in the editor, then "generate" a sprite, a tune, an
   effect from a description, straight into the game's assets (a provider per service, the keys kept on the user's
