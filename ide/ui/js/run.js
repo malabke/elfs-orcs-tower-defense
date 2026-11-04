@@ -88,8 +88,10 @@ export class Runner {
     // bin/jumphp runs everything in Docker: wait until the IDE has it running (it starts Docker Desktop by itself)
     if (/(^|[\/])jumphp$/.test(String(config.command?.[0] || ''))) await this.app.docker();
     // a CLI app: in the Terminal (a real terminal: its full-screen screens get their keys and their size)
-    if (config.terminal && this.app.terminal && !Object.keys(env).length) {
-      const started = this.app.terminal.run(config.command.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`)).join(' '), config.label);
+    // (a Debug too: its JUMPHP_XDEBUG goes in front of the command line, the screens keep their terminal)
+    if (config.terminal && this.app.terminal && Object.keys(env).every((k) => /^[A-Z_][A-Z0-9_]*$/.test(k))) {
+      const prefix = Object.entries(env).map(([k, v]) => `${k}=${/^[\w@%+=:,./-]*$/.test(String(v)) ? v : `'${String(v).replace(/'/g, "'\\''")}'`} `).join('');
+      const started = this.app.terminal.run(prefix + config.command.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`)).join(' '), config.label);
       this.app.showTool('terminal');
       await started;
       return;

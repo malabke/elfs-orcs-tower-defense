@@ -130,9 +130,10 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   update, then reachable from Help; the site's page in the 14 languages. Make it part of the definition of done
 - an IDE for phones: a light version (maybe a "soft" one) that drives Claude, either on the phone itself (not sure it
   can) or a computer's Claude through Remote Control (`/rc`): to study
-- reported by David (2026-11-04): a TUI project (CLI app) runs, but started under Xdebug it does not stop at a breakpoint:
-  find why (the CLI app's run path with JUMPHP_XDEBUG: `bin/jumphp run` of a cli app, the Terminal's Run, path mapping
-  of apps/<id>, xdebug.start_with_request in that container) and fix it, tested with a real DBGp session
+- TUI project under Xdebug not stopping: found (2026-11-04): `bin/jumphp run <cli app>` under JUMPHP_XDEBUG stops at a breakpoint (real DBGp
+  session, games/ and apps/, plain command and full-screen `ui` in a pty), but the IDE's Debug sent the run to the Run window (pipes: no terminal,
+  the app prints plain text, the screen's code never runs) because ide/ui/js/run.js only used the Terminal when no env was given. Fixed:
+  the env goes in front of the command line in the Terminal. NOT tried in the IDE itself yet: Debug a CLI app, break in src/Ui
 - a Run and a Debug (Xdebug) icon in the editor's gutter, on the line: run / debug the program from there with its
   arguments (a CLI app's command and options typed or remembered per line), like the run configurations
 
