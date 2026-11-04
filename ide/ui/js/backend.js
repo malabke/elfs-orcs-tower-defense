@@ -35,8 +35,14 @@ export const backend = {
     try { data = await response.json(); } catch { throw new Error(`HTTP ${response.status}`); }
     for (const [event, eventPayload] of data.events || []) dispatch(event, eventPayload);
     if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+    for (const fn of this.after) {
+      try { fn(name, payload, data.result); } catch (e) { console.error(e); }
+    }
     return data.result;
   },
+
+  /** Called after each command that succeeded (web): fn(name, payload, result). The web IDE's plugins follow the saves. */
+  after: new Set(),
 
   on(event, fn) {
     if (!listeners.has(event)) {

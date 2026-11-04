@@ -172,8 +172,8 @@ later iOS).
 - plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
   PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
   IDE's MCP server, updates: checked every 6 hours,
-  installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE (they would run on the server: a
-  sandbox first)
+  installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE: done (2026-11-04, not released yet), run in the visitor's
+  browser on the WebAssembly PHP (a Web Worker), writes through the web IDE's commands; MCP tools stay desktop only
 - done (2026-11-04, not released yet): the IDE's resource editors: sprites (PNG), sound effects (.sfx.json -> .wav), music
   (piano roll -> .wav), tilesets (.tsj with collisions) and levels (.tmj: layers, objects). Left: animated / flipped tiles
 - done (2026-11-04, not released yet): AI generation in the resource editors ("Generate…": Claude through the local

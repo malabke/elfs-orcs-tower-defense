@@ -132,7 +132,8 @@ class App {
     if (this.project.capabilities?.claude) this.claude = new ClaudePanel(this);
     if (this.project.capabilities?.terminal) this.terminal = new TerminalPanel(this);
     if (backend.kind === 'native' && this.project.playground) this.publishPanel = new PublishPanel(this);
-    if (this.project.capabilities?.plugins) {
+    // the web IDE: plugins run in the visitor's browser when jumphp.net serves their PHP core (backend.config.plugins)
+    if (this.project.capabilities?.plugins || (backend.kind !== 'native' && backend.config.plugins)) {
       this.plugins = new Plugins(this);
       await this.plugins.load();
     }

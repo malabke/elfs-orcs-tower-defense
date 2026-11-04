@@ -380,7 +380,19 @@ final class PluginHost
     private function matching(string $kind, string $path): array
     {
         return array_values(array_filter($this->providers, fn ($p) => $p['kind'] === $kind
-            && ($p['pattern'] === '*' || fnmatch($p['pattern'], $path) || fnmatch($p['pattern'], basename($path)))));
+            && ($p['pattern'] === '*' || self::glob($p['pattern'], $path) || self::glob($p['pattern'], basename($path)))));
+    }
+
+    /** fnmatch(), which the browser's PHP (WebAssembly) lacks: * and ? are wildcards, [...] classes. */
+    private static function glob(string $pattern, string $path): bool
+    {
+        if (function_exists('fnmatch')) {
+            return fnmatch($pattern, $path);
+        }
+        $re = preg_replace_callback('/\\\\\[(.*?)\\\\\]|\\\\\*|\\\\\?/', fn ($m) => match ($m[0]) {
+            '\\*' => '.*', '\\?' => '.', default => '[' . stripslashes($m[1]) . ']',
+        }, preg_quote($pattern, '#'));
+        return (bool)preg_match('#^' . $re . '$#s', $path);
     }
 
     // events, timers ------------------------------------------------------------------------------------------------
