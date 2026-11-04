@@ -77,6 +77,7 @@ Setup
   runtime:build             the shared engine of remote games (a games site) -> build/runtime
                             + .build/jumphp-runtime.tar.gz (+ .sha256), the release asset (docs/remote.md)
   runtime:download [version]  download it from the GitHub release instead
+  tidy [--examples] [--yes]  remove JumPHP's own development files from this project (tools/project-clean.list)
   update                    merge the newest JumPHP (git remote "jumphp") into the project
   cli:install               the `jumphp` command for the whole system (~/.local/bin): `jumphp test pong` from
                             any folder of the project, `jumphp new <folder>`; asks to update when Packagist has
@@ -452,13 +453,51 @@ cmd_update() {
     git -C "$ROOT" restore --source=FETCH_HEAD --worktree -- "${entries[@]}" || die "JumPHP's files not updated"
     mkdir -p "$ROOT/.jumphp"
     printf '{\n    "repository": "%s",\n    "commit": "%s",\n    "updated": "%s"\n}\n' "$REPO_URL" "$latest" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ROOT/.jumphp/jumphp.json"
+    # what this project tidied away (bin/jumphp tidy, a new project) does not come back
+    [ -f "$ROOT/.jumphp/excluded" ] && [ -f "$ROOT/tools/project-clean.sh" ] && bash "$ROOT/tools/project-clean.sh" --reapply >/dev/null
     say "updated (git status shows what changed). The engine changed? bin/jumphp engine:download (or engine:build); then bin/jumphp setup"
     return
   fi
   [ -z "$(git -C "$ROOT" status --porcelain)" ] || die "commit your changes first (git status)"
   say "merging $remote/main"
-  git -C "$ROOT" pull --no-rebase --no-edit "$remote" main
+  if ! git -C "$ROOT" pull --no-rebase --no-edit "$remote" main; then
+    # the only conflicts a project can have are files it tidied away (JumPHP changed what the project deleted): they stay away
+    local excluded="$ROOT/.jumphp/excluded" f p ok=1
+    [ -f "$excluded" ] || die "the merge has conflicts: resolve them (git status), then git commit"
+    while IFS= read -r f; do
+      local hit=0
+      while IFS= read -r p; do [ -n "$p" ] && { [ "$f" = "$p" ] || [[ "$f" == "$p"/* ]]; } && { hit=1; break; }; done < "$excluded"
+      [ "$hit" = 1 ] || { ok=0; break; }
+    done < <(git -C "$ROOT" diff --name-only --diff-filter=U)
+    [ "$ok" = 1 ] || die "the merge has conflicts: resolve them (git status), then git commit"
+    while IFS= read -r p; do [ -n "$p" ] && git -C "$ROOT" rm -r -q --ignore-unmatch -- "$p" >/dev/null 2>&1; done < "$excluded"
+    git -C "$ROOT" commit -q --no-edit || die "the merge could not be finished: git status"
+  fi
+  [ -f "$ROOT/.jumphp/excluded" ] && [ -f "$ROOT/tools/project-clean.sh" ] && bash "$ROOT/tools/project-clean.sh" --reapply >/dev/null
   say "updated. The engine changed? bin/jumphp engine:download (or engine:build); then bin/jumphp setup"
+}
+
+# bin/jumphp tidy [--examples] [--yes]: a project without JumPHP's own development files (tools/project-clean.list), and without
+# JumPHP's example projects with --examples. What it removes is kept in .jumphp/excluded: `bin/jumphp update` does not bring it back.
+cmd_tidy() {
+  local flags=() yes=0 a
+  for a in "$@"; do
+    case "$a" in
+      --yes|-y) yes=1 ;;
+      --examples) flags+=(--examples) ;;
+      *) die "usage: bin/jumphp tidy [--examples] [--yes]" ;;
+    esac
+  done
+  [ -f "$ROOT/tools/project-clean.sh" ] || die "no tools/project-clean.sh: bin/jumphp update first"
+  say "not a project's business (tools/project-clean.list):"
+  local out; out="$(bash "$ROOT/tools/project-clean.sh" --dry-run ${flags[@]+"${flags[@]}"})"
+  echo "$out"
+  [ "$out" = "nothing to tidy" ] && return 0
+  if [ "$yes" != 1 ]; then
+    local answer; read -r -p "Remove these (your own games/ and apps/ stay)? [y/N] " answer
+    [[ "$answer" =~ ^[yY] ]] || { say "left as they are"; return 0; }
+  fi
+  bash "$ROOT/tools/project-clean.sh" ${flags[@]+"${flags[@]}"}
 }
 
 cmd_new() {
@@ -1588,6 +1627,7 @@ main() {
     extension:add) cmd_extension_add "$@" ;;
     video:make) cmd_video_make "$@" ;;
     video:replay) cmd_video_replay "$@" ;;
+    tidy) cmd_tidy "$@" ;;
     debug) cmd_debug "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;

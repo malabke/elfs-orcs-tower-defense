@@ -41,6 +41,9 @@ elif ! command -v git >/dev/null 2>&1; then
   warn "git is not installed: the wizard will offer to install it"
 fi
 
+# a project of yours, not a copy of JumPHP's development tree: its own extensions, examples and notes go (tools/project-clean.sh)
+bash tools/project-clean.sh --new >/dev/null 2>&1 && say "tidied: JumPHP's examples and development files are not in your project (bin/jumphp tidy lists what it does)" || true
+
 # the wizard needs a real terminal (and docker): not inside the composer Docker image or a CI job
 if [ -f /.dockerenv ] || [ -n "${CI:-}" ] || ! { : </dev/tty; } 2>/dev/null; then
   say "project ready. Next: cd $(basename "$PWD") && bin/jumphp init (it creates the project's own GitHub repository)"
