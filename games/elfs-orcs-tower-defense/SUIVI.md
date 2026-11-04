@@ -40,7 +40,8 @@ Dernière mise à jour : 2026-11-04.
 2. **Fait (2026-11-04, 2e PC), commité, pas poussé** : le pixel art qui restait dans l'interface (créatures des
    cartes de peuple, icônes de tours du menu en anneau, bouton du héros, aperçu de la vague) est remplacé par des
    **portraits photographiés des modèles 3D** (`assets/sprites/portraits/`, faits par `tests/PortraitShotsTest.php` :
-   voir `AGENTS.md` « Portraits »). Tests complets + lint OK. Pousser = publier : seulement sur demande.
+   voir `AGENTS.md` « Portraits »). Tests complets + lint OK, vérifié avec le moteur partagé (`build:remote` +
+   `JUMPHP_WEB=remote webshot` : portraits affichés, police pixel en repli). Pousser = publier : seulement sur demande.
 3. Idées proposées, pas encore demandées : vignettes 3D vivantes dans les menus, animations d'attaque, particules.
 4. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (voir les pièges).
 
