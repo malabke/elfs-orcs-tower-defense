@@ -17,7 +17,17 @@ final class OpenAiImages implements ImageProvider
         return 'OpenAI Images (your API key)';
     }
 
-    public function request(string $prompt, string $key): array
+    public function needsKey(): bool
+    {
+        return true;
+    }
+
+    public function baseUrl(): string
+    {
+        return '';
+    }
+
+    public function request(string $prompt, string $key, ?string $baseUrl = null): array
     {
         return [
             'url' => self::URL,

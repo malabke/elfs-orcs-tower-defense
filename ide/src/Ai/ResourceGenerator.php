@@ -37,7 +37,7 @@ final class ResourceGenerator
     public function __construct(private Processes $processes, private string $root, ?callable $run = null, private array $images = [], private array $audio = [])
     {
         $this->run = $run ?? fn (array $command): Deferred => $this->processes->start($command, $this->root)['done'];
-        $this->images += [OpenAiImages::ID => new OpenAiImages()];
+        $this->images += [OpenAiImages::ID => new OpenAiImages(), LocalDiffusion::ID => new LocalDiffusion()];
         $this->audio += [ElevenLabsAudio::ID => new ElevenLabsAudio()];
     }
 
@@ -57,7 +57,7 @@ final class ResourceGenerator
             $list[] = ['id' => $id, 'name' => $name, 'needsKey' => $needsKey, 'kind' => 'chat', 'local' => $local, 'baseUrl' => $base, 'model' => $model, 'makes' => self::KINDS];
         }
         foreach ($this->images as $id => $p) {
-            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true, 'kind' => 'image', 'local' => false, 'baseUrl' => '', 'model' => '', 'makes' => ['sprite', 'tileset']];
+            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => $p->needsKey(), 'kind' => 'image', 'local' => $p->baseUrl() !== '', 'baseUrl' => $p->baseUrl(), 'model' => '', 'makes' => ['sprite', 'tileset']];
         }
         foreach ($this->audio as $id => $p) {
             $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true, 'kind' => 'audio', 'local' => false, 'baseUrl' => '', 'model' => '', 'makes' => $p->kinds()];
@@ -112,7 +112,7 @@ final class ResourceGenerator
                 return $this->text($provider, $kind, $prompt, $options, $key, $model, $baseUrl);
             }
             if ($provider !== 'claude') {
-                return $this->image($provider, $kind, $prompt, $options, $key);
+                return $this->image($provider, $kind, $prompt, $options, $key, $baseUrl);
             }
             $command = ['claude', '-p', $this->prompt($kind, $prompt, $options), '--output-format', 'json',
                 '--json-schema', json_encode($this->schema($kind, $options), JSON_UNESCAPED_SLASHES), '--tools', '',
@@ -344,7 +344,7 @@ final class ResourceGenerator
     }
 
     /** A picture service, then the picture made pixel art of the sprite's size (sprites only). */
-    private function image(string $provider, string $kind, string $prompt, array $o, string $key): Deferred
+    private function image(string $provider, string $kind, string $prompt, array $o, string $key, ?string $baseUrl = null): Deferred
     {
         $service = $this->images[$provider] ?? null;
         if ($service === null) {
@@ -353,13 +353,13 @@ final class ResourceGenerator
         if ($kind !== 'sprite' && $kind !== 'tileset') {
             throw new \InvalidArgumentException($service->name() . ' makes pictures: sprites and tilesets only.');
         }
-        if (trim($key) === '') {
+        if ($service->needsKey() && trim($key) === '') {
             throw new \InvalidArgumentException($service->name() . ' needs your API key (kept in the IDE on this computer).');
         }
         $what = $kind === 'tileset'
             ? "Pixel art tileset sheet for a retro 2D platformer, a regular grid of {$o['columns']} x {$o['rows']} square tiles that fit side by side (ground, earth, bricks, a platform, sky filler, decorations), consistent style, no gaps between tiles: $prompt"
             : "Pixel art sprite for a retro 2D game, plain transparent or single-colour background, centred: $prompt";
-        $req = $service->request($what, trim($key));
+        $req = $service->request($what, trim($key), $baseUrl);
         return $this->post($req)->then(function (string $out) use ($service, $o, $kind) {
             $png = $service->decode($out);
             if ($kind === 'tileset') {

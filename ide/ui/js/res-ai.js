@@ -70,11 +70,11 @@ async function open(kind, fields, apply, dir) {
     const p = current();
     modelRow.hidden = p.kind !== 'claude';
     typedRow.hidden = p.kind !== 'chat' && p.kind !== 'opencode';
-    baseRow.hidden = p.kind !== 'chat';
+    baseRow.hidden = !(p.kind === 'chat' || (p.kind === 'image' && p.baseUrl));
     keyRow.hidden = !p.needsKey;
     secsRow.hidden = p.kind !== 'audio';
     key.value = p.needsKey ? prefs.get('aiKey:' + p.id, '') : '';
-    base.value = p.kind === 'chat' ? prefs.get('aiBase:' + p.id, p.baseUrl) : '';
+    base.value = !baseRow.hidden ? prefs.get('aiBase:' + p.id, p.baseUrl) : '';
     typed.value = typedRow.hidden ? '' : prefs.get('aiTyped:' + p.id, p.model);
     status.textContent = '';
     listModels();

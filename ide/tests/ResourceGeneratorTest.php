@@ -293,4 +293,29 @@ final class ResourceGeneratorTest extends TestCase
         self::assertContains('tileset', $byId['openai-images']['makes']);
         self::assertContains('tileset', $byId['ollama']['makes']);
     }
+
+    public function testALocalStableDiffusionServerNeedsNoKeyAndItsPictureBecomesPixelArt(): void
+    {
+        $picture = imagecreatetruecolor(64, 64);
+        imagefill($picture, 0, 0, imagecolorallocate($picture, 20, 120, 220));
+        ob_start();
+        imagepng($picture);
+        $png = (string)ob_get_clean();
+        $out = self::settled($this->sequence((string)json_encode(['images' => [base64_encode($png)]]))->generate('sprite', 'a blue slime', ['width' => 4, 'height' => 4], 'diffusion-local', '', null, 'http://127.0.0.1:9999'));
+        self::assertSame(4, count($out['frames'][0]));
+        $command = $this->commands[0];
+        self::assertSame('http://127.0.0.1:9999/sdapi/v1/txt2img', end($command));
+        self::assertStringNotContainsString('Authorization', $this->headersSent[0]);
+        $byId = array_column($this->generator('')->providers(), null, 'id');
+        self::assertFalse($byId['diffusion-local']['needsKey']);
+        self::assertTrue($byId['diffusion-local']['local']);
+        self::assertSame('http://127.0.0.1:7860', $byId['diffusion-local']['baseUrl']);
+        self::assertTrue($byId['openai-images']['needsKey']);
+    }
+
+    public function testTheDiffusionServersErrorsAreShown(): void
+    {
+        $this->expectExceptionMessage('Stable Diffusion: ');
+        (new \JumPHP\Ide\Ai\LocalDiffusion())->decode((string)json_encode(['detail' => 'Not Found']));
+    }
 }
