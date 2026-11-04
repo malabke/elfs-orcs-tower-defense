@@ -26,3 +26,7 @@ Left:
 - existing projects without `origin` (like todojum): done in IDE 0.1.35: the IDE offers "Create its GitHub
   repository…" (also behind Publish): public repository, commit + push, then a jumphp.net project
   (`POST /api/ide/projects/import`); try it on todojum.
+
+- checked 2026-11-04 (David's Chrome + gh): todojumphp has its own `origin` (github.com/davidnurdin/todojumphp, public, pushed) and is a
+  published project on jumphp.net (/todojumphp, "en développement", listed, published 03/11/2026 13:58). Still to try by hand in the IDE:
+  Create an Installer > GitHub on it (a release of that repository, not JumPHP's)
