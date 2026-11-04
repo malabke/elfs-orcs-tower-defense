@@ -6,6 +6,7 @@ import { el, clear, icon, hydrateIcons, progressBar, menu, chooser, dialog, noti
 import { Editors, loadMonaco, monaco } from './editor.js';
 import { ProjectTree } from './tree.js';
 import { Plugins } from './plugins.js';
+import { Extensions } from './extensions.js';
 import { searchEverywhere, recentFiles, fileStructure, FindPanel } from './search.js';
 import { Git } from './git.js';
 import { Runner, Problems, Structure, Hierarchy } from './run.js';
@@ -126,6 +127,7 @@ class App {
     this.runner = new Runner(this);
     if (this.project.capabilities?.run && this.project.capabilities?.debug) this.debugger = new DebugPanel(this);
     if (this.project.capabilities?.run) this.gutterRun = new GutterRun(this);
+    if (this.project.capabilities?.run) this.extensions = new Extensions(this);
     this.problems = new Problems(this);
     this.structure = new Structure(this);
     this.hierarchy = new Hierarchy(this);
@@ -635,6 +637,7 @@ class App {
       a.add('previewTab', 'Play in a New Tab', () => this.runner.preview(), { icon: 'globe' });
     }
     this.plugins?.registerActions(a);
+    this.extensions?.registerActions(a);
     a.add('settings', 'Settings…', () => this.settings(), { kbd: 'Ctrl+Alt+S', icon: 'settings' });
     a.add('theme', 'Toggle Light / Dark Theme', () => this.toggleTheme());
     a.add('rebuildIndex', 'Rebuild the PHP Index', () => backend.invoke('index.rebuild'));
@@ -705,7 +708,7 @@ class App {
       section('Code', ['reformat', 'comment', 'rebuildIndex']),
       section('Refactor', ['rename', 'usages']),
       section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'runToCursor', 'toggleBreakpoint', 'exceptionBreakpoints', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
-      section('Tools', ['plugins', 'pluginUpdates']),
+      section('Tools', ['plugins', 'pluginUpdates', 'extensions']),
       section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },

@@ -28,6 +28,8 @@ final class Main implements AppMain
     private Processes $processes;
     private ?Ide $ide = null;
     private ?Loopback $loopback = null;
+    /** jumphp.net's "Install in my IDE" buttons come in here (LocalLink) */
+    private ?LocalLink $link = null;
 
     /** @var array{token?: string, user?: array<string, mixed>, server?: string} */
     private array $session = [];
@@ -61,6 +63,11 @@ final class Main implements AppMain
         $this->updates = new SelfUpdate($app);
         $this->registerCommands();
         $this->updates->start();
+        // jumphp.net's "Install in my IDE" (plugins, engine extensions): a listener on 127.0.0.1, the interface asks before it installs
+        if (getenv('JUMPHP_IDE_LINK') !== '0') {
+            $origins = array_values(array_unique(['https://jumphp.net', rtrim($this->playground->server(), '/')]));
+            $this->link = new LocalLink($origins, (string)$app->config->get('version'), fn (string $kind, string $id) => $app->send('link.install', ['kind' => $kind, 'id' => $id]));
+        }
         // the plugins installed from jumphp.net: a check a little after the start, then every 6 hours (event
         // plugins.updates; with "Update plugins automatically" they are installed at once, used at the next start)
         if (getenv('JUMPHP_IDE_UPDATES') !== '0') {
@@ -128,6 +135,7 @@ final class Main implements AppMain
     {
         $this->processes->poll();
         $this->loopback?->poll();
+        $this->link?->poll();
         $this->bridge->tick();
         if ($this->ide === null) {
             return;
@@ -183,6 +191,8 @@ final class Main implements AppMain
         $c['market.list'] = fn (array $p) => $this->marketList((string)($p['q'] ?? ''));
         $c['market.install'] = fn (array $p) => $this->marketInstall((string)($p['id'] ?? ''), isset($p['version']) ? (string)$p['version'] : null,
             ($p['via'] ?? '') === 'update' ? 'update' : 'install');
+        // the engine extensions of Packagist (Tools > Engine Extensions…)
+        $c['extensions.list'] = fn (array $p) => $this->extensionsList((string)($p['q'] ?? ''));
         // a mark (1 to 5) and, for the user's own plugins, their statistics
         $c['market.rate'] = fn (array $p) => self::deferred($this->playground->request('POST', '/api/ide/plugins/' . rawurlencode((string)($p['id'] ?? '')) . '/rating',
             ['score' => (int)($p['score'] ?? 0)]));
@@ -609,6 +619,21 @@ final class Main implements AppMain
     }
 
     /** jumphp.net's IDE plugins (its public API: no sign-in needed). */
+    /** Packagist's packages of type jumphp-extension (https://packagist.org/search.json), what jumphp.net/extensions lists too. */
+    private function extensionsList(string $query): Deferred
+    {
+        $url = 'https://packagist.org/search.json?' . http_build_query(['type' => 'jumphp-extension', 'q' => $query, 'per_page' => 30]);
+        return $this->processes->start(['curl', '-sS', '--max-time', '20', '-H', 'Accept: application/json', '-A', 'jumphp-ide', $url], sys_get_temp_dir())['done']
+            ->then(function (array $r) {
+                $data = json_decode((string)$r['stdout'], true);
+                if ($r['code'] !== 0 || !is_array($data) || !isset($data['results'])) {
+                    throw new \RuntimeException('Packagist cannot be reached: ' . trim((string)($r['stderr'] ?: $r['stdout'])));
+                }
+                return array_map(fn (array $x) => ['name' => (string)$x['name'], 'description' => (string)($x['description'] ?? ''), 'url' => (string)($x['url'] ?? ''),
+                    'downloads' => (int)($x['downloads'] ?? 0), 'favers' => (int)($x['favers'] ?? 0)], $data['results']);
+            });
+    }
+
     private function marketList(string $query): Deferred
     {
         $url = $this->playground->server() . '/api/plugins' . ($query !== '' ? '?' . http_build_query(['q' => $query]) : '');
