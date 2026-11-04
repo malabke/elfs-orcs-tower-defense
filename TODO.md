@@ -11,10 +11,11 @@ windows, or the game inside the Tauri window: `app.embed`), one-file export for 
 macOS (workflow `app-export` opens it on two Macs), updates (`app:release`, `JumPHP\Tauri\Updater`), the same app
 in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRuntime`). docs/tauri.md.
 
-- Android / iOS as native apps for DESKTOP (HTML) apps, `ui: webview` (games and graphic apps already have native apps:
-  `bin/jumphp android` and `bin/jumphp apple`, JumPHP 0.4.0; a webview app has its browser version, Android through `bin/jumphp twa`):
-  Tauri's mobile loop is driven by the activity / UIKit, so PHP has to be embedded in the app (the PHP builds of
-  `docker/android-native` / the Apple apps) and called from there (`run_return` does not exist on iOS)
+- Android / iOS as native apps for DESKTOP (HTML) apps, `ui: webview`: done 2026-11-04 (not committed yet): the app's
+  browser build in the phone's WebView + a bridge (save, notify, open, share, clipboard) used by jumphp-app.js;
+  `bin/jumphp android <app>` (tools/android/webview; tried in an emulator with hello-desktop: PHP answers, Save as opens
+  the system dialog) and `bin/jumphp ios <app>` (tools/apple/webview/main.m, a WKWebView; NOT tried yet: run the
+  apple workflow once on a webview app and fix). docs/tauri.md, android-native.md, apple.md.
 - the installers (jumphp2installer) offering a "start with the computer" box (the app does it: `$app->autostart()`,
   done; docs/tauri.md)
 - services / daemons in PHP: done 2026-11-04 (JumPHP 0.5.6): project.yaml `service:`, `JumPHP\Service\Daemon`,

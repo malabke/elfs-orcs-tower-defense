@@ -7,6 +7,12 @@ iOS) and OpenAL run inside the app, as on the desktop and in the native Android 
 - **iPhone / iPad**: an `.ipa` (iOS 14 or newer), the on-screen controls (d-pad or joystick, A / B / START) drawn
   by the engine, the game's orientation; and the same app for **Xcode's iOS simulator**.
 
+**A desktop app** (`ui: webview`, [tauri.md](tauri.md)): `bin/jumphp ios <app>` makes an iPhone / iPad app of its
+browser build (made first on GitHub's Linux machines, `bin/jumphp build`) shown by a `WKWebView` from a scheme of its own
+(`jumphp://app/`, inside the app), with a bridge for "save to Files", notifications, links, sharing and the clipboard
+(`tools/apple/webview/main.m`); no PHP to build, so a few minutes. Its Mac app is Tauri's (`bin/jumphp app:export
+<app> --macos`). **Not tried yet** on a Mac: the first run may need fixes.
+
 Building them needs Xcode, so a Mac: the command has **GitHub build them on one of its Macs** (free for a public
 repository), from any computer.
 

@@ -32,7 +32,30 @@ permissions:
   contents: write
 
 jobs:
+  # a desktop app (ui: webview): its browser build (dist/web, Docker: not on GitHub's Macs), shown by the iOS app's WKWebView
+  web:
+    runs-on: ubuntu-latest
+    outputs:
+      webview: ${{ steps.kind.outputs.webview }}
+    env:
+      GAME: ${{ inputs.game || 'pong' }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: kind
+        run: |
+          d="games/$GAME"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
+          y="$d/config/project.yaml"; [ -f "$y" ] || y="$d/config/game.yaml"
+          if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$y"; then echo "webview=1" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.kind.outputs.webview == '1'
+        run: bin/jumphp engine:download && bin/jumphp build "$GAME"
+      - if: steps.kind.outputs.webview == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: ${{ env.GAME_DIR }}/dist/web/
+
   app:
+    needs: web
     runs-on: macos-15
     timeout-minutes: 150
     env:
@@ -53,7 +76,12 @@ jobs:
           coverage: none
 
       - name: Where the project is (games/<id>, else apps/<id>)
-        run: d="$GAME_DIR"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
+        run: d="games/$GAME"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
+      - if: needs.web.outputs.webview == '1'
+        uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: ${{ env.GAME_DIR }}/dist/web/
       - name: Tools (autoconf for PHP's configure)
         run: brew list autoconf >/dev/null 2>&1 || brew install autoconf
 

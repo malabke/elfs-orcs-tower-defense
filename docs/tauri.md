@@ -489,8 +489,14 @@ The app's own files (`$app->storage`, options) live in the browser (IndexedDB), 
 works there as it is; as an Android app, `bin/jumphp twa <app> --url <its page online>` (project.yaml `pwa: true`); on an
 iPhone, Safari's "Add to Home Screen" (PWA). Tried in headless Chrome with `games/hello-desktop`: the greeting from
 PHP, the View menu's check item, the confirm dialog, "Save as" downloading the note PHP wrote, no error.
-A native Tauri app on Android / iOS (the phone's own WebView driving PHP inside the app) is not done: Tauri's mobile
-loop belongs to the activity / UIKit there, PHP would have to be embedded in it.
+**Native phone apps**: `bin/jumphp android <app>` (an `.apk` / `.aab`) and `bin/jumphp ios <app>` (an `.ipa` + the
+simulator's app, built on GitHub's Macs) put this browser build inside the app, shown by the phone's own WebView
+(Android `WebView`, iOS `WKWebView`) from a secure origin of its own, with no network needed. What a page can not do
+goes to the phone through a small bridge that `jumphp-app.js` uses when it is there: "save" = the system's save dialog
+(Android) / "save to Files" (iOS), notifications, links in the browser, sharing, the clipboard; opening files is the
+page's file picker, answered by the system. Android: tried in an emulator with `games/hello-desktop` (the greeting from
+PHP, "Save as" opening the system's dialog). iOS: written the same way, not tried yet. (Tauri's own mobile runtime is
+not used: its loop belongs to the activity / UIKit there.)
 
 ## Updates
 
@@ -628,7 +634,5 @@ Next:
   systemd unit; docs: TODO.md).
 - **Signed apps**: macOS notarization and Windows Authenticode need the developer's certificates (the Apple
   account, a code signing certificate); unsigned, the systems warn the first time.
-- **Android, iOS as native Tauri apps** (the browser version above runs there already): Tauri supports them, but its event loop is driven by the activity / UIKit there (`run_return`
-  does not exist on iOS): PHP would be called from those loops, as the native SDL apps already do; that means a
-  Tauri mobile project embedding JumPHP's PHP build for Android / iOS, its own work.
+- **iOS**: `bin/jumphp ios <app>` (a WKWebView on the browser build) is written but not tried on a Mac yet.
 - More native features as Tauri plugins + `JumPHP\Native` providers.

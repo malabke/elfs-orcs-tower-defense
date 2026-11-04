@@ -9,6 +9,32 @@
 //   save: PHP writes into /tmp/save, the page downloads the file right after the frame that wrote it;
 // - notifications (Notification API), links (a new tab), clipboard (navigator.clipboard).
 // What a page can not do (tray icon, system-wide shortcuts, file paths of the computer) does nothing, quietly.
+// In a native phone app (bin/jumphp android / apple of a desktop app: this page in a WebView / WKWebView), the app's
+// shell does what a page can not: saving a file (the system's "save as"), notifications, links, clipboard, sharing.
+
+// the native shell around this page, if any: Android's window.JumPHPAndroid, iOS's webkit.messageHandlers.jumphp
+const shell = (() => {
+  const a = window.JumPHPAndroid;
+  if (a) {
+    return {save: (name, bytes) => a.save(name, base64(bytes)), notify: (t, b) => a.notify(t, b), open: (u) => a.openUrl(u),
+      share: (t, u) => a.share(t, u), copy: (t) => a.copy(t), paste: () => Promise.resolve(a.paste()), exit: () => a.exit()};
+  }
+  const i = window.webkit?.messageHandlers?.jumphp;
+  if (i) {
+    const post = (op, data = {}) => i.postMessage({op, ...data});
+    return {save: (name, bytes) => post('save', {name, data: base64(bytes)}), notify: (title, body) => post('notify', {title, body}),
+      open: (url) => post('open', {url}), share: (text, url) => post('share', {text, url}), copy: (text) => post('copy', {text}),
+      paste: () => (navigator.clipboard?.readText ? navigator.clipboard.readText() : Promise.reject(new Error('no clipboard'))),
+      exit: () => post('exit')};
+  }
+  return null;
+})();
+function base64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+if (shell && !navigator.share) navigator.share = (d = {}) => Promise.resolve(shell.share(String(d.text || d.title || ''), String(d.url || '')));
 
 const css = `
 #jumphp-app { position: fixed; inset: 0; display: flex; flex-direction: column; background: #fff; color: #222;
@@ -264,6 +290,7 @@ export function install(api) {
       const path = `/tmp/save/${name}`;
       const data = fs.readFile(path);
       fs.unlink(path);
+      if (shell) { shell.save(name, data); continue; }
       const a = el('a', {href: URL.createObjectURL(new Blob([data])), download: name});
       document.body.append(a);
       a.click();
@@ -288,6 +315,7 @@ export function install(api) {
     },
     'app.exit': () => {
       window.saveUserFiles?.();
+      if (shell) { setTimeout(() => shell.exit(), 300); return; }
       root.hidden = true;
       closed.style.display = 'flex';
     },
@@ -314,14 +342,15 @@ export function install(api) {
     'dialog.open': openFiles,
     'dialog.save': (c) => { FS().mkdirTree('/tmp/save'); answer(c.id, '/tmp/save/' + String(c.file_name || 'file').replace(/[\/\\]/g, '_')); },
     'notification.show': (c) => {
+      if (shell) return shell.notify(String(c.title || ''), String(c.body || ''));
       if (window.Notification && Notification.permission === 'granted') new Notification(c.title || '', {body: c.body || ''});
       else if (window.Notification && Notification.permission !== 'denied') Notification.requestPermission().then((p) => (p === 'granted' ? new Notification(c.title || '', {body: c.body || ''}) : toast(c.title, c.body)));
       else toast(c.title, c.body);
     },
-    'opener.url': (c) => /^(https?|mailto):/.test(c.url || '') && window.open(c.url, '_blank', 'noopener'),
+    'opener.url': (c) => /^(https?|mailto):/.test(c.url || '') && (shell ? shell.open(c.url) : window.open(c.url, '_blank', 'noopener')),
     'opener.path': () => {}, 'opener.reveal': () => {},
-    'clipboard.write': (c) => navigator.clipboard?.writeText(String(c.text ?? '')).catch(() => {}),
-    'clipboard.read': (c) => (navigator.clipboard?.readText ? navigator.clipboard.readText() : Promise.reject(new Error('no clipboard')))
+    'clipboard.write': (c) => (shell ? shell.copy(String(c.text ?? '')) : navigator.clipboard?.writeText(String(c.text ?? '')).catch(() => {})),
+    'clipboard.read': (c) => (shell ? shell.paste() : navigator.clipboard?.readText ? navigator.clipboard.readText() : Promise.reject(new Error('no clipboard')))
       .then((text) => send({type: 'result', id: c.id, result: text}), (e) => send({type: 'result', id: c.id, error: String(e.message || e)})),
     'menu.set': (c) => { menus[c.window && c.window !== '*' ? c.window : '*'] = JSON.parse(JSON.stringify(c.menu || [])); renderMenus(); },
     'menu.remove': (c) => { delete menus[c.window && c.window !== '*' ? c.window : '*']; renderMenus(); },

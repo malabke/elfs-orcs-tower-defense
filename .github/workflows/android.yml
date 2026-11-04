@@ -36,12 +36,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Where the project is (games/<id>, else apps/<id>)
-        run: d="$GAME_DIR"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
+        run: d="games/$GAME"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
       - name: The game's vendor/ (composer, the engine from engine/)
         run: |
           test -d "$GAME_DIR" || { echo "no $GAME_DIR"; exit 1; }
           docker run --rm --user "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer -v "$PWD:/app" -w "/app/$GAME_DIR" \
             composer:2.8.12 install --no-dev --no-interaction --no-progress --ignore-platform-reqs
+
+      - name: A desktop app (ui webview) - its browser build, shown by the app's WebView
+        run: |
+          y="$GAME_DIR/config/project.yaml"; [ -f "$y" ] || y="$GAME_DIR/config/game.yaml"
+          if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$y"; then bin/jumphp engine:download && bin/jumphp build "$GAME"; fi
 
       - name: The NDK (the runner's Android SDK)
         run: |

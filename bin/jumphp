@@ -670,6 +670,8 @@ cmd_android() {
 
   if [ "$local_build" = 1 ]; then
     local sdk="$home/android-sdk"
+    # a desktop app (ui: webview): the app is its browser build in a WebView (tools/android/webview)
+    if is_app "$game"; then cmd_build "$game"; fi
     [ -d "$sdk/ndk/29.0.14206865" ] || die "the Android SDK with its NDK is needed in $sdk: run bin/jumphp twa once (it installs the SDK after your yes to its license), then: $sdk/cmdline-tools/latest/bin/sdkmanager --install \"ndk;29.0.14206865\""
     ensure_vendor "$dir"
     mkdir -p "$home/android-native"
@@ -745,6 +747,11 @@ cmd_apple() {
     esac
     shift
   done
+  # a desktop app (ui: webview): iOS here (a WKWebView on its browser build), its Mac app is Tauri's (app:export --macos)
+  if is_app "$game"; then
+    [[ "$platforms" != *macos* ]] || die "$game is a desktop app: its Mac app is bin/jumphp app:export $game --macos"
+    platforms="${platforms:-ios}"
+  fi
   platforms="$(echo "${platforms:-macos ios}" | xargs)"
   [ "$local_build" = 1 ] || [ ! -L "$ROOT/$dir" ] || die "$game is kept in its own repository: GitHub's Macs build from a JumPHP project (put the game in one), or --local on a Mac"
   local state="$ROOT/$dir/apple/app.json" build=0
@@ -771,6 +778,7 @@ cmd_apple() {
   if [ "$local_build" = 1 ]; then
     [ "$(uname)" = Darwin ] || die "--local builds on a Mac with Xcode; elsewhere, without --local: on GitHub's Macs"
     [ -f "$ROOT/$dir/vendor/autoload.php" ] || (cd "$ROOT/$dir" && composer install --no-dev --no-interaction --ignore-platform-reqs)
+    if is_app "$game"; then cmd_build "$game"; fi
     GAME="$game" PLATFORMS="$platforms" BUNDLE_ID="$bundle" VERSION="$version" BUILD="$build" bash "$ROOT/tools/apple/build.sh"
     bash "$ROOT/tools/apple/check.sh" "$game" "$platforms"
     say "done: $dir/dist/apple/ (screenshots in check/)"
@@ -961,6 +969,8 @@ cmd_installer() {
   local where; case "$target" in github) where="GitHub release of $repo" ;; standalone) where="standalone: the game inside" ;; *) where="$url" ;; esac
   say "$dir: the installer ($list, v$version, $where)"
   local args=(--target "$target" --version "$version" --platforms "$list" --publisher "$(git -C "$ROOT" config user.name 2>/dev/null || true)")
+  # a "start with the computer" box (project.yaml app.autostart) when the base installers know the step (0.2.9+)
+  grep -q 'stepAutostart' "$ROOT/.cache/installer-bases/jumphp2installer-linux-x86_64" && args+=(--autostart 1)
   case "$target" in github) args+=(--repo "$repo") ;; dir) args+=(--url "$url") ;; esac
   php_run . -- php -d phar.readonly=0 tools/game-installer.php "$dir" .cache/installer-bases "${args[@]}"
   local out="$ROOT/$dir/dist/installer"

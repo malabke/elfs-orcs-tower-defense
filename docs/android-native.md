@@ -4,6 +4,12 @@
 OpenGL ES and OpenAL run inside the app, as on the desktop; the on-screen controls (d-pad or joystick, A / B /
 START) are drawn by the engine. Phones (arm64-v8a) and emulators / Chromebooks (x86_64), Android 8.0 or newer.
 
+**A desktop app** (`ui: webview`, [tauri.md](tauri.md)): the same command makes an app of its browser build (`bin/jumphp
+build`, done by the command) shown by Android's WebView from `https://appassets.androidplatform.net/` (inside the app,
+no network), with a bridge for the system's save dialog, notifications, links, sharing and the clipboard
+(`tools/android/webview`); no NDK, a few minutes. Output: `dist/android-native/<app>-<version>.apk` / `.aab`, the same
+package, key and Google Play steps as a game. Tried in an emulator with `games/hello-desktop`.
+
 (The other way, `bin/jumphp twa`, puts the game's web page in Chrome: [docs/android.md](android.md). With the
 same package and key, the native app replaces the TWA on Google Play as a new version.)
 

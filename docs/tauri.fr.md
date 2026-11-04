@@ -287,4 +287,5 @@ glisser-déposer, fermeture décidée par PHP, jeux hybrides, tests sans fenêtr
 macOS, mises à jour.
 
 Ensuite : la signature des apps (certificats du développeur), Android et iOS (la boucle y est pilotée par
-l'activité / UIKit : un projet mobile Tauri embarquant le PHP d'Android / iOS de JumPHP, un chantier en soi), d'autres fonctions natives.
+l'activité / UIKit ; à la place, `bin/jumphp android <app>` et `bin/jumphp ios <app>` mettent la version navigateur de
+l'app dans la WebView du téléphone, voir docs/tauri.md ; Android essayé, iOS pas encore), d'autres fonctions natives.

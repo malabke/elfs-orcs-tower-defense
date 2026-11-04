@@ -1086,7 +1086,8 @@ bin/jumphp build notes               # dist/web/: the same app in a web page (we
   docs/services.md).
 - Platforms: Linux (Docker commands), Windows and macOS (the workflow `tauri` builds and tries the library there,
   `app-export` opens the exported .app on two Macs). `tauri:download` fetches the library of these sources. In the
-  browser: windows become frames, menus a bar, dialogs HTML, save = download, no tray / global shortcuts.
+  browser: windows become frames, menus a bar, dialogs HTML, save = download, no tray / global shortcuts. Phones:
+  `bin/jumphp android <app>` / `bin/jumphp ios <app>` = that browser build in the phone's WebView (iOS not tried yet).
 - Don'ts: no SDL / `Engine` in an app (it has no SDL window); no blocking calls; never write outside `var/` (the
   user's data folder once exported) except files the user chose in a dialog.
 
