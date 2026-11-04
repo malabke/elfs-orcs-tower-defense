@@ -378,7 +378,7 @@ webview_bundle() {
   say "the app for $t (a WKWebView on dist/web)"
   rm -rf "${dest:?}" && mkdir -p "$app"
   xcrun --sdk "$SDK" clang -fobjc-arc -O2 -target "$TRIPLE" -isysroot "$(xcrun --sdk "$SDK" --show-sdk-path)" \
-    -framework UIKit -framework WebKit -framework UserNotifications -framework Foundation \
+    -framework UIKit -framework WebKit -framework UserNotifications -framework Foundation -framework CoreGraphics \
     "$HERE/webview/main.m" -o "$app/$ID" || die "the WebView app failed to build for $t"
   cp -R "$GAME_DIR/dist/web" "$app/web"
   cat > "$app/Info.plist" <<EOF
