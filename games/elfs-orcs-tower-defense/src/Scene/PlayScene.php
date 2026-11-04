@@ -108,7 +108,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     public function exit(): void
     {
         if ($this->use3d) {
-            $this->engine->gl()->disable();
+            $this->world->shutdown($this->engine->gl());
             $this->use3d = false;
         }
     }
@@ -119,7 +119,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
         $gl = $this->engine->gl();
         $this->use3d = $wanted && $this->world->boot($gl);
         if (!$this->use3d) {
-            $gl->disable();
+            $this->world->shutdown($gl);
             $this->cam = new FlatView(self::MAP_Y);
             $this->rig = null;
             return;
@@ -888,7 +888,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     /** The 3D layer (ground, towers, creatures, shots, glows), then the 2D over it: bars, banner, ring menu, HUD. */
     private function render3d(Renderer $r): void
     {
-        $r->clear(World3d::CLEAR);
+        $r->clear($this->world->clearColour());
         if ($this->rig === null) {
             return;
         }
@@ -1698,11 +1698,12 @@ final class PlayScene extends AbstractScene implements HotReloadable
         $scale = Text::fitScale($font, $title, $w - 40, 1.7);
         $height = $font->lineHeight($scale) + ($line !== '' ? Text::height($font, $line, $w - 60) + 4 : 0) + 12;
         $y = self::MAP_Y + 56;
-        // a ribbon of ink over the land, edged with gold, fading in and out with its text
-        $a = (int)(255 * $alpha);
-        $r->fillRect(0, $y, $w, $height, [20, 26, 46, (int)(200 * $alpha)]);
-        $r->fillRect(0, $y, $w, 1, [214, 176, 92, (int)(220 * $alpha)]);
-        $r->fillRect(0, $y + $height - 1, $w, 1, [214, 176, 92, (int)(220 * $alpha)]);
+        // a ribbon of ink over the land, edged with gold, fading in and out with its text (over a key-coloured 3D
+        // layer: a black ribbon and opaque text, see World3d)
+        $a = Paint::$keyed ? 255 : (int)(255 * $alpha);
+        $r->fillRect(0, $y, $w, $height, World3d::veil([20, 26, 46, (int)(200 * $alpha)]));
+        Paint::round($r, 0, $y, $w, 1, 0, [214, 176, 92, (int)(220 * $alpha)]);
+        Paint::round($r, 0, $y + $height - 1, $w, 1, 0, [214, 176, 92, (int)(220 * $alpha)]);
         $font->draw($r, $title, $w / 2, $y + 5, $scale, [255, 225, 130, $a], 'center', [40, 22, 10, $a]);
         if ($line !== '') {
             Text::draw($r, $font, $line, $w / 2, $y + 8 + $font->lineHeight($scale), $w - 60, [232, 236, 244, $a], 'center', [16, 20, 36, $a]);

@@ -3,12 +3,15 @@
 namespace App\Ui;
 
 use JumPHP\Renderer\Renderer;
+use JumPHP\Util\Color;
 
 /**
  * The look of the interface, like the 3D battle: a storybook. Rounded panels of deep ink blue edged with gold,
  * wooden buttons, round medallions, and icons drawn with shapes (sharp at any size with the renderer's HD:
  * every edge is cut at the real pixels of the view texture). Colours are [r, g, b] or [r, g, b, a]: over the 3D
- * any colour can be translucent (the layer is composed by the 2D's alpha).
+ * any colour can be translucent (the layer is composed by the 2D's alpha). On an engine that shows the 3D through a
+ * key colour ($keyed, set by World3d), only black may be translucent over it: faint colours are left out, nearly
+ * opaque ones made opaque.
  */
 final class Paint
 {
@@ -20,11 +23,28 @@ final class Paint
     public const GOLD = [244, 204, 92];
     public const CREAM = [250, 238, 212];
 
+    /** The 3D layer under the 2D is shown through a key colour (an engine without alpha composing). */
+    public static bool $keyed = false;
+
     // ---- shapes -------------------------------------------------------------------------------------------------
+
+    /** A colour that can be drawn over the 3D now (null: leave it out). @return array{0: int, 1: int, 2: int, 3: int}|null */
+    public static function fit(array|string $color): ?array
+    {
+        $c = Color::of($color);
+        if (!self::$keyed || $c->a >= 255 || ($c->r === 0 && $c->g === 0 && $c->b === 0)) {
+            return [$c->r, $c->g, $c->b, $c->a];
+        }
+        return $c->a < 128 ? null : [$c->r, $c->g, $c->b, 255];
+    }
 
     /** A rounded rectangle of one colour (a translucent one is even: no part is drawn twice). */
     public static function round(Renderer $r, float $x, float $y, float $w, float $h, float $radius, array|string $color): void
     {
+        $color = self::fit($color);
+        if ($color === null) {
+            return;
+        }
         $rad = max(0.0, min($radius, $w / 2, $h / 2));
         if ($rad <= 0) {
             $r->fillRect($x, $y, $w, $h, $color);
@@ -32,7 +52,7 @@ final class Paint
         }
         $r->fillRect($x, $y + $rad, $w, $h - 2 * $rad, $color);
         // the top and bottom bands, row by row of real pixels: their ends follow the corners
-        $k = max(1, $r->hd());
+        $k = Hd::factor($r);
         $rows = (int)ceil($rad * $k);
         $row = $rad / $rows;
         for ($i = 0; $i < $rows; $i++) {
@@ -46,10 +66,14 @@ final class Paint
     /** A filled triangle (rows of real pixels). @param array{0: float, 1: float} $a */
     public static function triangle(Renderer $r, array $a, array $b, array $c, array|string $color): void
     {
+        $color = self::fit($color);
+        if ($color === null) {
+            return;
+        }
         $pts = [$a, $b, $c];
         usort($pts, static fn (array $p, array $q) => $p[1] <=> $q[1]);
         [$p0, $p1, $p2] = $pts;
-        $k = max(1, $r->hd());
+        $k = Hd::factor($r);
         $step = 1 / $k;
         $edgeX = static function (array $u, array $v, float $y): float {
             $dy = $v[1] - $u[1];
@@ -131,7 +155,11 @@ final class Paint
         if ($part <= 0) {
             return;
         }
-        $k = max(1, $r->hd());
+        $color = self::fit($color);
+        if ($color === null) {
+            return;
+        }
+        $k = Hd::factor($r);
         $rows = (int)ceil(2 * $radius * $k * $part);
         for ($i = 0; $i < $rows; $i++) {
             $y = -$radius + $i / $k;

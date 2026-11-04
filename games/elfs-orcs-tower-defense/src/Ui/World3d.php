@@ -13,9 +13,11 @@ use JumPHP\Gl\WebGl;
  * The battle's 3D layer (WebGL in the browser, OpenGL on the desktop), painted like a storybook: one shader for
  * everything, the map built once as one buffer, and every tower, creature and projectile a model (one buffer each,
  * built the first time it is asked for) drawn with its own matrix. The 2D scene draws over it, composed by its
- * alpha: scenes clear the 2D with CLEAR (transparent) and whatever they draw over it (smooth text, translucent
- * panels of any colour) lies over the 3D as it is. The layer is at the view texture's resolution: with the
- * renderer's HD (game.yaml `hd: auto`) that is the window's.
+ * alpha: scenes clear the 2D with clearColour() (transparent) and whatever they draw over it (smooth text,
+ * translucent panels of any colour) lies over the 3D as it is. The layer is at the view texture's resolution: with
+ * the renderer's HD (game.yaml `hd: auto`) that is the window's. On an engine that cannot compose by alpha (the
+ * playground's shared engine before it has this project's changes: see Hd) the 3D shows through the key colour KEY
+ * instead: clearColour() is KEY, veil() turns translucent colours black, Paint::$keyed tells the interface.
  *
  * The shader reads the vertex's material (Mesh::$mat): the ground is painted from the map's GroundMap texture
  * (grass patches, the road with a wobbly edge, water with glints, soft shadows) and a tiling noise texture
@@ -27,8 +29,10 @@ use JumPHP\Gl\WebGl;
  */
 final class World3d
 {
-    /** What the 2D picture is cleared with where the 3D shows: transparent. */
+    /** What the 2D picture is cleared with where the 3D shows: transparent (alpha composing). */
     public const CLEAR = [0, 0, 0, 0];
+    /** ... or this key colour, on an engine without alpha composing. */
+    public const KEY = [255, 0, 255];
 
     private const VERTEX = <<<'GLSL'
         attribute vec3 a_pos;
@@ -199,7 +203,10 @@ final class World3d
         $this->light = [$x / $len, $y / $len, $z / $len];
     }
 
-    /** Turns the 3D layer on (below the 2D, composed by its alpha, smoothed). False without WebGL / OpenGL. */
+    /**
+     * Turns the 3D layer on (below the 2D, composed by its alpha, or through KEY on an older engine; smoothed).
+     * False without WebGL / OpenGL.
+     */
     public function boot(WebGl $gl): bool
     {
         if (!$gl->isAvailable()) {
@@ -213,9 +220,34 @@ final class World3d
         if ($this->prog === 0) {
             return false;
         }
-        $gl->setLayer('below', 'view', null);
+        if (Hd::alphaLayers()) {
+            $gl->setLayer('below', 'view', null);
+            Paint::$keyed = false;
+        } else {
+            $gl->setLayer('below', 'native', self::KEY);
+            Paint::$keyed = true;
+        }
         $gl->setSupersample(2);
         return true;
+    }
+
+    /** The 3D layer off (a scene that showed it ends). */
+    public function shutdown(WebGl $gl): void
+    {
+        $gl->disable();
+        Paint::$keyed = false;
+    }
+
+    /** What the 2D must be cleared with where the 3D shows. @return int[] */
+    public function clearColour(): array
+    {
+        return Paint::$keyed ? self::KEY : self::CLEAR;
+    }
+
+    /** A translucent colour laid over the 3D: as it is, or black over a key-coloured layer (only black darkens it well). */
+    public static function veil(array $rgba): array
+    {
+        return Paint::$keyed ? [0, 0, 0, $rgba[3] ?? 255] : $rgba;
     }
 
     /** Builds the land of a map (once per map and side's colours). */

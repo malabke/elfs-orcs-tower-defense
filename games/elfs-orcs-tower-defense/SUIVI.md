@@ -21,17 +21,22 @@ Dernière mise à jour : 2026-11-04.
   écrans de choix avec de vraies images de la 3D (`assets/sprites/cards/`). La 3D est composée par la transparence
   de la 2D (plus de couleur clé magenta).
 - **Publication** : le dépôt GitHub `malabke/elfs-orcs-tower-defense` est celui du playground : **pousser sur `main`
-  publie le jeu**. Le 2026-11-04 l'utilisateur a demandé de tout pousser, mais **GitHub a refusé (403)** : sur ce PC
-  git se connecte avec le compte `clement-cdy`, qui n'a pas les droits sur `malabke/...`. Rien n'est donc encore sur
-  GitHub depuis la création du dépôt : à pousser (`git push origin main`) une fois le bon compte connecté ou
-  `clement-cdy` ajouté comme collaborateur. Le jeu n'est pas listé dans l'annuaire du playground
-  (`update_project listed=true` : seulement sur demande). Pour un état de travail sans publier : une autre branche.
-  Sur un autre PC : `git pull` (après le push).
+  publie le jeu** (https://jumphp.net/elfs-orcs-tower-defense, pas listé dans l'annuaire : `update_project
+  listed=true` seulement sur demande). Poussé le 2026-11-04 (« pousse tout ») : l'URL du dépôt contient le compte
+  `malabke` (`https://malabke@github.com/...`) pour que Git Credential Manager prenne ce compte et pas `clement-cdy`.
+  Pour un état de travail sans publier : une autre branche. Sur un autre PC : `git pull`.
+- **Le playground n'utilise pas le moteur de ce dépôt** mais son moteur partagé (la version officielle de `VERSION`,
+  0.4.0) : les ajouts faits au moteur ici (2D en HD, composition par transparence, options de TtfFont) n'y sont pas.
+  Le jeu le détecte (`src/Ui/Hd.php`) et y garde l'ancienne manière : police pixel, 3D par couleur clé (vérifié avec
+  `build:remote` + `JUMPHP_WEB=remote webshot`). Pour avoir l'interface HD sur le playground, il faudrait que JumPHP
+  intègre ces changements du moteur (une contribution au projet JumPHP) : à proposer à l'utilisateur.
 
 ## En cours / à faire
 
-1. Interface HD faite, vérifiée (tests du jeu 161 + test de fumée, moteur 74 + phpstan, version navigateur dans
-   Chrome) et commitée (`7e773b9` moteur, `44f43d7` jeu). **Push refusé (403)** : voir « Publication ».
+1. Interface HD faite, vérifiée et poussée (`7e773b9` moteur, `44f43d7` jeu) ; le playground la montre à l'ancienne
+   (police pixel) faute du moteur à jour, voir « Publication ». Le premier push a cassé le jeu sur le playground
+   (constante `TtfFont::BOLD` absente de son moteur) : corrigé par `Hd` et le repli, à garder en tête (toujours
+   vérifier avec le moteur partagé avant de pousser).
 2. Encore en pixel art : les créatures des cartes de peuple, les icônes de tours du menu en anneau, le portrait du
    héros et l'aperçu de la vague dans la barre du haut.
 3. Idées proposées, pas encore demandées : vignettes 3D vivantes dans les menus, animations d'attaque, particules.
@@ -64,5 +69,6 @@ Dernière mise à jour : 2026-11-04.
 
 - 2026-11-02 / 03 : jalons 1 à 4, site, équilibrage ; passage à la 3D WebGL.
 - 2026-11-04 : style peint « livre d'images » (commits `9edac44`, `8ff2691`) ; correctif moteur des textures
-  (`GL_UNPACK_ROW_LENGTH`) ; interface HD avec Nunito et `Paint` ; fichier de suivi `SUIVI.md` ; push refusé
-  (403, compte `clement-cdy` sans droits sur le dépôt).
+  (`GL_UNPACK_ROW_LENGTH`) ; interface HD avec Nunito et `Paint` ; fichier de suivi `SUIVI.md` ; premier push (après
+  un refus 403 : mauvais compte GitHub) ; le jeu plantait sur le playground (moteur partagé sans les ajouts) :
+  repli compatible (`Hd`, police pixel, couleur clé) et nouveau push.

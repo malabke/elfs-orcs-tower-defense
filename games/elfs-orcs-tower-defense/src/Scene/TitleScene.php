@@ -54,7 +54,7 @@ final class TitleScene extends GameMenuScene
             $this->rig = new Rig((float)$this->width(), (float)$this->height());
             $this->road = Path::fromTiles($this->map['paths'][0]);
         } else {
-            $this->engine->gl()->disable();
+            $this->world->shutdown($this->engine->gl());
         }
     }
 
@@ -62,7 +62,7 @@ final class TitleScene extends GameMenuScene
     {
         parent::exit();
         if ($this->use3d) {
-            $this->engine->gl()->disable();
+            $this->world->shutdown($this->engine->gl());
             $this->use3d = false;
         }
     }
@@ -100,7 +100,7 @@ final class TitleScene extends GameMenuScene
 
     protected function rowBand(): array
     {
-        return $this->use3d ? [20, 26, 46, 170] : parent::rowBand();
+        return $this->use3d ? World3d::veil([20, 26, 46, 170]) : parent::rowBand();
     }
 
     protected function renderBackground(Renderer $r): void
@@ -128,7 +128,7 @@ final class TitleScene extends GameMenuScene
     private function render3d(Renderer $r): void
     {
         $t = $this->time;
-        $r->clear(World3d::CLEAR);
+        $r->clear($this->world->clearColour());
         $this->rig->orbit([240.0 + 70.0 * sin($t * 0.07), 0.0, 112.0], 440.0, 43.0, 0.1 * sin($t * 0.045));
         $w = $this->world;
         $w->begin($this->rig, $t);
@@ -155,10 +155,10 @@ final class TitleScene extends GameMenuScene
                 -atan2($dz, $dx), 2.0);
         }
         // a veil of evening blue over the land so that the menu reads well, deeper towards the title, in soft steps
-        $r->fillRect(0, 0, $this->width(), $this->height(), [12, 16, 34, 70]);
+        $r->fillRect(0, 0, $this->width(), $this->height(), World3d::veil([12, 16, 34, 70]));
         $band = $this->height() * 0.03;
         foreach ([70, 62, 54, 46, 39, 32, 26, 20, 15, 10, 6, 3] as $i => $alpha) {
-            $r->fillRect(0, $i * $band, $this->width(), $band, [12, 16, 34, $alpha]);
+            $r->fillRect(0, $i * $band, $this->width(), $band, World3d::veil([12, 16, 34, $alpha]));
         }
     }
 }

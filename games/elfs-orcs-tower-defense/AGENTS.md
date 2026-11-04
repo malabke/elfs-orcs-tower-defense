@@ -48,8 +48,15 @@ drawing when WebGL is missing or the param `view: flat` is given (the long logic
 To look at the models: `tests/ModelShotsTest.php` builds every tower of each side at level 1, 3 and specialized
 (`var/screenshots/tests/towers-<side>.png`; crop them with GD to look closer).
 The 2D is HD (game.yaml `hd: auto`: drawn at the window's resolution, coordinates unchanged) and the 3D layer is composed
-by the 2D's alpha (`setLayer('below', 'view', null)`): scenes clear the 2D with `World3d::CLEAR` (transparent), then any
-colour, translucent or not, and smooth text lie over the 3D as they are.
+by the 2D's alpha (`setLayer('below', 'view', null)`): scenes clear the 2D with `$world->clearColour()` (transparent),
+then any colour, translucent or not, and smooth text lie over the 3D as they are.
+**The playground does not run this repository's engine** but its shared one (the official release of `VERSION`): the
+engine changes of this project (HD, alpha composing, TtfFont's style / thicken / outline) are not there until JumPHP
+releases them. `App\Ui\Hd` detects what the engine can do; without it the game keeps the retro way: the pixel font
+(`FontProvider::PIXEL_FONT`), the 3D through the key colour `World3d::KEY` (`Paint::$keyed`: only black may be
+translucent over it, `World3d::veil()`). `tests/LegacyEngineTest.php` plays that way (`Hd::$legacy`); check the real
+thing with `bin/jumphp build:remote <id>` then `JUMPHP_WEB=remote bin/jumphp webshot <id>` (build/runtime: the shared
+engine as released). Never call an engine method this project added without going through `Hd`.
 Things to remember: `crc32()` is signed and products overflow in the browser's 32-bit PHP
 (mask to 16 bits: `Mesh::hash()`); the 16-bit depth buffer needs a far near plane (`Rig::NEAR`); the browser builds the
 map mesh too (PHP has 128 MB there: keep a map under 100k vertices, ViewTest checks it); no uniform may be declared in both
@@ -108,9 +115,10 @@ the bot play every side and prints lives / gold per wave and the enemies that go
   `tests/TranslationsTest.php` fails on a missing or unused key. `App\Ui\Text` wraps / fits text to a width.
 - **Fonts** (`App\Ui\FontProvider`): `assets/fonts/Nunito.ttf` (Google Fonts' variable file, OFL: `Nunito-OFL.txt`;
   10 px, Latin + Cyrillic; its default instance is the thinnest weight, so it is made bold and thickened, its shadow drawn
-  as an outline) and `assets/fonts/unifont.otf` (16 px, CJK, OFL / GPL with font exception). **Without these files the
-  built-in bitmap font is used** (upper-case ASCII: accents dropped, CJK not shown). `MixedFont` draws CJK runs with the
-  fallback (its line metrics are the main font's).
+  as an outline) when the engine has HD, else `PressStart2P-Regular.ttf` (8 px, pixel); `assets/fonts/unifont.otf`
+  (16 px, CJK, OFL / GPL with font exception). **Without these files the built-in bitmap font is used** (upper-case
+  ASCII: accents dropped, CJK not shown). `MixedFont` draws CJK runs with the fallback (its line metrics are the main
+  font's).
 - **Controls** (`config/input.yaml`): mouse / touch: click a stone platform → a ring of 4 choices (first click shows
   it, second does it); keys / pad: arrows jump between platforms, confirm opens the ring, arrows pick a choice,
   confirm again does it, back closes; N / pad Y calls the next wave (gold bonus), F / Tab / pad X speed x1-x3,
