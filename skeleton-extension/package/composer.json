@@ -4,8 +4,7 @@
     "type": "jumphp-extension",
     "license": "MIT",
     "require": {
-        "php": ">=8.2",
-        "jumphp/engine": "*"
+        "php": ">=8.2"
     },
     "autoload": {
         "psr-4": { "JumphpExtensions\\SkeletonExtension\\": "src/" }

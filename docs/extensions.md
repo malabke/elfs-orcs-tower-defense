@@ -54,8 +54,30 @@ bin/jumphp shot star-field-demo
   config key, README.md, AGENTS.md: replace them with your subsystem.
 - `games/star-field-demo/`: a game requiring it through a path repository (`../../extensions/star-field`): it shows
   the extension and its `tests/` play it (GameTestCase). Develop both together.
-- Publish: a GitHub repository of its own holding the package, then Packagist (rename `name` in composer.json first:
-  `<your-vendor>/<package>`); a game then `bin/jumphp composer <game> require <your-vendor>/<package>`.
+- Publish: see below.
+
+## Publishing an extension
+
+Packagist serves a package from a repository with its `composer.json` at the root, its versions being the git tags.
+
+**Your own extension**: a public GitHub repository holding `extensions/<id>/`'s content at its root (rename `name`
+first: `<your-vendor>/<package>`, keep `"type": "jumphp-extension"`), a tag (`git tag v1.0.0 && git push --tags`), then
+https://packagist.org/packages/submit with the repository's address (signed in with GitHub, Packagist installs its hook:
+each new tag is a new version). Games then `bin/jumphp extension:add <game> <your-vendor>/<package>`, and
+https://jumphp.net/extensions lists it (it reads Packagist's `jumphp-extension` packages). Do not require
+`jumphp/engine`: it is not on Packagist, and every JumPHP project already has it (`../../engine`).
+
+**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`): developed here in `extensions/<id>`, split to
+one read-only repository each, `davidnurdin/jumphp-<id>`, by `.github/workflows/extensions-split.yml` on each release
+tag `v*` (the split gets the same tag) — the same as `tools/extensions-publish.sh --push`. Without `--push` the script is
+a dry run: the splits go to `.build/extensions-split/<id>.git`, to look at or to require through a `vcs` repository.
+
+Once, to set it up:
+1. create the three empty public repositories `davidnurdin/jumphp-particles`, `jumphp-physics`, `jumphp-shorts`;
+2. a fine-grained token (GitHub > Settings > Developer settings) with *Contents: read and write* on these three, saved as
+   the JumPHP repository's secret `EXTENSIONS_SPLIT_TOKEN`;
+3. run the workflow once (Actions > extensions-split > Run workflow, or the next `v*` tag);
+4. submit each repository on https://packagist.org/packages/submit.
 
 ## The particles extension
 

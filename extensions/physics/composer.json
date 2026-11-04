@@ -3,20 +3,39 @@
     "description": "A small 2D physics engine for JumPHP: balls, rings and arcs (rotating, opening, growing, shrinking, with gaps), pegs, walls; gravity, restitution, collision events; fixed step, seeded, 32-bit safe",
     "type": "jumphp-extension",
     "license": "MIT",
+    "keywords": [
+        "jumphp",
+        "jumphp-extension",
+        "game",
+        "physics"
+    ],
+    "homepage": "https://jumphp.net/extensions/physics",
+    "support": {
+        "source": "https://github.com/davidnurdin/jumPhp/tree/main/extensions/physics",
+        "issues": "https://github.com/davidnurdin/jumPhp/issues"
+    },
     "require": {
-        "php": ">=8.2",
-        "jumphp/engine": "*"
+        "php": ">=8.2"
     },
     "autoload": {
-        "psr-4": { "JumPHP\\Physics2d\\": "src/" }
+        "psr-4": {
+            "JumPHP\\Physics2d\\": "src/"
+        }
     },
     "extra": {
         "jumphp": {
             "name": "Physics",
-            "services": ["JumPHP\\Physics2d\\World"],
+            "services": [
+                "JumPHP\\Physics2d\\World"
+            ],
             "config": {
                 "physics": {
-                    "default": { "gravity": 600, "restitution": 1.0, "hz": 240, "seed": 1 },
+                    "default": {
+                        "gravity": 600,
+                        "restitution": 1.0,
+                        "hz": 240,
+                        "seed": 1
+                    },
                     "doc": "Physics: gravity (px/s², down), restitution (1 = no energy lost), hz = steps a second (fixed), seed (same seed, same run)"
                 }
             }

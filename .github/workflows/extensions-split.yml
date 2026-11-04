@@ -1,0 +1,32 @@
+# JumPHP's own engine extensions (extensions/<id>) pushed to one read-only repository each
+# (davidnurdin/jumphp-<id>), where Packagist reads them: each JumPHP release tag becomes their version.
+# Needs the secret EXTENSIONS_SPLIT_TOKEN: a fine-grained token with "Contents: read and write" on those repositories
+# (docs/extensions.md "Publishing an extension"). Without it (a fork), the job says so and does nothing.
+name: extensions-split
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The version tag to put on the splits (default: v<VERSION>)'
+        required: false
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Split and push extensions/<id>
+        env:
+          TOKEN: ${{ secrets.EXTENSIONS_SPLIT_TOKEN }}
+          TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "::warning::no EXTENSIONS_SPLIT_TOKEN secret: nothing pushed"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          export JUMPHP_EXTENSIONS_REMOTE="https://x-access-token:${TOKEN}@github.com/davidnurdin/jumphp-{id}.git"
+          tools/extensions-publish.sh --push ${TAG:+--tag "$TAG"}

@@ -3,20 +3,40 @@
     "description": "Vertical videos (TikTok, Shorts, Reels) made from a JumPHP scene: melodies played by collisions, the sound mixed offline, bin/jumphp video:make renders the frames and the MP4",
     "type": "jumphp-extension",
     "license": "MIT",
+    "keywords": [
+        "jumphp",
+        "jumphp-extension",
+        "game",
+        "shorts"
+    ],
+    "homepage": "https://jumphp.net/extensions/shorts",
+    "support": {
+        "source": "https://github.com/davidnurdin/jumPhp/tree/main/extensions/shorts",
+        "issues": "https://github.com/davidnurdin/jumPhp/issues"
+    },
     "require": {
-        "php": ">=8.2",
-        "jumphp/engine": "*"
+        "php": ">=8.2"
     },
     "autoload": {
-        "psr-4": { "JumPHP\\Shorts\\": "src/" }
+        "psr-4": {
+            "JumPHP\\Shorts\\": "src/"
+        }
     },
     "extra": {
         "jumphp": {
             "name": "Shorts",
-            "services": ["JumPHP\\Shorts\\Recorder"],
+            "services": [
+                "JumPHP\\Shorts\\Recorder"
+            ],
             "config": {
                 "video": {
-                    "default": { "scene": null, "params": {}, "seconds": 30, "scale": 4, "title": "" },
+                    "default": {
+                        "scene": null,
+                        "params": {},
+                        "seconds": 30,
+                        "scale": 4,
+                        "title": ""
+                    },
                     "doc": "bin/jumphp video:make: scene (the scene rendered, its params get seed / seconds / template), seconds, scale (view x scale = the video's size: 270x480 x 4 = 1080x1920), title"
                 }
             }
