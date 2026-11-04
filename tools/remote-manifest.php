@@ -38,6 +38,59 @@ foreach ($it as $file) {
     copy($file->getPathname(), "$out/files/$path");
     $files[] = ['path' => $path, 'hash' => substr(hash_file('sha256', $file->getPathname()), 0, 16), 'size' => $file->getSize()];
 }
+
+// the game's engine extensions (Composer type jumphp-extension) and the packages they need that the shared engine has
+// not: copied under vendor-extensions/ with a Composer-like installed.json (JumPHP\Extension\Extensions finds them)
+$installed = json_decode((string)@file_get_contents("$game/vendor/composer/installed.json"), true) ?: [];
+$installed = array_column($installed['packages'] ?? $installed, null, 'name');
+$shared = runtimePackages("$runtime/jumphp-vendor.pack");
+$wanted = [];
+$add = function (string $name) use (&$add, &$wanted, $installed, $shared): void {
+    if (isset($wanted[$name]) || isset($shared[$name]) || $name === 'jumphp/engine' || !isset($installed[$name])) {
+        return;
+    }
+    $wanted[$name] = $installed[$name];
+    foreach (array_keys($installed[$name]['require'] ?? []) as $dep) {
+        $add((string)$dep);
+    }
+};
+foreach ($installed as $name => $p) {
+    if (($p['type'] ?? '') === 'jumphp-extension') {
+        $add((string)$name);
+    }
+}
+$extensions = [];
+foreach ($wanted as $name => $p) {
+    $dir = realpath("$game/vendor/composer/" . ($p['install-path'] ?? "../$name"));
+    if ($dir === false) {
+        fwrite(STDERR, "$name: not installed (bin/jumphp install)\n");
+        exit(1);
+    }
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS));
+    foreach ($it as $file) {
+        $rel = substr($file->getPathname(), strlen($dir) + 1);
+        if (!$file->isFile() || preg_match('#^(vendor|tests|\.git[^/]*)(/|$)#', $rel)) {
+            continue;
+        }
+        $path = "vendor-extensions/$name/$rel";
+        @mkdir(dirname("$out/files/$path"), 0777, true);
+        copy($file->getPathname(), "$out/files/$path");
+        $files[] = ['path' => $path, 'hash' => substr(hash_file('sha256', $file->getPathname()), 0, 16), 'size' => $file->getSize()];
+    }
+    foreach ((array)($p['autoload']['psr-4'] ?? []) as $prefix => $dirs) {
+        foreach ((array)$dirs as $d) {
+            $autoload[$prefix][] = rtrim("vendor-extensions/$name/" . trim((string)$d, '/'), '/') . '/';
+        }
+    }
+    $extensions[] = ['name' => $name, 'type' => $p['type'] ?? 'library', 'version' => $p['version'] ?? 'dev',
+        'extra' => $p['extra'] ?? new stdClass(), 'install-path' => $name];
+}
+if ($extensions) {
+    $json = json_encode(['packages' => $extensions], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+    @mkdir("$out/files/vendor-extensions", 0777, true);
+    file_put_contents("$out/files/vendor-extensions/installed.json", $json);
+    $files[] = ['path' => 'vendor-extensions/installed.json', 'hash' => substr(hash('sha256', $json), 0, 16), 'size' => strlen($json)];
+}
 usort($files, fn (array $a, array $b) => strcmp($a['path'], $b['path']));
 
 $version = json_decode((string)file_get_contents("$runtime/version.json"), true);
@@ -78,3 +131,21 @@ $html = strtr(file_get_contents("$runtime/page.html"), [
 ]);
 file_put_contents("$out/index.html", $html);
 printf("remote game: %s (%d files)\n", $out, count($files));
+
+/** @return array<string, true> the Composer packages inside the shared engine's jumphp-vendor.pack */
+function runtimePackages(string $pack): array
+{
+    $data = (string)@file_get_contents($pack);
+    if (strlen($data) < 8 || substr($data, 0, 4) !== 'JPK1') {
+        return [];
+    }
+    $length = unpack('V', substr($data, 4, 4))[1];
+    $header = json_decode(substr($data, 8, $length), true) ?: [];
+    foreach ($header['files'] ?? [] as [$path, $offset, $size]) {
+        if ($path === 'composer/installed.json') {
+            $installed = json_decode(substr($data, 8 + $length + $offset, $size), true) ?: [];
+            return array_fill_keys(array_column($installed['packages'] ?? $installed, 'name'), true);
+        }
+    }
+    return [];
+}

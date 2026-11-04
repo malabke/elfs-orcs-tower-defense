@@ -67,19 +67,9 @@ particular 3D engine (voxels, a raycaster, a mode-7 plane), a dialogue / quest s
   `bin/jumphp extension:add <game> <vendor/pkg>`), filled from Packagist by their type (`jumphp-extension`)
 - a project kind of its own: "JumPHP extension" (New Project in the IDE, `bin/jumphp extension:new`: a repository
   ready for Packagist, its example game, its tests, its IDE plugin), next to games, apps and IDE plugins
-- the playground's shared engine loading the extensions a published game requires (today a game's own Composer
-  packages are not supported there)
-
-## CLI apps on jumphp.net: a real terminal in the browser (interactive like on the desktop)
-
-Done (2026-11-04, not deployed yet): PHP runs in a Web Worker (jumphp-playground `public/cli/terminal-worker.js`) and waits
-for what is typed through a SharedArrayBuffer (the CLI page sends COOP / COEP / Document-Isolation-Policy); questions
-(line edited and echoed by the page, Ctrl+D / Ctrl+C = end of input, twice Ctrl+C = the command stopped), full-screen
-symfony/tui screens (`skeleton-cli/src/Ui/WebTerminal.php` + `WebLoop.php`, a Revolt loop without fibers), docs. Tried in
-headless Chrome (puppeteer 24.10, Chrome 137): hello-cli's `add` question answered, its `ui` screen driven by arrows /
-Enter / q, Ctrl+C, top level and inside a frame; the fallback without isolation. No engine rebuild.
-
-Left:
+- done (2026-11-04, not released yet): the playground's shared engine loads the extensions a published game requires
+  (installed at publish, no scripts / plugins, served beside the game; build:remote joins them). Left: the extensions'
+  directory on jumphp.net, bin/jumphp extension:add, run_tests installing them
 - hidden answers (Symfony's `askHidden`: `stty -echo`) are shown as typed: a way for the app to tell the page
 - browsers without Document-Isolation-Policy (Firefox, Safari): inside the playground's frame they get a link to a tab of
   its own; try them for real

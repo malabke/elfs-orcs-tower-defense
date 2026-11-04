@@ -55,6 +55,22 @@ final class ExtensionsTest extends TestCase
         self::assertTrue($c->has(Extensions::class));
     }
 
+    public function testARemoteGameFindsItsExtensionsInVendorExtensions(): void
+    {
+        $root = $this->root . '/remote';
+        mkdir("$root/vendor/composer", 0777, true);
+        mkdir("$root/vendor-extensions");
+        // the shared engine's own vendor/: no extension there
+        file_put_contents("$root/vendor/composer/installed.json", json_encode(['packages' => [['name' => 'symfony/yaml', 'type' => 'library']]]));
+        file_put_contents("$root/vendor-extensions/installed.json", json_encode(['packages' => [
+            ['name' => 'acme/rain', 'type' => 'jumphp-extension', 'install-path' => 'acme/rain', 'extra' => ['jumphp' => ['name' => 'Rain']]],
+        ]]));
+        $found = Extensions::discover($root);
+        self::assertCount(1, $found);
+        self::assertSame('Rain', $found[0]['name']);
+        self::assertSame("$root/vendor-extensions/acme/rain", $found[0]['dir']);
+    }
+
     public function testAGameWithoutExtensionsHasNone(): void
     {
         self::assertSame([], Extensions::discover(sys_get_temp_dir() . '/jumphp-no-such-game'));

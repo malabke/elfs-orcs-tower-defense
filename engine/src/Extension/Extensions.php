@@ -48,18 +48,22 @@ final class Extensions
         if (isset(self::$found[$root])) {
             return self::$found[$root];
         }
-        $file = $root . '/vendor/composer/installed.json';
-        $data = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
-        $packages = is_array($data) ? ($data['packages'] ?? $data) : [];
+        // the game's vendor/ (desktop, browser build), and vendor-extensions/ (a remote game: the playground or
+        // build:remote hand its extensions over beside the shared engine, whose vendor/ is not the game's)
         $list = [];
-        foreach ($packages as $p) {
-            if (!is_array($p) || ($p['type'] ?? '') !== 'jumphp-extension') {
-                continue;
+        foreach (['vendor/composer' => 'vendor', 'vendor-extensions' => 'vendor-extensions'] as $at => $vendor) {
+            $file = "$root/$at/installed.json";
+            $data = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
+            foreach (is_array($data) ? ($data['packages'] ?? $data) : [] as $p) {
+                if (!is_array($p) || ($p['type'] ?? '') !== 'jumphp-extension' || !is_string($p['name'] ?? null) || isset($list[$p['name']])) {
+                    continue;
+                }
+                $jumphp = is_array($p['extra']['jumphp'] ?? null) ? $p['extra']['jumphp'] : [];
+                $dir = isset($p['install-path']) ? "$root/$at/" . $p['install-path'] : "$root/$vendor/" . $p['name'];
+                $list[$p['name']] = ['name' => (string)($jumphp['name'] ?? $p['name']), 'package' => $p['name'], 'dir' => rtrim($dir, '/'), 'jumphp' => $jumphp];
             }
-            $jumphp = is_array($p['extra']['jumphp'] ?? null) ? $p['extra']['jumphp'] : [];
-            $dir = isset($p['install-path']) ? $root . '/vendor/composer/' . $p['install-path'] : $root . '/vendor/' . $p['name'];
-            $list[] = ['name' => (string)($jumphp['name'] ?? $p['name']), 'package' => (string)$p['name'], 'dir' => rtrim($dir, '/'), 'jumphp' => $jumphp];
         }
+        $list = array_values($list);
         usort($list, fn ($a, $b) => strcmp($a['package'], $b['package']));
         return self::$found[$root] = $list;
     }
