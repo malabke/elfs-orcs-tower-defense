@@ -65,7 +65,7 @@ final class Text
         return count(self::wrap($font, $text, $maxWidth, $scale)) * self::lineStep($font, $scale);
     }
 
-    /** From one line to the next: the font's own line skip, at most its height + 3 px (Press Start 2P's is twice its height). */
+    /** From one line to the next: the font's own line skip, at most its height + 3 px (some fonts' skip is twice their height). */
     public static function lineStep(TextDrawer $font, float $scale = 1): int
     {
         return min($font->lineHeight($scale), $font->height($scale) + (int)round(3 * $scale));

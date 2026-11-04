@@ -10,6 +10,7 @@ use App\Td\GameData;
 use App\Td\Hero;
 use App\Td\Tower;
 use App\Ui\FontProvider;
+use App\Ui\Paint;
 use App\Ui\Sfx;
 use App\Ui\Sprites;
 use App\Ui\Text;
@@ -887,7 +888,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     /** The 3D layer (ground, towers, creatures, shots, glows), then the 2D over it: bars, banner, ring menu, HUD. */
     private function render3d(Renderer $r): void
     {
-        $r->clear(World3d::KEY);
+        $r->clear(World3d::CLEAR);
         if ($this->rig === null) {
             return;
         }
@@ -1107,8 +1108,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     {
         $bar = function (float $x, float $y, float $height, float $ratio, float $width, array $fill) use ($r): void {
             [$sx, $sy] = $this->cam->screen($x, $y, $height);
-            $r->fillRect($sx - $width / 2 - 1, $sy - 1, $width + 2, 4, [20, 10, 10]);
-            $r->fillRect($sx - $width / 2, $sy, $width * max(0.0, min(1.0, $ratio)), 2, $fill);
+            Paint::bar($r, $sx - $width / 2, $sy, $width, 2, $ratio, $fill);
         };
         foreach ($this->battle->enemies as $e) {
             if ($e->hp < $e->maxHp && !$e->isUnderground() && ($e->isTargetable() || $e->isStealthy())) {
@@ -1211,26 +1211,22 @@ final class PlayScene extends AbstractScene implements HotReloadable
         foreach ($this->mapButtons() as $b) {
             $x = $b['x'];
             $y = $b['y'];
-            $active = $this->aim === $b['id'];
-            $r->fillCircle($x, $y, $b['r'], $active ? [255, 220, 90] : [20, 16, 24]);
-            $r->fillCircle($x, $y, $b['r'] - 2, [70, 60, 50]);
+            Paint::medallion($r, $x, $y, $b['r'], $this->aim === $b['id']);
             $hero = $this->battle->hero;
             if ($b['id'] === 'hero' && $hero !== null) {
                 $def = $hero->def;
                 $this->sprites->drawEnemy($r, (string)$def['sprite'], 0, $x, $y, false);
                 $wait = $hero->isAlive() ? $hero->skillTimer / max(1.0, (float)$def['skill']['cooldown']) : 1.0;
-                if (!$hero->isAlive()) {
-                    $this->font()->draw($r, (string)(int)ceil($hero->respawn), $x, $y - $this->font()->height() / 2, 1, [255, 120, 100], 'center', [0, 0, 0]);
-                }
             } else {
-                [$iw, $ih] = $this->sprites->iconSize('star');
-                $this->sprites->drawIcon($r, 'star', $x - $iw, $y - $ih, 2);
+                Paint::icon($r, 'star', $x, $y, 15);
                 $wait = $this->battle->powerTimer / max(1.0, (float)$this->battle->power()['cooldown']);
             }
             if ($wait > 0) {
-                // the part still to wait, darkened from the top
-                $size = 2 * ($b['r'] - 2);
-                $r->fillRect($x - $size / 2, $y - $size / 2, $size, $size * min(1.0, $wait), [0, 0, 0, 140]);
+                // the part still to wait, darkened from the top of the round button
+                Paint::discTop($r, $x, $y, $b['r'] - 1.5, $wait, [0, 0, 0, 140]);
+            }
+            if ($b['id'] === 'hero' && $hero !== null && !$hero->isAlive()) {
+                $this->font()->draw($r, (string)(int)ceil($hero->respawn), $x, $y - $this->font()->height() / 2, 1, [255, 150, 130], 'center', [40, 10, 10]);
             }
         }
     }
@@ -1442,23 +1438,21 @@ final class PlayScene extends AbstractScene implements HotReloadable
         foreach ($this->ringOptions($slot) as $option) {
             $x = $option['x'];
             $y = $option['y'];
-            $chosen = $option['id'] === $this->choice;
-            $r->fillCircle($x, $y, 12, $chosen ? [255, 220, 90] : [20, 16, 24]);
-            $r->fillCircle($x, $y, 10, $option['enabled'] ? [70, 60, 50] : [50, 44, 44]);
+            Paint::medallion($r, $x, $y, 12, $option['id'] === $this->choice, $option['enabled']);
             if ($option['tower'] !== null) {
                 $def = $this->data->tower($option['tower']);
                 $this->sprites->drawTower($r, (string)$def['sprite'], 1, null, $x, $y + 9, 0.5);
             } else {
-                [$iw, $ih] = $this->sprites->iconSize($option['icon']);
-                $this->sprites->drawIcon($r, $option['icon'], $x - $iw, $y - $ih, 2);
+                Paint::icon($r, $option['icon'], $x, $y, 13);
             }
             if ($option['cost'] !== null) {
                 $text = ($option['id'] === 'sell' ? '+' : '') . $option['cost'];
-                $color = $option['id'] === 'sell' ? [160, 240, 140] : ($option['enabled'] ? [255, 220, 90] : [220, 80, 70]);
-                $ty = $y + 9;
-                $tw = $this->font()->width($text);
-                $r->fillRect($x - $tw / 2 - 2, $ty - 1, $tw + 4, $this->font()->lineHeight() + 1, [10, 8, 12]);
-                $this->font()->draw($r, $text, $x, $ty, 1, $color, 'center');
+                $color = $option['id'] === 'sell' ? [170, 244, 150] : ($option['enabled'] ? [255, 226, 120] : [244, 120, 104]);
+                $font = $this->font();
+                $tw = $font->width($text);
+                $th = $font->height();
+                Paint::round($r, $x - $tw / 2 - 3, $y + 9, $tw + 6, $th + 1, ($th + 1) / 2, [24, 16, 12, 220]);
+                $font->draw($r, $text, $x, $y + 9.5, 1, $color, 'center');
             }
         }
         $this->drawInfo($r, $slot);
@@ -1493,8 +1487,8 @@ final class PlayScene extends AbstractScene implements HotReloadable
         [$sx, $sy] = $this->cam->screen($this->battle->slots[$slot]['x'], $this->battle->slots[$slot]['y']);
         $x = $sx < $this->width() / 2 ? $this->width() - $panelW - 4 : 4;
         $y = $sy < $this->height() / 2 ? $this->height() - $height - 4 : self::MAP_Y + 4;
-        $r->fillRect($x, $y, $panelW, $height, [14, 12, 20]);
-        $r->drawRect($x, $y, $panelW, $height, $this->colors['main'] ?? [80, 160, 90]);
+        Paint::panel($r, $x, $y, $panelW, $height);
+        $r->fillRect($x + 6, $y + 1, $panelW - 12, 1, $this->colors['main'] ?? [80, 160, 90]);
         $ty = $y + 5;
         foreach ($lines as [$text, $color]) {
             $ty += Text::draw($r, $font, $text, $x + 6, $ty, $inner, $color) + 2;
@@ -1610,25 +1604,30 @@ final class PlayScene extends AbstractScene implements HotReloadable
     {
         $w = $this->width();
         $font = $this->font();
-        $r->fillRect(0, 0, $w, self::MAP_Y, [30, 24, 20]);
-        $r->fillRect(0, self::MAP_Y - 2, $w, 2, $this->colors['dark'] ?? [30, 80, 50]);
+        // a wooden bar, its soft shadow on the land, a thread of the side's colour
+        $r->fillRect(0, self::MAP_Y, $w, 2, [0, 0, 0, 80]);
+        $r->fillRect(0, self::MAP_Y + 2, $w, 3, [0, 0, 0, 34]);
+        $r->fillRect(0, 0, $w, self::MAP_Y, Paint::WOOD_DARK);
+        $r->fillRect(0, 0, $w, self::MAP_Y - 1.5, [96, 62, 38]);
+        $r->fillRect(0, 0, $w, 12, [114, 76, 46]);
+        $r->fillRect(0, 0.5, $w, 0.75, [255, 236, 200, 40]);
+        $r->fillRect(0, self::MAP_Y - 1.5, $w, 1.5, $this->colors['main'] ?? [60, 140, 80]);
         $ty = 15 - $font->height() / 2;
-        $x = 6;
-        $this->sprites->drawIcon($r, 'heart', $x, 8, 2);
-        $x += 17;
-        $font->draw($r, (string)$this->battle->lives, $x, $ty, 1, [255, 170, 180], 'left', [0, 0, 0]);
-        $x += max(18, $font->width((string)$this->battle->lives)) + 8;
-        $this->sprites->drawIcon($r, 'coin', $x, 9, 2);
-        $x += 15;
-        $font->draw($r, (string)$this->battle->gold, $x, $ty, 1, [255, 220, 90], 'left', [0, 0, 0]);
-        $x += max(26, $font->width((string)$this->battle->gold)) + 8;
-        $this->sprites->drawIcon($r, 'flag', $x, 8, 2);
-        $x += 17;
-        $wave = Lang::t('WAVE {n}', ['n' => $this->battle->waveIndex . '/' . $this->battle->waveCount()]);
-        $font->draw($r, $wave, $x, $ty, 1, [230, 230, 230], 'left', [0, 0, 0]);
-        $left = $x + $font->width($wave) + 8;
+        // lives, gold, the wave: each in a dark pill
+        $x = 4;
+        $pill = function (string $icon, string $text, array $color, float $min) use ($r, $font, $ty, &$x): void {
+            $tw = max($min, $font->width($text));
+            Paint::round($r, $x, 6, $tw + 26, 18, 9, [20, 12, 8, 120]);
+            Paint::icon($r, $icon, $x + 10, 15, 11);
+            $font->draw($r, $text, $x + 19, $ty, 1, $color, 'left', [30, 16, 10]);
+            $x += $tw + 30;
+        };
+        $pill('heart', (string)$this->battle->lives, [255, 196, 202], 12);
+        $pill('coin', (string)$this->battle->gold, [255, 226, 120], 20);
+        $pill('flag', Lang::t('WAVE {n}', ['n' => $this->battle->waveIndex . '/' . $this->battle->waveCount()]), [244, 238, 226], 0);
+        $left = $x;
         if ($this->battle->hard) {
-            $this->sprites->drawIcon($r, 'skull', $left, 9, 2);
+            Paint::icon($r, 'skull', $left + 6, 15, 11);
             $left += 16;
         }
 
@@ -1636,21 +1635,20 @@ final class PlayScene extends AbstractScene implements HotReloadable
         foreach ($this->hudButtons() as $b) {
             $enabled = $b['id'] !== 'call' || $this->battle->canCallWave();
             $hover = $mouse->x >= $b['x'] && $mouse->x < $b['x'] + $b['w'] && $mouse->y >= $b['y'] && $mouse->y < $b['y'] + $b['h'];
-            $r->fillRect($b['x'], $b['y'], $b['w'], $b['h'], [12, 10, 10]);
-            $r->fillRect($b['x'] + 1, $b['y'] + 1, $b['w'] - 2, $b['h'] - 2, !$enabled ? [50, 46, 44] : ($hover ? [110, 90, 60] : [80, 64, 44]));
+            Paint::button($r, $b['x'], $b['y'] + 1, $b['w'], $b['h'] - 2, $enabled, $hover, $b['id'] === 'speed' && $this->speed > 1);
             $cy = $b['y'] + $b['h'] / 2;
             if ($b['id'] === 'pause') {
-                $this->sprites->drawIcon($r, 'pause', $b['x'] + 8, $cy - 5, 2);
+                Paint::icon($r, 'pause', $b['x'] + $b['w'] / 2, $cy, 10);
             } elseif ($b['id'] === 'speed') {
-                $font->draw($r, 'x' . $this->speed, $b['x'] + $b['w'] / 2, $cy - $font->height() / 2, 1, $this->speed > 1 ? [255, 220, 90] : [230, 230, 230], 'center');
+                $font->draw($r, 'x' . $this->speed, $b['x'] + $b['w'] / 2, $cy - $font->height() / 2, 1, $this->speed > 1 ? [255, 226, 120] : [244, 238, 226], 'center', [40, 22, 12]);
             } else {
-                $this->sprites->drawIcon($r, 'play', $b['x'] + 6, $cy - 5, 2);
-                $font->draw($r, $this->callLabel(), $b['x'] + 20, $cy - $font->height() / 2, 1, $enabled ? [255, 240, 200] : [140, 130, 120]);
+                Paint::icon($r, 'play', $b['x'] + 11, $cy, 9);
+                $font->draw($r, $this->callLabel(), $b['x'] + 20, $cy - $font->height() / 2, 1, $enabled ? [255, 242, 214] : [196, 186, 176], 'left', [40, 22, 12]);
                 $left = $this->drawPreview($r, $left, $b['x'] - 4);
                 if ($enabled && $this->battle->countdown !== null) {
                     // the time left, as a bar under the button
                     $total = $this->battle->waveIndex === 0 ? (float)($this->params['countdown'] ?? $this->map['first_wave']) : 25.0;
-                    $r->fillRect($b['x'] + 1, $b['y'] + $b['h'] - 3, ($b['w'] - 2) * min(1.0, $this->battle->countdown / max(1.0, $total)), 2, [255, 220, 90]);
+                    Paint::bar($r, $b['x'] + 4, $b['y'] + $b['h'] - 4, $b['w'] - 8, 1.5, min(1.0, $this->battle->countdown / max(1.0, $total)), Paint::GOLD);
                 }
             }
         }
@@ -1697,15 +1695,17 @@ final class PlayScene extends AbstractScene implements HotReloadable
         }
         $font = $this->font();
         $w = $this->width();
-        $scale = Text::fitScale($font, $title, $w - 40, max(1, round(16 / max(1, $font->height()))));
+        $scale = Text::fitScale($font, $title, $w - 40, 1.7);
         $height = $font->lineHeight($scale) + ($line !== '' ? Text::height($font, $line, $w - 60) + 4 : 0) + 12;
         $y = self::MAP_Y + 56;
-        $r->fillRect(0, $y, $w, $height, [0, 0, 0, (int)(190 * $alpha)]);   // black: it darkens the 3D under it
-        // opaque text: over the 3D (keyed by a colour) a translucent colour would be tinted by it
-        $a = 255;
-        $font->draw($r, $title, $w / 2, $y + 6, $scale, [255, 225, 120, $a], 'center', [0, 0, 0, $a]);
+        // a ribbon of ink over the land, edged with gold, fading in and out with its text
+        $a = (int)(255 * $alpha);
+        $r->fillRect(0, $y, $w, $height, [20, 26, 46, (int)(200 * $alpha)]);
+        $r->fillRect(0, $y, $w, 1, [214, 176, 92, (int)(220 * $alpha)]);
+        $r->fillRect(0, $y + $height - 1, $w, 1, [214, 176, 92, (int)(220 * $alpha)]);
+        $font->draw($r, $title, $w / 2, $y + 5, $scale, [255, 225, 130, $a], 'center', [40, 22, 10, $a]);
         if ($line !== '') {
-            Text::draw($r, $font, $line, $w / 2, $y + 8 + $font->lineHeight($scale), $w - 60, [220, 230, 240, $a], 'center', [0, 0, 0, $a]);
+            Text::draw($r, $font, $line, $w / 2, $y + 8 + $font->lineHeight($scale), $w - 60, [232, 236, 244, $a], 'center', [16, 20, 36, $a]);
         }
     }
 }

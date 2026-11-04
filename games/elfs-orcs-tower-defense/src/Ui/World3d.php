@@ -12,8 +12,10 @@ use JumPHP\Gl\WebGl;
 /**
  * The battle's 3D layer (WebGL in the browser, OpenGL on the desktop), painted like a storybook: one shader for
  * everything, the map built once as one buffer, and every tower, creature and projectile a model (one buffer each,
- * built the first time it is asked for) drawn with its own matrix. The 2D scene draws over it: the layer shows
- * wherever the 2D picture is the key colour (KEY), so overlays must be opaque or black-translucent.
+ * built the first time it is asked for) drawn with its own matrix. The 2D scene draws over it, composed by its
+ * alpha: scenes clear the 2D with CLEAR (transparent) and whatever they draw over it (smooth text, translucent
+ * panels of any colour) lies over the 3D as it is. The layer is at the view texture's resolution: with the
+ * renderer's HD (game.yaml `hd: auto`) that is the window's.
  *
  * The shader reads the vertex's material (Mesh::$mat): the ground is painted from the map's GroundMap texture
  * (grass patches, the road with a wobbly edge, water with glints, soft shadows) and a tiling noise texture
@@ -25,8 +27,8 @@ use JumPHP\Gl\WebGl;
  */
 final class World3d
 {
-    /** The colour the 2D picture is cleared with where the 3D shows. */
-    public const KEY = [255, 0, 255];
+    /** What the 2D picture is cleared with where the 3D shows: transparent. */
+    public const CLEAR = [0, 0, 0, 0];
 
     private const VERTEX = <<<'GLSL'
         attribute vec3 a_pos;
@@ -197,7 +199,7 @@ final class World3d
         $this->light = [$x / $len, $y / $len, $z / $len];
     }
 
-    /** Turns the 3D layer on (below the 2D, window resolution, smoothed). False without WebGL / OpenGL. */
+    /** Turns the 3D layer on (below the 2D, composed by its alpha, smoothed). False without WebGL / OpenGL. */
     public function boot(WebGl $gl): bool
     {
         if (!$gl->isAvailable()) {
@@ -211,7 +213,7 @@ final class World3d
         if ($this->prog === 0) {
             return false;
         }
-        $gl->setLayer('below', 'native', self::KEY);
+        $gl->setLayer('below', 'view', null);
         $gl->setSupersample(2);
         return true;
     }

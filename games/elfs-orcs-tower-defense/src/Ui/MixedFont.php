@@ -46,14 +46,15 @@ final class MixedFont implements TextDrawer
         return $max;
     }
 
+    /** The main font's: the fallback only writes a few words in another script (the names of languages). */
     public function height(float $scale = 1): int
     {
-        return max($this->main->height($scale), $this->fallback->height($scale));
+        return $this->main->height($scale);
     }
 
     public function lineHeight(float $scale = 1): int
     {
-        return max($this->main->lineHeight($scale), $this->fallback->lineHeight($scale));
+        return $this->main->lineHeight($scale);
     }
 
     public static function isCjk(string $char): bool

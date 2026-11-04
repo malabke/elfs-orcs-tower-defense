@@ -48,7 +48,16 @@ final class ModelShotsTest extends GameTestCase
         $this->game->run(40);
         (new \ReflectionProperty(PlayScene::class, 'banners'))->setValue($this->game->scene(), []);
         $this->game->run(2);
-        $this->game->shot("towers-$faction");
+        $file = $this->game->shot("towers-$faction");
+        // where the towers at level 3 stand in the picture: tools/site/make.php cuts them out for the side's card
+        $scene = $this->game->scene();
+        $k = (imagesx(imagecreatefrompng($file)) ?: 960) / $this->game->engine->sdl->getRenderer()->getWidth();
+        $spots = [];
+        foreach ([4, 5, 6, 7] as $slot) {
+            [$sx, $sy] = $scene->screenOf($battle->slots[$slot]['x'], $battle->slots[$slot]['y']);
+            $spots[] = [round($sx * $k), round($sy * $k)];
+        }
+        file_put_contents(dirname($file) . "/towers-$faction.json", json_encode($spots));
         self::assertCount(12, $battle->towers());
     }
 }

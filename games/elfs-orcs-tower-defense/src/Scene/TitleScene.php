@@ -100,7 +100,7 @@ final class TitleScene extends GameMenuScene
 
     protected function rowBand(): array
     {
-        return $this->use3d ? [0, 0, 0, 120] : parent::rowBand();
+        return $this->use3d ? [20, 26, 46, 170] : parent::rowBand();
     }
 
     protected function renderBackground(Renderer $r): void
@@ -128,7 +128,7 @@ final class TitleScene extends GameMenuScene
     private function render3d(Renderer $r): void
     {
         $t = $this->time;
-        $r->clear(World3d::KEY);
+        $r->clear(World3d::CLEAR);
         $this->rig->orbit([240.0 + 70.0 * sin($t * 0.07), 0.0, 112.0], 440.0, 43.0, 0.1 * sin($t * 0.045));
         $w = $this->world;
         $w->begin($this->rig, $t);
@@ -154,12 +154,11 @@ final class TitleScene extends GameMenuScene
             $w->draw("u:$sprite:$frame", static fn () => Units::build($sprite, $frame), $x, $flying ? 15.0 + sin($t * 5 + $i) * 1.5 : 0.3, $z,
                 -atan2($dz, $dx), 2.0);
         }
-        // pure black over the 3D: it darkens it (any other colour would be tinted by the key); darker towards the
-        // title, in soft steps
-        $r->fillRect(0, 0, $this->width(), $this->height(), [0, 0, 0, 70]);
-        $band = $this->height() * 0.06;
-        foreach ([60, 48, 36, 26, 17, 9] as $i => $alpha) {
-            $r->fillRect(0, (int)($i * $band), $this->width(), (int)ceil($band), [0, 0, 0, $alpha]);
+        // a veil of evening blue over the land so that the menu reads well, deeper towards the title, in soft steps
+        $r->fillRect(0, 0, $this->width(), $this->height(), [12, 16, 34, 70]);
+        $band = $this->height() * 0.03;
+        foreach ([70, 62, 54, 46, 39, 32, 26, 20, 15, 10, 6, 3] as $i => $alpha) {
+            $r->fillRect(0, $i * $band, $this->width(), $band, [12, 16, 34, $alpha]);
         }
     }
 }

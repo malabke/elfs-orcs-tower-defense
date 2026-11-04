@@ -68,7 +68,9 @@ final class VictoryScene extends GameMenuScene
         // the stars, one after the other
         for ($i = 0; $i < 3; $i++) {
             $earned = $i < $this->stars && $this->time > 0.3 + $i * 0.35;
-            $this->sprites->drawIcon($r, $earned ? 'star' : 'star_off', $this->width() / 2 - 48 + $i * 34, $this->height() * 0.42, 3);
+            // each star grows in when it is won
+            $grow = $earned ? min(1.0, ($this->time - 0.3 - $i * 0.35) * 6) : 1.0;
+            \App\Ui\Paint::icon($r, $earned ? 'star' : 'star_off', $this->width() / 2 - 34 + $i * 34, $this->height() * 0.42 + 13, 28 * (0.6 + 0.4 * $grow));
         }
     }
 }

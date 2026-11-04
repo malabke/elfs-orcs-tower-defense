@@ -1,7 +1,8 @@
 # elfs-orcs-tower-defense — notes for agents
 
 This game is built with JumPHP. **Read `../../AGENTS.md` first** (rules, commands, API), then `BRIEF.md` (what the
-game must become, milestone by milestone).
+game must become, milestone by milestone), then **`SUIVI.md`** (where the work stands, the user's decisions, what comes
+next: in French; keep it up to date after each step, the user works from several computers).
 
 ## Checklist
 
@@ -46,8 +47,10 @@ overlays (ring menu, bars, numbers, HUD) through `$this->cam`; `render3d()` draw
 drawing when WebGL is missing or the param `view: flat` is given (the long logic tests use it: Mesa's software GL is slow).
 To look at the models: `tests/ModelShotsTest.php` builds every tower of each side at level 1, 3 and specialized
 (`var/screenshots/tests/towers-<side>.png`; crop them with GD to look closer).
-Things to remember: over the 3D (keyed by magenta) 2D overlays must be opaque, or pure black with alpha (it darkens the 3D;
-any other translucent colour is tinted by the key); `crc32()` is signed and products overflow in the browser's 32-bit PHP
+The 2D is HD (game.yaml `hd: auto`: drawn at the window's resolution, coordinates unchanged) and the 3D layer is composed
+by the 2D's alpha (`setLayer('below', 'view', null)`): scenes clear the 2D with `World3d::CLEAR` (transparent), then any
+colour, translucent or not, and smooth text lie over the 3D as they are.
+Things to remember: `crc32()` is signed and products overflow in the browser's 32-bit PHP
 (mask to 16 bits: `Mesh::hash()`); the 16-bit depth buffer needs a far near plane (`Rig::NEAR`); the browser builds the
 map mesh too (PHP has 128 MB there: keep a map under 100k vertices, ViewTest checks it); no uniform may be declared in both
 shaders (their precisions differ in WebGL: link error); offsets that grow with time (clouds, water) are wrapped in PHP
@@ -57,10 +60,14 @@ Engine fix made for this game (engine/src/Gl/OpenGl.php `textureFromRgba`): desk
 so a texture made after SDL had updated one of its own was read with wrong rows (the second battle of a session had a
 scrambled ground); it is reset to 0 around the upload now.
 The title screen is 3D too (`TitleScene::render3d()`: the first map, elf towers, the horde walking the road, a camera
-drifting with `Rig::orbit()`; flat 2D without WebGL or with `view: flat`); its veil and the selected row's band are pure
-black translucent (`GameMenuScene::rowBand()`).
-Still pixel art (to redo): the side and map screens' background maps (`Sprites::drawMap`) and card pictures, the ring
-menu's tower icons, the hero / power buttons, the HUD icons and the font (Press Start 2P).
+drifting with `Rig::orbit()`; flat 2D without WebGL or with `view: flat`).
+The interface's look (`App\Ui\Paint`, storybook like the 3D): rounded panels of ink blue edged with gold, wooden buttons
+and header bars, round medallions, an evening-sky backdrop, and icons drawn with shapes (heart, coin, flag, skull, stars,
+lock, pause / play, up, target, sell): sharp at any size in HD. The side and map screens show pictures of the 3D game
+(`assets/sprites/cards/side-<side>.png`, `map-<map>.png`, drawn smoothed by `Sprites::drawPicture()`), cut by
+`tools/site/make.php` from the test frames (ModelShotsTest writes where the towers stand: `towers-<side>.json`).
+Still pixel art (to redo): the creatures on the side cards, the ring menu's tower icons, the hero's portrait and the next
+wave's preview in the top bar.
 
 Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
 `bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the
@@ -99,9 +106,11 @@ the bot play every side and prints lives / gold per wave and the enemies that go
   replaces any generated picture. **Sounds**: `src/Ui/Sfx.php` (Synth; `assets/sfx/<name>.wav` replaces one).
 - **Text**: every string goes through `Lang::t()`; `config/lang.yaml` has the 13 other languages;
   `tests/TranslationsTest.php` fails on a missing or unused key. `App\Ui\Text` wraps / fits text to a width.
-- **Fonts** (`App\Ui\FontProvider`): `assets/fonts/PressStart2P-Regular.ttf` (8 px, Latin + Cyrillic, OFL) and
-  `assets/fonts/unifont.otf` (16 px, CJK, OFL / GPL with font exception). **Without these files the built-in bitmap
-  font is used** (upper-case ASCII: accents dropped, CJK not shown). `MixedFont` draws CJK runs with the fallback.
+- **Fonts** (`App\Ui\FontProvider`): `assets/fonts/Nunito.ttf` (Google Fonts' variable file, OFL: `Nunito-OFL.txt`;
+  10 px, Latin + Cyrillic; its default instance is the thinnest weight, so it is made bold and thickened, its shadow drawn
+  as an outline) and `assets/fonts/unifont.otf` (16 px, CJK, OFL / GPL with font exception). **Without these files the
+  built-in bitmap font is used** (upper-case ASCII: accents dropped, CJK not shown). `MixedFont` draws CJK runs with the
+  fallback (its line metrics are the main font's).
 - **Controls** (`config/input.yaml`): mouse / touch: click a stone platform → a ring of 4 choices (first click shows
   it, second does it); keys / pad: arrows jump between platforms, confirm opens the ring, arrows pick a choice,
   confirm again does it, back closes; N / pad Y calls the next wave (gold bonus), F / Tab / pad X speed x1-x3,

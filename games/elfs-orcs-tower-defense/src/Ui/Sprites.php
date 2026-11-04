@@ -28,6 +28,32 @@ final class Sprites
         $this->root = rtrim($root, '/');
     }
 
+    /** @var array<string, true> pictures of assets/sprites/cards/ that are not there */
+    private array $missing = [];
+
+    /**
+     * Draws a picture of the 3D game (assets/sprites/cards/$name.png, cut from real frames by tools/site/make.php),
+     * smoothed when it is scaled. False when it is not there: draw something else.
+     */
+    public function drawPicture(Renderer $r, string $name, float $x, float $y, float $w, float $h): bool
+    {
+        $sdl = $this->sdl ?? throw new \LogicException('Sprites::attach() first');
+        $key = "picture:$name";
+        if (!$sdl->hasTexture($key)) {
+            $png = "assets/sprites/cards/$name.png";
+            if (isset($this->missing[$name]) || !is_file($this->root . '/' . $png)) {
+                $this->missing[$name] = true;
+                return false;
+            }
+            // linear filtering for this one (SDL reads the hint when it makes a texture)
+            \SDL_SetHint(\SDL_HINT_RENDER_SCALE_QUALITY, '1');
+            $sdl->loadTexture($key, $png);
+            \SDL_SetHint(\SDL_HINT_RENDER_SCALE_QUALITY, '0');
+        }
+        $r->copy($sdl->getTexture($key)['texture'], null, $x, $y, $w, $h);
+        return true;
+    }
+
     /** Draws a texture made by $make() the first time (or loaded from assets/sprites/$file). */
     private function texture(string $name, string $file, callable $make): array
     {

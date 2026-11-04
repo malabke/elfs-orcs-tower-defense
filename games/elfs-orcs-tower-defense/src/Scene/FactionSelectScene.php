@@ -5,6 +5,7 @@ namespace App\Scene;
 use App\Save\Progress;
 use App\Td\GameData;
 use App\Ui\FontProvider;
+use App\Ui\Paint;
 use App\Ui\Sfx;
 use App\Ui\Sprites;
 use App\Ui\Text;
@@ -117,21 +118,22 @@ final class FactionSelectScene extends AbstractScene
     {
         $font = $this->font();
         $w = $this->width();
-        $this->sprites->drawMap($r, 'thornvale', $this->data->map('thornvale'), $this->data->faction($this->factions[$this->selected])['colors'], 0, 30);
-        $r->fillRect(0, 0, $w, $this->height(), [8, 8, 16, 200]);
+        Paint::backdrop($r, $w, $this->height());
+        Paint::header($r, $w, 26, $this->data->faction($this->factions[$this->selected])['colors']['main']);
         $title = Lang::t('CHOOSE YOUR SIDE');
-        $font->draw($r, $title, $w / 2, 8, Text::fitScale($font, $title, $w - 16, $font->height() <= 8 ? 2 : 1), [250, 230, 150], 'center', [0, 0, 0]);
+        $scale = Text::fitScale($font, $title, $w - 16, 1.3);
+        $font->draw($r, $title, $w / 2, 13 - $font->height($scale) / 2, $scale, [255, 228, 150], 'center', [40, 22, 10]);
 
         foreach ($this->factions as $i => $id) {
             $this->drawCard($r, $i, $id);
         }
 
         [$bx, $by, $bw, $bh] = $this->backButton();
-        $r->fillRect($bx, $by, $bw, $bh, [20, 16, 16]);
-        $r->fillRect($bx + 1, $by + 1, $bw - 2, $bh - 2, [70, 56, 40]);
-        $font->draw($r, Lang::t('BACK'), $bx + $bw / 2, $by + $bh / 2 - $font->height() / 2, 1, [240, 230, 210], 'center');
+        $mouse = $this->engine->input->getMouse();
+        Paint::button($r, $bx, $by, $bw, $bh, true, $mouse->x >= $bx && $mouse->x < $bx + $bw && $mouse->y >= $by && $mouse->y < $by + $bh);
+        $font->draw($r, Lang::t('BACK'), $bx + $bw / 2, $by + $bh / 2 - $font->height() / 2, 1, [255, 242, 214], 'center', [40, 22, 12]);
         $hint = Lang::t('PRESS AGAIN TO CONFIRM');
-        Text::draw($r, $font, $hint, $bx + $bw + 12, $by + $bh / 2 - $font->height() / 2, $w - $bw - 28, [160, 160, 170]);
+        Text::draw($r, $font, $hint, $bx + $bw + 12, $by + $bh / 2 - $font->height() / 2, $w - $bw - 28, [196, 200, 216], 'left', [16, 20, 36]);
     }
 
     private function drawCard(Renderer $r, int $i, string $id): void
@@ -141,27 +143,31 @@ final class FactionSelectScene extends AbstractScene
         $colors = $faction['colors'];
         [$x, $y, $w, $h] = $this->card($i);
         $chosen = $i === $this->selected;
-        $r->fillRect($x, $y, $w, $h, $chosen ? $colors['light'] : [20, 18, 26]);
-        $r->fillRect($x + 2, $y + 2, $w - 4, $h - 4, [14, 12, 20, 235]);
-        $r->fillRect($x + 2, $y + 2, $w - 4, 4, $colors['main']);
+        Paint::panel($r, $x, $y, $w, $h, $chosen ? Paint::GOLD : [70, 66, 90], null, 5);
+        Paint::round($r, $x + 3, $y + 3, $w - 6, 4, 2, $colors['main']);
         $inner = $w - 8;
-        $ty = $y + 10;
-        $ty += Text::draw($r, $font, Lang::t($faction['name']), $x + $w / 2, $ty, $inner, [255, 225, 120], 'center') + 4;
+        $ty = $y + 11;
+        $ty += Text::draw($r, $font, Lang::t($faction['name']), $x + $w / 2, $ty, $inner, [255, 226, 130], 'center', [40, 22, 10]) + 4;
 
-        // the four towers, at their best level
-        $towers = $faction['towers'];
-        $tw = $inner / max(1, count($towers));
-        foreach ($towers as $k => $tower) {
-            $scale = min(0.75, $tw / 28);
-            $this->sprites->drawTower($r, (string)$this->data->tower($tower)['sprite'], 3, null, $x + 4 + $tw * ($k + 0.5), $ty + 40 * $scale, $scale);
+        // the four towers at their best level: the picture of their 3D models (or their drawings)
+        $pw = $inner;
+        $ph = $pw * 140 / 400;
+        Paint::round($r, $x + 3, $ty - 1, $pw + 2, $ph + 2, 2, [10, 12, 20]);
+        if (!$this->sprites->drawPicture($r, "side-$id", $x + 4, $ty, $pw, $ph)) {
+            $towers = $faction['towers'];
+            $tw = $inner / max(1, count($towers));
+            foreach ($towers as $k => $tower) {
+                $scale = min(0.75, $tw / 28);
+                $this->sprites->drawTower($r, (string)$this->data->tower($tower)['sprite'], 3, null, $x + 4 + $tw * ($k + 0.5), $ty + 40 * $scale, $scale);
+            }
         }
-        $ty += 34;
+        $ty += max(34, $ph + 6);
 
-        $ty += Text::draw($r, $font, Lang::t($faction['motto']), $x + $w / 2, $ty, $inner, [220, 230, 240], 'center') + 6;
+        $ty += Text::draw($r, $font, Lang::t($faction['motto']), $x + $w / 2, $ty, $inner, [234, 238, 246], 'center', [16, 20, 36]) + 6;
 
         // who comes
         $enemy = $faction['enemy'] === 'alliance' ? Lang::t('AGAINST THE ALLIANCE') : Lang::t('AGAINST THE HORDE');
-        $ty += Text::draw($r, $font, $enemy, $x + $w / 2, $ty, $inner, [240, 150, 130], 'center') + 4;
+        $ty += Text::draw($r, $font, $enemy, $x + $w / 2, $ty, $inner, [250, 160, 140], 'center', [40, 14, 10]) + 4;
         $sprites = $faction['enemy'] === 'alliance' ? ['elf', 'dwarf', 'rider'] : ['grunt', 'goblin', 'warg'];
         foreach ($sprites as $k => $sprite) {
             $this->sprites->drawEnemy($r, $sprite, (int)($this->time * 4) + $k, $x + $w / 2 + ($k - 1) * 22, $ty + 8, true, 0.9);
@@ -170,7 +176,7 @@ final class FactionSelectScene extends AbstractScene
         // the best stars won on the map
         $stars = $this->progress->stars($id, 'thornvale');
         for ($s = 0; $s < 3; $s++) {
-            $this->sprites->drawIcon($r, $s < $stars ? 'star' : 'star_off', $x + $w / 2 - 15 + $s * 11, $y + $h - 14);
+            Paint::icon($r, $s < $stars ? 'star' : 'star_off', $x + $w / 2 - 11 + $s * 11, $y + $h - 10, 10);
         }
     }
 }

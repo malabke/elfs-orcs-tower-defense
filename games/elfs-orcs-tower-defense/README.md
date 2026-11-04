@@ -17,5 +17,5 @@ Commandes :
   Entrée pour valider, Échap pour fermer ;
 - N : appeler la vague suivante (bonus d'or), F : vitesse ×1 / ×2 / ×3, Échap / P : pause.
 
-Polices (licence OFL), à placer dans `assets/fonts/` : `PressStart2P-Regular.ttf` (latin, cyrillique) et
-`unifont.otf` (japonais, chinois, coréen). Sans elles, la police intégrée du moteur sert (majuscules sans accents).
+Polices (licence OFL), dans `assets/fonts/` : `Nunito.ttf` (latin, cyrillique) et `unifont.otf` (japonais, chinois,
+coréen). Sans elles, la police intégrée du moteur sert (majuscules sans accents).

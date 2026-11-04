@@ -5,6 +5,7 @@ namespace App\Scene;
 use App\Save\Progress;
 use App\Td\GameData;
 use App\Ui\FontProvider;
+use App\Ui\Paint;
 use App\Ui\Sfx;
 use App\Ui\Sprites;
 use App\Ui\Text;
@@ -222,23 +223,25 @@ final class MapSelectScene extends AbstractScene
         $font = $this->font();
         $w = $this->width();
         $colors = $this->data->faction($this->faction)['colors'];
-        $r->clear([14, 12, 20]);
-        $r->fillRect(0, 0, $w, 26, $colors['dark']);
+        Paint::backdrop($r, $w, $this->height());
+        Paint::header($r, $w, 26, $colors['main']);
         $title = Lang::t($this->data->faction($this->faction)['name']) . ' - ' . Lang::t('CHOOSE A MAP');
-        $font->draw($r, $title, $w / 2, 13 - $font->height() / 2, Text::fitScale($font, $title, $w - 16, 1), [250, 230, 150], 'center', [0, 0, 0]);
+        $scale = Text::fitScale($font, $title, $w - 16, 1.2);
+        $font->draw($r, $title, $w / 2, 13 - $font->height($scale) / 2, $scale, [255, 228, 150], 'center', [40, 22, 10]);
 
         foreach ($this->maps as $i => $id) {
             $this->drawCard($r, $i, $id, $colors);
         }
 
+        $mouse = $this->engine->input->getMouse();
         $buttons = [[$this->backButton(), Lang::t('BACK'), true, false], [$this->hardButton(), $this->hardLabel(), $this->hardOpen(), $this->selected >= count($this->maps)]];
         foreach ($buttons as [[$bx, $by, $bw, $bh], $label, $enabled, $focus]) {
-            $r->fillRect($bx, $by, $bw, $bh, $focus ? [255, 220, 90] : [20, 16, 16]);
-            $r->fillRect($bx + 1, $by + 1, $bw - 2, $bh - 2, $enabled ? [70, 56, 40] : [44, 40, 40]);
-            $font->draw($r, $label, $bx + $bw / 2, $by + $bh / 2 - $font->height() / 2, 1, $enabled ? [240, 230, 210] : [130, 120, 110], 'center');
+            $hover = $mouse->x >= $bx && $mouse->x < $bx + $bw && $mouse->y >= $by && $mouse->y < $by + $bh;
+            Paint::button($r, $bx, $by, $bw, $bh, $enabled, $enabled && $hover, $focus);
+            $font->draw($r, $label, $bx + $bw / 2, $by + $bh / 2 - $font->height() / 2, 1, $enabled ? [255, 242, 214] : [200, 190, 182], 'center', [40, 22, 12]);
         }
         if ($this->hard) {
-            $this->sprites->drawIcon($r, 'skull', $this->hardButton()[0] - 16, $this->height() - 24, 2);
+            Paint::icon($r, 'skull', $this->hardButton()[0] - 10, $this->height() - 17, 12);
         }
     }
 
@@ -249,24 +252,29 @@ final class MapSelectScene extends AbstractScene
         [$x, $y] = $this->card($i);
         $open = $this->playable($i);
         $chosen = $i === $this->selected || ($this->selected >= count($this->maps) && $i === $this->lastMap);
-        $r->fillRect($x, $y, self::CARD_W, self::CARD_H, $chosen ? $colors['light'] : [40, 36, 48]);
-        $r->fillRect($x + 2, $y + 2, self::CARD_W - 4, self::CARD_H - 4, [20, 18, 28]);
-        // the map, small
-        $this->sprites->drawMap($r, $id, $map, $colors, $x + 14, $y + 4, 0.25);
-        $font->draw($r, ($i + 1) . '', $x + 6, $y + 6, 1, [255, 255, 255], 'left', [0, 0, 0]);
-        Text::draw($r, $font, Lang::t($map['name']), $x + self::CARD_W / 2, $y + 68, self::CARD_W - 8, $open ? [255, 225, 120] : [140, 130, 120], 'center');
+        Paint::panel($r, $x, $y, self::CARD_W, self::CARD_H, $chosen ? Paint::GOLD : [70, 66, 90], null, 5);
+        // the map, small: a picture of it in 3D (or its drawing)
+        Paint::round($r, $x + 13, $y + 3, 122, 62, 2, [10, 12, 20]);
+        if (!$this->sprites->drawPicture($r, "map-$id", $x + 14, $y + 4, 120, 60)) {
+            $this->sprites->drawMap($r, $id, $map, $colors, $x + 14, $y + 4, 0.25);
+        }
+        Paint::round($r, $x + 4, $y + 4, 13, 13, 6.5, [20, 26, 46, 220]);
+        $font->draw($r, ($i + 1) . '', $x + 10.5, $y + 10.5 - $font->height() / 2, 1, [255, 255, 255], 'center', [16, 20, 36]);
+        Text::draw($r, $font, Lang::t($map['name']), $x + self::CARD_W / 2, $y + 68, self::CARD_W - 8, $open ? [255, 226, 130] : [160, 150, 150],
+            'center', [40, 22, 10]);
         if (!$open) {
-            $r->fillRect($x + 14, $y + 4, 120, 60, [0, 0, 0, 170]);
-            $this->sprites->drawIcon($r, 'lock', $x + self::CARD_W / 2 - 10, $y + 18, 4);
+            $r->fillRect($x + 14, $y + 4, 120, 60, [16, 18, 32, 190]);
+            Paint::icon($r, 'lock', $x + self::CARD_W / 2, $y + 34, 22);
             return;
         }
         $stars = $this->progress->stars($this->faction, $id);
         $hard = $this->progress->stars($this->faction, $id, true);
+        Paint::round($r, $x + self::CARD_W - 47, $y + 51, 36, 12, 6, [20, 26, 46, 200]);
         for ($s = 0; $s < 3; $s++) {
-            $this->sprites->drawIcon($r, $s < $stars ? 'star' : 'star_off', $x + self::CARD_W - 38 + $s * 11, $y + 54);
+            Paint::icon($r, $s < $stars ? 'star' : 'star_off', $x + self::CARD_W - 40 + $s * 11, $y + 57, 10);
         }
         if ($hard > 0) {
-            $this->sprites->drawIcon($r, 'skull', $x + 18, $y + 54);
+            Paint::icon($r, 'skull', $x + 24, $y + 57, 11);
         }
     }
 }

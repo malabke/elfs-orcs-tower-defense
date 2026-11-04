@@ -7,8 +7,9 @@ use JumPHP\Renderer\TextDrawer;
 use JumPHP\Renderer\TtfFont;
 
 /**
- * The font of the current language: a pixel font for Latin and Cyrillic, a fallback one for Japanese, Chinese
- * and Korean (assets/fonts/, OFL licences). Without the files, the engine's built-in font (upper-case ASCII).
+ * The font of the current language: a soft rounded font for Latin and Cyrillic (Nunito, smooth: with the
+ * renderer's HD it is drawn at the window's resolution), a fallback one for Japanese, Chinese and Korean
+ * (assets/fonts/, OFL licences). Without the files, the engine's built-in font (upper-case ASCII).
  * apply() makes it the engine's font: menus and HUD all take it from there.
  */
 final class FontProvider
@@ -20,8 +21,12 @@ final class FontProvider
         'tr' => 'Türkçe', 'ja' => '日本語', 'zh' => '中文', 'ko' => '한국어',
     ];
     public const CJK = ['ja', 'zh', 'ko'];
-    public const MAIN_FONT = ['assets/fonts/PressStart2P-Regular.ttf', 8];
-    public const CJK_FONT = ['assets/fonts/unifont.otf', 16];
+    /**
+     * [file, size in view pixels, smooth, SDL_ttf style, thicken, outline (view pixels)]. Nunito's variable file
+     * holds its thinnest weight: made bold, thickened, and its shadow drawn as an outline (readable over the 3D).
+     */
+    public const MAIN_FONT = ['assets/fonts/Nunito.ttf', 10, true, TtfFont::BOLD, 0.3, 0.55];
+    public const CJK_FONT = ['assets/fonts/unifont.otf', 16, false, 0, 0.0, 0.0];
 
     /** @var array<string, TextDrawer> */
     private array $fonts = [];
@@ -51,8 +56,9 @@ final class FontProvider
     private function load(Engine $engine, string $key, array $font): ?TextDrawer
     {
         if (!array_key_exists($key, $this->fonts)) {
-            [$file, $size] = $font;
-            $this->fonts[$key] = is_file($engine->config->path($file)) ? new TtfFont($engine->sdl, $file, $size) : null;
+            [$file, $size, $smooth, $style, $thicken, $outline] = $font;
+            $this->fonts[$key] = is_file($engine->config->path($file))
+                ? new TtfFont($engine->sdl, $file, $size, $smooth, $style, $thicken, $outline) : null;
         }
         return $this->fonts[$key];
     }

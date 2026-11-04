@@ -22,6 +22,7 @@ game:
   width: 480                    # virtual resolution (pixels of the game, scaled to the window)
   height: 270
   scale: 3                      # desktop window = 1440 x 810
+  hd: auto                      # the 2D drawn at the window's resolution (sharp text), coordinates unchanged
   background: [10, 10, 16]
   start_scene: App\Scene\TitleScene
   pause_scene: App\Scene\PauseScene

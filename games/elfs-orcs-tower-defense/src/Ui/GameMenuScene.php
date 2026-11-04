@@ -105,15 +105,15 @@ abstract class GameMenuScene extends MenuScene
         foreach ($this->subtitles() as [$text, $color]) {
             $y += Text::draw($r, $font, $text, $w / 2, $y, $w - 32, $color, 'center') + 2;
         }
-        // the selected row gets a band behind it
+        // the selected row gets a soft pill behind it
         [$rx, $ry, $rw, $rh] = $this->rowRect($this->menu->selected);
-        $r->fillRect($rx, $ry, $rw, $rh, $this->rowBand());
+        Paint::round($r, $rx, $ry + 1, $rw, $rh - 2, ($rh - 2) / 2, $this->rowBand());
         $this->menu->render($r, $font, $w / 2, $this->height() * $this->menuTop);
     }
 
-    /** The colour of the band behind the selected row (over a 3D background: pure black, see renderBackground()). */
+    /** The colour of the pill behind the selected row. */
     protected function rowBand(): array
     {
-        return [255, 255, 255, 28];
+        return [255, 236, 190, 34];
     }
 }
