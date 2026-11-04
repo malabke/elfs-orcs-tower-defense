@@ -9,6 +9,7 @@ const KINDS = [
   { id: 'gui-mobile', icon: 'app', title: 'Mobile app', text: 'The same for phones (iOS and Android): portrait forms made in the visual editor, exported as native apps.', playground: true },
   { id: 'app', icon: 'app', title: 'Desktop app', text: 'HTML / CSS pages with PHP behind them (Tauri): a tool, an editor, a utility.', playground: true },
   { id: 'cli', icon: 'terminal', title: 'CLI app', text: 'A program in the terminal: commands, and full-screen text screens (Symfony Console + symfony/tui). One executable per system.', playground: true },
+  { id: 'extension', icon: 'plugin', title: 'Engine extension', text: 'A Composer package that adds to the JumPHP engine (particles, physics, a tile format...), with an example game that tests it. Pure PHP, works in the browser too.', playground: true },
   { id: 'plugin', icon: 'plugin', title: 'IDE plugin', text: 'A plugin of this IDE, in PHP: actions, tool windows, completion, problems, run configurations. Tested without a window, shared on jumphp.net.', playground: true },
   { id: 'hybrid', game: true, icon: 'hybrid', title: 'Hybrid game', text: 'An SDL game with HTML windows beside it (control panel, editor).', playground: true },
   { id: 'cpc', game: true, icon: 'disk', title: 'Amstrad CPC remake', text: 'Remake an Amstrad CPC game from its .dsk disc: same graphics, music and rules.', playground: true },
@@ -134,7 +135,7 @@ export class Welcome {
   async renderForm(form, kind) {
     clear(form);
     const s = this.state;
-    const title = el('input.input', { placeholder: kind.id === 'app' ? 'Notes' : kind.id === 'cli' ? 'Todo' : kind.id === 'plugin' ? 'Todo Finder' : kind.id.startsWith('gui') ? 'Contacts' : 'Star Hopper' });
+    const title = el('input.input', { placeholder: kind.id === 'app' ? 'Notes' : kind.id === 'cli' ? 'Todo' : kind.id === 'plugin' ? 'Todo Finder' : kind.id === 'extension' ? 'Wind Effects' : kind.id.startsWith('gui') ? 'Contacts' : 'Star Hopper' });
     const description = el('input.input', { placeholder: 'One sentence: what it is' });
     const brief = el('textarea.input', { rows: 5, placeholder: kind.id === 'cpc' ? 'Which game, what to keep from the original…' : 'What it should be: the idea, the rules, the controls… (your Claude reads it in BRIEF.md)' });
     const folder = el('input.input', { value: s.projectsDir || '' });
@@ -180,7 +181,9 @@ export class Welcome {
       el('label.field', {}, el('span', {}, 'Brief'), brief),
       el('label.field', {}, el('span', {}, 'Folder (the project goes in a new folder inside)'), el('div', { style: { display: 'flex', gap: '6px' } }, folder,
         el('button.btn', { onclick: async () => { const f = await backend.invoke('native.open', { folder: true }).catch(() => null); if (f) folder.value = f; } }, 'Choose…'))),
-      el('p', { style: { color: 'var(--text-3)', fontSize: '12px' } }, kind.id === 'plugin'
+      el('p', { style: { color: 'var(--text-3)', fontSize: '12px' } }, kind.id === 'extension'
+        ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the extension and its example game there (bin/jumphp extension:new), pushes it and opens it.`
+        : kind.id === 'plugin'
         ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the plugin there (bin/jumphp plugin:new), pushes it and opens it. Share it with Tools > Plugins… > Publish on jumphp.net.`
         : `Creates the GitHub repository ${s.user?.login || 'you'}/<name> on your account through jumphp.net (from the JumPHP template, with BRIEF.md), clones it here and opens it. Commit and push go there; Publish puts it on jumphp.net.`),
       el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('button.btn.primary', { onclick: async (e) => {

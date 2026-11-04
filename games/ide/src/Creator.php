@@ -42,7 +42,7 @@ final class Creator
         if ($this->main->user() === null) {
             return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first: it creates the project\'s GitHub repository on your account.'));
         }
-        if ($kind === 'plugin') {
+        if ($kind === 'plugin' || $kind === 'extension') {
             return $this->local($kind, $title, $p);
         }
         if (!isset(self::PLAYGROUND_KINDS[$kind])) {
@@ -109,9 +109,10 @@ final class Creator
     /** An IDE plugin: the template, bin/jumphp plugin:new, then the user's own public repository (created here) and a push. */
     private function local(string $kind, string $title, array $p): Deferred
     {
-        $id = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-') ?: 'plugin';
+        $extension = $kind === 'extension';
+        $id = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-') ?: $kind;
         if (!preg_match('/^[a-z]/', $id)) {
-            $id = 'plugin-' . $id;
+            $id = "$kind-$id";
         }
         $parent = $this->folder($p);
         @mkdir($parent, 0777, true);
@@ -133,24 +134,25 @@ final class Creator
                 // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
                 exec('rm -rf ' . escapeshellarg("$root/.git"));
                 // one project, one plugin: not JumPHP's examples (the playground's projects start the same way)
-                foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: [])] as $example) {
+                foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/extensions/*", GLOB_ONLYDIR) ?: [])] as $example) {
                     exec('rm -rf ' . escapeshellarg($example));
                 }
                 return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
                     ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root))
                     ->then(fn () => $this->noPushToJumphp($root));
             })
-            ->then(function () use ($root, $id, $title) {
-                $this->progress('bin/jumphp plugin:new…');
-                return $this->run(['bin/jumphp', 'plugin:new', $id, $title], $root);
+            ->then(function () use ($root, $id, $title, $extension) {
+                $command = $extension ? 'extension:new' : 'plugin:new';
+                $this->progress("bin/jumphp $command…");
+                return $this->run(['bin/jumphp', $command, $id, $title], $root);
             })
-            ->then(function () use ($root, $id, $p) {
+            ->then(function () use ($root, $id, $p, $extension) {
                 $brief = trim((string)($p['brief'] ?? ''));
-                file_put_contents("$root/apps/$id/BRIEF.md", "# " . ($p['title'] ?? $id) . "\n\n" . ($p['description'] ?? '') . "\n\n" . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
+                file_put_contents(($extension ? "$root/extensions/$id" : "$root/apps/$id") . "/BRIEF.md", "# " . ($p['title'] ?? $id) . "\n\n" . ($p['description'] ?? '') . "\n\n" . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
                 $this->progress('Creating your GitHub repository…');
                 return $this->git($root)->then(fn (Git $git) => $this->createRepository($git, $id, (string)($p['description'] ?? ''))
                     ->then(fn (array $repo) => $git->run(['remote', 'add', 'origin', (string)$repo['clone_url']])->then(fn () => $repo))
-                    ->then(fn (array $repo) => $git->commit(($p['title'] ?? $id) . ': a JumPHP IDE plugin', ['.'])->then(fn () => $repo))
+                    ->then(fn (array $repo) => $git->commit(($p['title'] ?? $id) . ($extension ? ': a JumPHP engine extension' : ': a JumPHP IDE plugin'), ['.'])->then(fn () => $repo))
                     ->then(function (array $repo) use ($git) {
                         $this->progress('Pushing to ' . $repo['html_url'] . '…');
                         return $git->push();
