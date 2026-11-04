@@ -3,6 +3,7 @@
 namespace Tests;
 
 use App\Td\GameData;
+use App\View3d\GroundMap;
 use App\View3d\MapModel;
 use App\View3d\Mesh;
 use App\View3d\Props;
@@ -31,20 +32,21 @@ final class ViewTest extends TestCase
         foreach ($m->v as $i => $value) {
             self::assertTrue(is_finite($value), "$what: vertex float $i is $value");
         }
-        for ($i = 0, $n = count($m->v); $i < $n; $i += 9 * 7) {
+        for ($i = 0, $n = count($m->v); $i < $n; $i += Mesh::STRIDE * 7) {
             $len = sqrt($m->v[$i + 3] ** 2 + $m->v[$i + 4] ** 2 + $m->v[$i + 5] ** 2);
             self::assertEqualsWithDelta(1.0, $len, 0.01, "$what: a normal is not a unit vector");
             foreach ([6, 7, 8] as $k) {
                 self::assertGreaterThanOrEqual(0.0, $m->v[$i + $k]);
                 self::assertLessThan(2.1, $m->v[$i + $k]);
             }
+            self::assertTrue($m->v[$i + 9] >= 0.0 && $m->v[$i + 9] < 7.0, "$what: unknown material {$m->v[$i + 9]}");
         }
     }
 
-    public function testEveryCreatureBuildsInBothWalkingFrames(): void
+    public function testEveryCreatureBuildsInEveryWalkingFrame(): void
     {
         foreach (array_keys(Units::KINDS) as $sprite) {
-            foreach ([0, 1] as $frame) {
+            for ($frame = 0; $frame < Units::FRAMES; $frame++) {
                 self::assertSound(Units::build($sprite, $frame), "$sprite/$frame");
             }
             self::assertGreaterThan(3.0, Units::height($sprite));
@@ -117,8 +119,12 @@ final class ViewTest extends TestCase
         $data = self::data();
         $built = MapModel::build($data->map($id), $data->faction('elves')['colors']);
         self::assertSound($built['mesh'], "map $id");
-        self::assertLessThan(60000, $built['mesh']->vertexCount(), 'a map stays one light buffer');
+        // the browser's PHP builds it too, with 128 MB
+        self::assertLessThan(100000, $built['mesh']->vertexCount(), 'a map stays one light buffer');
         self::assertCount(3, $built['fog']);
+        self::assertSame(GroundMap::W * GroundMap::H * 4, strlen($built['ground']), 'the ground texture is whole');
+        self::assertSame(0.0, MapModel::height(240.0, 120.0), 'the board is flat (clicks are cast on y = 0)');
+        self::assertGreaterThan(5.0, MapModel::height(240.0, -90.0), 'hills rise beyond the far edge');
     }
 
     /** Every platform (and the tower on it) is on the screen, under the top bar, with a camera that fits the map. */

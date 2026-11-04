@@ -3,18 +3,33 @@
 namespace App\View3d;
 
 /**
- * A triangle mesh built in code: boxes, cylinders / cones, balls, flat quads, merged into one list of vertices
- * (x y z, normal x y z, colour r g b: 9 floats each, triangles not indexed). One mesh = one buffer = one draw call.
+ * A triangle mesh built in code: boxes, cylinders / cones, balls, triangles, flat quads, merged into one list of
+ * vertices (x y z, normal x y z, colour r g b, material: 10 floats each, triangles not indexed). One mesh = one
+ * buffer = one draw call.
  *
  * Axes: x and z are the map's x and y, y is up. Every primitive can be scaled, rotated (radians, applied roll z,
  * then pitch x, then yaw y) and moved: $pos is the centre of a box or a ball, the centre of the base of a cylinder.
+ *
+ * The material ($mat, set before adding) tells the shader how to paint a vertex: SOLID, a number in (0, 1] for
+ * leaves, grass and cloth that move in the wind (how much), GROUND for the painted ground, MOTE + a seed (0..1) for
+ * the specks of light that float over the map, SOFT for the soft shadows.
  */
 final class Mesh
 {
-    public const STRIDE = 9;
+    public const STRIDE = 10;
+
+    public const SOLID = 0.0;
+    public const LEAVES = 0.35;
+    public const GRASS = 1.0;
+    public const GROUND = 2.0;
+    public const MOTE = 4.0;
+    public const SOFT = 6.0;
 
     /** @var list<float> */
     public array $v = [];
+
+    /** the material of what is added next */
+    public float $mat = self::SOLID;
 
     /** '#rrggbb' or '#rgb' to [r, g, b] 0..1, times $k (darker / lighter). @return array{0: float, 1: float, 2: float} */
     public static function rgb(string $hex, float $k = 1.0): array
@@ -32,15 +47,35 @@ final class Mesh
         return [$a[0] + ($b[0] - $a[0]) * $t, $a[1] + ($b[1] - $a[1]) * $t, $a[2] + ($b[2] - $a[2]) * $t];
     }
 
+    /** A colour times $k. @return array{0: float, 1: float, 2: float} */
+    public static function times(array $c, float $k): array
+    {
+        return [$c[0] * $k, $c[1] * $k, $c[2] * $k];
+    }
+
+    /** A number 0..1 from integers (the same each time): for scattering things without randomness. */
+    public static function hash(int ...$n): float
+    {
+        // 16 bits: crc32() is signed (and its products overflow) in the browser's 32-bit PHP
+        return (crc32(implode(',', $n)) & 0xffff) / 65536;
+    }
+
     public function vertexCount(): int
     {
         return intdiv(count($this->v), self::STRIDE);
     }
 
+    /** Sets the material of what is added next. */
+    public function material(float $mat): self
+    {
+        $this->mat = $mat;
+        return $this;
+    }
+
     // ---- primitives -------------------------------------------------------------------------------------------
 
-    /** A box of size $size centred on $pos. */
-    public function box(array $pos, array $size, array $col, array $rot = [0, 0, 0]): self
+    /** A box of size $size centred on $pos; $top: the colour of its upper half (a gradient), else $col. */
+    public function box(array $pos, array $size, array $col, array $rot = [0, 0, 0], ?array $top = null): self
     {
         $h = [$size[0] / 2, $size[1] / 2, $size[2] / 2];
         $x = $this->xf($pos, [1, 1, 1], $rot);
@@ -59,9 +94,9 @@ final class Mesh
                     $quad[] = $p;
                 }
                 foreach ([[0, 1, 2], [0, 2, 3]] as [$a, $b, $c]) {
-                    $this->emit($quad[$a], $n, $col, $x);
-                    $this->emit($quad[$b], $n, $col, $x);
-                    $this->emit($quad[$c], $n, $col, $x);
+                    foreach ([$a, $b, $c] as $k) {
+                        $this->emit($quad[$k], $n, $top !== null && $quad[$k][1] > 0 ? $top : $col, $x);
+                    }
                 }
             }
         }
@@ -69,16 +104,21 @@ final class Mesh
     }
 
     /** A box standing on $pos (the middle of its bottom face). */
-    public function slab(array $pos, array $size, array $col, array $rot = [0, 0, 0]): self
+    public function slab(array $pos, array $size, array $col, array $rot = [0, 0, 0], ?array $top = null): self
     {
-        return $this->box([$pos[0], $pos[1] + $size[1] / 2, $pos[2]], $size, $col, $rot);
+        return $this->box([$pos[0], $pos[1] + $size[1] / 2, $pos[2]], $size, $col, $rot, $top);
     }
 
-    /** A cylinder from radius $rb at the base to $rt at the top (0: a cone), $h tall. */
-    public function cyl(array $pos, float $rb, float $rt, float $h, array $col, int $seg = 8, array $rot = [0, 0, 0], bool $cap = true): self
+    /**
+     * A cylinder from radius $rb at the base to $rt at the top (0: a cone), $h tall; $top: the colour at the top
+     * (a gradient from $col at the base), $cap: a lid on top, $bottom: a lid under it too.
+     */
+    public function cyl(array $pos, float $rb, float $rt, float $h, array $col, int $seg = 8, array $rot = [0, 0, 0], bool $cap = true,
+                        ?array $top = null, bool $bottom = false): self
     {
         $x = $this->xf($pos, [1, 1, 1], $rot);
         $slope = $h > 0 ? ($rb - $rt) / $h : 0.0;
+        $top ??= $col;
         for ($i = 0; $i < $seg; $i++) {
             $a0 = 2 * M_PI * $i / $seg;
             $a1 = 2 * M_PI * ($i + 1) / $seg;
@@ -91,25 +131,50 @@ final class Mesh
             $n1 = [$c1, $slope, $s1];
             $this->emit($p00, $n0, $col, $x);
             $this->emit($p10, $n1, $col, $x);
-            $this->emit($p11, $n1, $col, $x);
+            $this->emit($p11, $n1, $top, $x);
             $this->emit($p00, $n0, $col, $x);
-            $this->emit($p11, $n1, $col, $x);
-            $this->emit($p01, $n0, $col, $x);
+            $this->emit($p11, $n1, $top, $x);
+            $this->emit($p01, $n0, $top, $x);
             if ($cap && $rt > 0.001) {
                 $up = [0, 1, 0];
-                $this->emit([0.0, $h, 0.0], $up, $col, $x);
-                $this->emit($p01, $up, $col, $x);
-                $this->emit($p11, $up, $col, $x);
+                $this->emit([0.0, $h, 0.0], $up, $top, $x);
+                $this->emit($p01, $up, $top, $x);
+                $this->emit($p11, $up, $top, $x);
+            }
+            if ($bottom && $rb > 0.001) {
+                $down = [0, -1, 0];
+                $this->emit([0.0, 0.0, 0.0], $down, $col, $x);
+                $this->emit($p10, $down, $col, $x);
+                $this->emit($p00, $down, $col, $x);
             }
         }
         return $this;
     }
 
-    /** An ellipsoid with radii $r, centred on $pos. */
-    public function ball(array $pos, array $r, array $col, int $seg = 6, int $rings = 4, array $rot = [0, 0, 0]): self
+    /**
+     * An ellipsoid with radii $r, centred on $pos. $top: the colour of its upper side (a gradient from $col below:
+     * leaves lit from above), $lump: how bumpy (0 = smooth; a canopy of leaves: 0.15), $seed: which bumps.
+     */
+    public function ball(array $pos, array $r, array $col, int $seg = 6, int $rings = 4, array $rot = [0, 0, 0], ?array $top = null,
+                         float $lump = 0.0, int $seed = 0): self
     {
         $x = $this->xf($pos, $r, $rot);
-        $pt = static fn (float $phi, float $th): array => [sin($phi) * cos($th), cos($phi), sin($phi) * sin($th)];
+        $s = $seed * 1.7;
+        $pt = static function (float $phi, float $th) use ($lump, $s): array {
+            $d = [sin($phi) * cos($th), cos($phi), sin($phi) * sin($th)];
+            if ($lump > 0) {
+                $k = 1 + $lump * (sin($d[0] * 3.1 + $s) * sin($d[1] * 2.7 + $s * 1.3) + 0.6 * sin($d[2] * 4.3 - $d[0] * 2.1 + $s * 0.7));
+                $d = [$d[0] * $k, $d[1] * $k, $d[2] * $k];
+            }
+            return $d;
+        };
+        $colour = static function (array $p) use ($col, $top): array {
+            if ($top === null) {
+                return $col;
+            }
+            $t = max(0.0, min(1.0, $p[1] * 0.6 + 0.5));
+            return Mesh::mix($col, $top, $t * $t * (3 - 2 * $t));
+        };
         for ($j = 0; $j < $rings; $j++) {
             $p0 = M_PI * $j / $rings;
             $p1 = M_PI * ($j + 1) / $rings;
@@ -122,16 +187,26 @@ final class Mesh
                 $d = $pt($p1, $t0);
                 if ($j > 0) {
                     foreach ([$a, $b, $c] as $p) {
-                        $this->emit($p, $p, $col, $x);
+                        $this->emit($p, $p, $colour($p), $x);
                     }
                 }
                 if ($j < $rings - 1) {
                     foreach ([$a, $c, $d] as $p) {
-                        $this->emit($p, $p, $col, $x);
+                        $this->emit($p, $p, $colour($p), $x);
                     }
                 }
             }
         }
+        return $this;
+    }
+
+    /** One triangle with its normal and a colour per corner (map coordinates, no transform). */
+    public function tri(array $a, array $b, array $c, array $n, array $ca, array $cb, array $cc): self
+    {
+        $x = self::identity();
+        $this->emit($a, $n, $ca, $x);
+        $this->emit($b, $n, $cb, $x);
+        $this->emit($c, $n, $cc, $x);
         return $this;
     }
 
@@ -142,17 +217,17 @@ final class Mesh
     }
 
     /**
-     * A quad of 4 corners (in order) with its normal and one colour per corner (smooth shading).
+     * A quad of 4 corners (in order) with its normal (or one normal per corner) and one colour per corner.
      * @param array<int, array{0: float, 1: float, 2: float}> $p
      * @param array<int, array{0: float, 1: float, 2: float}> $cols
      */
     public function quad(array $p, array $n, array $cols): self
     {
-        $id = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-        $x = ['m' => $id, 's' => [1, 1, 1], 'inv' => [1, 1, 1], 't' => [0, 0, 0]];
+        $x = self::identity();
+        $normals = is_array($n[0]) ? $n : [$n, $n, $n, $n];
         foreach ([[0, 1, 2], [0, 2, 3]] as $tri) {
             foreach ($tri as $k) {
-                $this->emit($p[$k], $n, $cols[$k], $x);
+                $this->emit($p[$k], $normals[$k], $cols[$k], $x);
             }
         }
         return $this;
@@ -160,10 +235,11 @@ final class Mesh
 
     // ---- composition ------------------------------------------------------------------------------------------
 
-    /** Another mesh, scaled, turned about y and moved, added to this one. */
-    public function add(self $other, array $t = [0, 0, 0], float $scale = 1.0, float $yaw = 0.0): self
+    /** Another mesh, scaled, turned about y, moved and its colours times $tint, added to this one. */
+    public function add(self $other, array $t = [0, 0, 0], float $scale = 1.0, float $yaw = 0.0, ?array $tint = null): self
     {
         [$c, $s] = [cos($yaw), sin($yaw)];
+        [$tr, $tg, $tb] = $tint ?? [1.0, 1.0, 1.0];
         $v = $other->v;
         for ($i = 0, $n = count($v); $i < $n; $i += self::STRIDE) {
             $x = $v[$i] * $scale;
@@ -172,7 +248,7 @@ final class Mesh
             $nx = $v[$i + 3];
             $nz = $v[$i + 5];
             array_push($this->v, $x * $c + $z * $s + $t[0], $y + $t[1], -$x * $s + $z * $c + $t[2],
-                $nx * $c + $nz * $s, $v[$i + 4], -$nx * $s + $nz * $c, $v[$i + 6], $v[$i + 7], $v[$i + 8]);
+                $nx * $c + $nz * $s, $v[$i + 4], -$nx * $s + $nz * $c, $v[$i + 6] * $tr, $v[$i + 7] * $tg, $v[$i + 8] * $tb, $v[$i + 9]);
         }
         return $this;
     }
@@ -189,6 +265,12 @@ final class Mesh
     }
 
     // ---- internals --------------------------------------------------------------------------------------------
+
+    /** @return array{m: array, s: array, inv: array, t: array} */
+    private static function identity(): array
+    {
+        return ['m' => [[1, 0, 0], [0, 1, 0], [0, 0, 1]], 's' => [1, 1, 1], 'inv' => [1, 1, 1], 't' => [0, 0, 0]];
+    }
 
     /** @return array{m: array, s: array, inv: array, t: array} */
     private function xf(array $t, array $s, array $rot): array
@@ -231,6 +313,6 @@ final class Mesh
             $m[0][0] * $px + $m[0][1] * $py + $m[0][2] * $pz + $x['t'][0],
             $m[1][0] * $px + $m[1][1] * $py + $m[1][2] * $pz + $x['t'][1],
             $m[2][0] * $px + $m[2][1] * $py + $m[2][2] * $pz + $x['t'][2],
-            $nx / $len, $ny / $len, $nz / $len, $col[0], $col[1], $col[2]);
+            $nx / $len, $ny / $len, $nz / $len, $col[0], $col[1], $col[2], $this->mat);
     }
 }

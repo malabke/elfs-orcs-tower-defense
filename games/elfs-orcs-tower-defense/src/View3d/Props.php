@@ -15,6 +15,12 @@ final class Props
         return (new Mesh())->cyl([0, 0, 0], 1.0, 1.0, 0.02, [1.0, 1.0, 1.0], 20);
     }
 
+    /** A soft shadow of radius 1 (material SOFT: the shader fades it out towards its edge). */
+    public static function softDisc(): Mesh
+    {
+        return (new Mesh())->material(Mesh::SOFT)->cyl([0, 0, 0], 1.0, 1.0, 0.01, [1.0, 1.0, 1.0], 20);
+    }
+
     /** A flat ring of outer radius 1, inner 0.93. */
     public static function ring(): Mesh
     {

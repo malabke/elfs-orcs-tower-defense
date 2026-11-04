@@ -26,19 +26,36 @@ publishing (only when the user asks): the bot wins all 30 map x side combination
 stays winnable, `site/` (the game's home page) and `assets/thumbnail.png` / `assets/icon.png` exist, the remote build
 (`bin/jumphp build:remote`) was checked in Chrome.
 
-**The battle is drawn in 3D** (the user does not want pixel art): a WebGL layer under the 2D scene (`$engine->gl()`,
-layer 'below', 'native' resolution, key colour magenta). Pure classes in `src/View3d/` (excluded from the container,
-unit-tested by `tests/ViewTest.php`): `Mesh` (boxes, cylinders, balls, quads -> one buffer), `Units` (every creature, 2
-walking frames), `Towers` (20 towers by level / specialization), `Props` (shots, walls, traps, disc / ring / ball),
-`MapModel` (ground, roads, scenery, platforms, castle, one mesh per map and side), `Rig` (the camera: fits every platform
-under the top bar, `screen()` / `world()` project both ways), `FlatView` (the 2D fallback's projection). `src/Ui/World3d.php`
-holds the GL side (one lit shader with fog, a model cache, one draw call per object). `PlayScene` reads and places its 2D
+**The battle is drawn in 3D, painted like a storybook** (the user wants neither pixel art nor a crude low-poly look:
+soft painted ground, lush round trees, warm light, cool shadows): a WebGL layer under the 2D scene (`$engine->gl()`, layer
+'below', 'native' resolution, key colour magenta). Pure classes in `src/View3d/` (excluded from the container, unit-tested
+by `tests/ViewTest.php`): `Mesh` (boxes, cylinders, balls with colour gradients and lumps, triangles, quads -> one buffer;
+10 floats per vertex, the last one the material), `Units` (every creature, round "picture book" characters, 4 walking
+frames), `Towers` (20 towers by level / specialization, front towards +z), `Props` (shots, walls, traps, disc / ring /
+ball / soft shadow), `MapModel` (the land of a map: terrain with hills outside the board, the forest around it, trees,
+bushes, grass tufts, flowers, rocks, floating specks of light, platforms, the castle; one mesh per map and side),
+`GroundMap` (a 512 x 256 RGBA texture per map: road, water, sun / shadows, sky light), `Rig` (the camera: fits every
+platform under the top bar, `screen()` / `world()` project both ways), `FlatView` (the 2D fallback's projection).
+`src/Ui/World3d.php` holds the GL side: ONE shader for everything, reading the vertex material (`Mesh::SOLID`, leaves /
+grass in (0, 1] = how much they sway in the wind, `GROUND` painted from the GroundMap and `assets/textures/noise.png`
+(made by `tools/make-noise.php`: patches, grain, clouds), `MOTE` + seed: specks that drift, `SOFT`: shadows fading at
+their edge); warm wrapped sun from the west (`MapModel::SUN`), cool sky, drifting cloud shadows, haze far away, a light
+vignette; a model cache, one draw call per object. Static shadows (trees, rocks, castle) are baked into the GroundMap;
+towers and creatures get soft blob shadows (`World3d::shadow()`, drawn first). `PlayScene` reads and places its 2D
 overlays (ring menu, bars, numbers, HUD) through `$this->cam`; `render3d()` draws the world, `render()` keeps the flat 2D
 drawing when WebGL is missing or the param `view: flat` is given (the long logic tests use it: Mesa's software GL is slow).
+To look at the models: `tests/ModelShotsTest.php` builds every tower of each side at level 1, 3 and specialized
+(`var/screenshots/tests/towers-<side>.png`; crop them with GD to look closer).
 Things to remember: over the 3D (keyed by magenta) 2D overlays must be opaque, or pure black with alpha (it darkens the 3D;
 any other translucent colour is tinted by the key); `crc32()` is signed and products overflow in the browser's 32-bit PHP
-(mask to 16 bits); the 16-bit depth buffer needs a far near plane (`Rig::NEAR`); `bin/jumphp test <game> --filter X` runs
-only phpunit (with OpenGL on Xvfb when the game uses it).
+(mask to 16 bits: `Mesh::hash()`); the 16-bit depth buffer needs a far near plane (`Rig::NEAR`); the browser builds the
+map mesh too (PHP has 128 MB there: keep a map under 100k vertices, ViewTest checks it); no uniform may be declared in both
+shaders (their precisions differ in WebGL: link error); offsets that grow with time (clouds, water) are wrapped in PHP
+(`fmod`) before they reach the shader; a gable roof's halves turn by `+side * pitch` about x (each falls away from the
+ridge); `bin/jumphp test <game> --filter X` runs only phpunit (with OpenGL on Xvfb when the game uses it).
+Engine fix made for this game (engine/src/Gl/OpenGl.php `textureFromRgba`): desktop GL kept SDL's `GL_UNPACK_ROW_LENGTH`,
+so a texture made after SDL had updated one of its own was read with wrong rows (the second battle of a session had a
+scrambled ground); it is reset to 0 around the upload now.
 Still pixel art (to redo): the menus' background maps (`Sprites::drawMap`), the ring menu's tower icons, the hero / power
 buttons, the HUD icons and the font (Press Start 2P).
 

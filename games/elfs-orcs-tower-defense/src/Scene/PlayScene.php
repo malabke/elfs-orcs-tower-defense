@@ -893,25 +893,33 @@ final class PlayScene extends AbstractScene implements HotReloadable
         }
         $w = $this->world;
         $b = $this->battle;
-        $w->begin($this->rig);
-        $black = [0.0, 0.0, 0.0];
+        $w->begin($this->rig, $this->time);
 
-        // shadows first: they lie on the ground, everything else stands over them
-        foreach ($b->enemies as $e) {
-            if (!$e->isUnderground()) {
-                $w->disc($e->x, $e->y, ($e->isFlying() ? 3.4 : 5.2) * (float)($e->def['scale'] ?? 1.0) * self::UNIT_SCALE * 0.9, $black,
-                    $e->isFlying() ? 0.2 : 0.36);
-            }
-        }
+        // soft shadows first, towards the east (the sun is low in the west): everything else stands over them
+        [$sx, $sz, $k] = MapModel::shadowStep();
+        $yaw = -atan2($sz, $sx);
+        $unitShadow = function (float $x, float $y, float $r, float $height, float $alpha) use ($w, $sx, $sz, $k, $yaw): void {
+            $len = $height * $k * 0.35;
+            $w->shadow($x + $sx * $len, $y + $sz * $len, $r + $len * 0.6, $r * 0.8, $yaw, $alpha);
+        };
         foreach ($b->towers() as $t) {
+            $len = Towers::height(min(3, $t->level)) * self::TOWER_SCALE * $k * 0.8;
+            $w->shadow($t->x + $sx * $len * 0.5, $t->y + $sz * $len * 0.5, $len * 0.5 + 12.0, 12.5, $yaw, 0.4);
             foreach ($t->soldiers as $s) {
                 if ($s->isAlive()) {
-                    $w->disc($s->x, $s->y, 5.4, $black, 0.36);
+                    $unitShadow($s->x, $s->y, 5.0, 24.0, 0.42);
                 }
             }
         }
+        foreach ($b->enemies as $e) {
+            if (!$e->isUnderground()) {
+                $size = (float)($e->def['scale'] ?? 1.0) * self::UNIT_SCALE;
+                $unitShadow($e->x, $e->y, ($e->isFlying() ? 3.0 : 4.6) * $size * 0.9, $e->isFlying() ? 30.0 : 12.0 * $size, $e->isFlying() ? 0.22 : 0.42);
+            }
+        }
         if ($b->hero?->isAlive()) {
-            $w->disc($b->hero->x, $b->hero->y, 6.4, Mesh::rgb((string)($this->colors['main'] ?? '#ffffff'), 0.9), 0.85, 0.7, 1.0);
+            $unitShadow($b->hero->x, $b->hero->y, 5.6, 28.0, 0.42);
+            $w->disc($b->hero->x, $b->hero->y, 6.4, Mesh::rgb((string)($this->colors['main'] ?? '#ffffff'), 0.9), 0.55, 0.7, 1.0);
         }
 
         foreach ($b->towers() as $t) {
@@ -922,7 +930,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
             foreach ($t->soldiers as $s) {
                 if ($s->isAlive()) {
                     $sprite = (string)$t->stats['soldiers']['sprite'];
-                    $this->creature3d($sprite, 1.0, $s->x, $s->y, $this->headingOf($s->x, $s->y, $s->target, $s->facingLeft), (int)($s->age * 7) % 2);
+                    $this->creature3d($sprite, 1.0, $s->x, $s->y, $this->headingOf($s->x, $s->y, $s->target, $s->facingLeft), self::walkFrame($s->age));
                 }
             }
         }
@@ -930,7 +938,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
             $h = $b->hero;
             $moving = $h->isWalking() || $h->isFighting();
             $this->creature3d((string)$h->def['sprite'], (float)($h->def['scale'] ?? 1.0), $h->x, $h->y,
-                $this->headingOf($h->x, $h->y, $h->target, $h->facingLeft), $moving ? (int)($h->age * 7) % 2 : 0);
+                $this->headingOf($h->x, $h->y, $h->target, $h->facingLeft), $moving ? self::walkFrame($h->age) : 0);
         }
         foreach ($b->enemies as $e) {
             $this->enemy3d($e);
@@ -965,6 +973,12 @@ final class PlayScene extends AbstractScene implements HotReloadable
         return $left ? M_PI : 0.0;
     }
 
+    /** The walking frame of a creature that has lived $age seconds (about two steps a second). */
+    private static function walkFrame(float $age): int
+    {
+        return (int)($age * 9.0) % Units::FRAMES;
+    }
+
     private function creature3d(string $sprite, float $size, float $x, float $y, float $yaw, int $frame, array $tint = [1.0, 1.0, 1.0],
                                 float $alpha = 1.0, float $lift = 0.3): void
     {
@@ -989,9 +1003,9 @@ final class PlayScene extends AbstractScene implements HotReloadable
             $tint = [1.4, 0.8 + 0.25 * sin($this->time * 20), 0.62];
         }
         $alpha = $e->isStealthy() && !$e->revealed ? 0.28 : 1.0;
-        $lift = $e->isFlying() ? 15.0 + sin($e->age * 5) * 1.5 : 0.3 + abs(sin($e->age * 8)) * 0.5;
+        $lift = $e->isFlying() ? 15.0 + sin($e->age * 5) * 1.5 : 0.3;
         $this->creature3d((string)$def['sprite'], (float)($def['scale'] ?? 1.0), $e->x, $e->y, -atan2($e->dirY, $e->dirX),
-            $e->isStunned() ? 0 : (int)($e->age * 7) % 2, $tint, $alpha, $lift);
+            $e->isStunned() ? 0 : self::walkFrame($e->age), $tint, $alpha, $lift);
     }
 
     private function tower3d(Tower $t): void
