@@ -30,7 +30,8 @@ done
 if [ ${#ids[@]} -eq 0 ]; then
   for d in extensions/*/; do [ -f "$d/composer.json" ] && ids+=("$(basename "$d")"); done
 fi
-remote_tpl="${JUMPHP_EXTENSIONS_REMOTE:-https://github.com/davidnurdin/jumphp-{id}.git}"
+default_remote='https://github.com/davidnurdin/jumphp-{id}.git'
+remote_tpl="${JUMPHP_EXTENSIONS_REMOTE:-$default_remote}"
 
 for id in "${ids[@]}"; do
   [ -f "extensions/$id/composer.json" ] || { echo "[x] no extensions/$id/composer.json" >&2; exit 1; }
@@ -48,7 +49,10 @@ for id in "${ids[@]}"; do
   if git ls-remote --exit-code --tags "$target" "refs/tags/$tag" >/dev/null 2>&1; then
     echo "    $tag is already there: kept" >&2
   else
-    git push --quiet "$target" "$sha:refs/tags/$tag"
+    # GitHub sometimes answers 500 to a tag pushed to a repository that just got its first branch: its API then
+    git push --quiet "$target" "$sha:refs/tags/$tag" \
+      || { repo="$(printf '%s' "$shown" | sed -E 's#.*github\.com/##; s#\.git$##')"; command -v gh >/dev/null \
+           && gh api "repos/$repo/git/refs" -f ref="refs/tags/$tag" -f sha="$sha" >/dev/null && echo "    $tag made through GitHub's API" >&2; }
   fi
 done
 [ "$push" = 1 ] || echo "dry run: .build/extensions-split/<id>.git (--push to publish)" >&2
