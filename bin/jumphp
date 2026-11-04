@@ -146,6 +146,7 @@ CLI apps (in the terminal: commands + full-screen text screens, symfony/tui; doc
                             game games/<id>-demo (docs/extensions.md)
   extension:add <game> <pkg>  add an engine extension to a game (Packagist, or one of extensions/ here), then
                             show what it adds
+  video:replay <game> [--input J|file] [--scene C] [--seconds S]   a film (MP4, with its sound) of any game, from scripted or recorded input
   video:make <game> [--seed N] [--count N] [--seconds S] [--template T]
                             vertical videos (TikTok, Shorts: 1080x1920, 60 FPS, H.264 + AAC) of project.yaml video: scene,
                             each bounce a note (jumphp/shorts): dist/video/*.mp4 + a cover (docs/video-maker.md)
@@ -1581,6 +1582,7 @@ main() {
     extension:new) cmd_extension_new "$@" ;;
     extension:add) cmd_extension_add "$@" ;;
     video:make) cmd_video_make "$@" ;;
+    video:replay) cmd_video_replay "$@" ;;
     debug) cmd_debug "$@" ;;
     app:run) cmd_app_run "$@" ;;
     app:test) cmd_app_test "$@" ;;

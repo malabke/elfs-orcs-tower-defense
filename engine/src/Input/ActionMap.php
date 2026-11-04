@@ -106,6 +106,12 @@ class ActionMap
         return false;
     }
 
+    /** @return list<string> every action that has a key or another binding */
+    public function names(): array
+    {
+        return array_values(array_unique([...array_keys($this->bindings), ...array_keys($this->keys)]));
+    }
+
     /** Went down this frame. */
     public function isPressed(string $action): bool
     {

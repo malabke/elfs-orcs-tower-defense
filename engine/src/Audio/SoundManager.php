@@ -28,6 +28,10 @@ class SoundManager
     private ?string $currentMusic = null;
     /** @var array<string, array{0: string, 1: ?string, 2: bool}> file, intro file, music? of each loaded sound (hot reload) */
     private array $sources = [];
+
+    /** JUMPHP_AUDIO_LOG=<folder>: what is played and when, for a film of the game (AudioLog), also without an audio device */
+    private AudioLog|false|null $log = null;
+    private ?string $loggedMusic = null;
     private bool $inIntro = false;
     private float $sfxVolume = 1.0;
     private float $musicVolume = 0.7;
@@ -58,6 +62,12 @@ class SoundManager
     }
 
     public function loadSfx(string $name, string $path): void
+    {
+        $this->audioLog()?->register($name, $this->resolve($path));
+        $this->loadSfxFile($name, $path);
+    }
+
+    private function loadSfxFile(string $name, string $path): void
     {
         if (!$this->enabled) {
             return;
@@ -110,6 +120,7 @@ class SoundManager
     /** Registers a generated sound (Synth::*). */
     public function synth(string $name, string $wavBytes): void
     {
+        $this->audioLog()?->registerBytes($name, $wavBytes);
         if (!$this->enabled) {
             return;
         }
@@ -117,7 +128,7 @@ class SoundManager
         @mkdir($dir, 0777, true);
         $file = $dir . '/' . preg_replace('/[^\w-]/', '_', $name) . '.wav';
         file_put_contents($file, $wavBytes);
-        $this->loadSfx($name, $file);
+        $this->loadSfxFile($name, $file);
     }
 
     public function hasSfx(string $name): bool
@@ -128,6 +139,9 @@ class SoundManager
     /** @param bool $restart stop the previous play of the same sound first (no pile-up) */
     public function playSfx(string $name, int $loops = 0, bool $restart = true): void
     {
+        if (!$this->muted) {
+            $this->audioLog()?->sfx($this->clock(), $name, $this->sfxVolume, $loops);
+        }
         if (!$this->enabled || $this->muted || !isset($this->chunks[$name])) {
             return;
         }
@@ -156,6 +170,7 @@ class SoundManager
     /** $introPath: played once before the loop starts (update() chains them). */
     public function loadMusic(string $name, string $path, ?string $introPath = null): void
     {
+        $this->audioLog()?->register($name, $this->resolve($path));
         if (!$this->enabled) {
             return;
         }
@@ -170,6 +185,10 @@ class SoundManager
 
     public function playMusic(string $name, bool $loop = true): void
     {
+        if (!$this->muted && $this->loggedMusic !== $name) {
+            $this->loggedMusic = $name;
+            $this->audioLog()?->music($this->clock(), $name, $this->musicVolume, $loop);
+        }
         if (!$this->enabled || !isset($this->musics[$name])) {
             return;
         }
@@ -189,6 +208,10 @@ class SoundManager
 
     public function stopMusic(): void
     {
+        if ($this->loggedMusic !== null) {
+            $this->loggedMusic = null;
+            $this->audioLog()?->stopMusic($this->clock());
+        }
         if ($this->enabled) {
             \Mix_HaltMusic();
         }
@@ -234,6 +257,21 @@ class SoundManager
     public function isMuted(): bool
     {
         return $this->muted;
+    }
+
+    private function audioLog(): ?AudioLog
+    {
+        if ($this->log === null) {
+            $dir = (string)\JumPHP\Kernel\Platform::setting('JUMPHP_AUDIO_LOG', '');
+            $this->log = $dir !== '' ? new AudioLog($dir) : false;
+        }
+        return $this->log ?: null;
+    }
+
+    /** The game's clock (seconds), what the film's sound is placed by. */
+    private function clock(): float
+    {
+        return \JumPHP\Kernel\Engine::get()->time();
     }
 
     private function applyVolumes(): void

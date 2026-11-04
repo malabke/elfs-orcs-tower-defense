@@ -14,6 +14,35 @@ bin/jumphp video:make shorts-demo --template rings --seconds 30 --seed 7 --count
 - `--seed N`: the same seed makes the same video again (fixed-step physics, seeded); `--count 3`: seeds N, N+1, N+2.
 - `--seconds`, `--template` (the scene's `template` param), `--title` (the question at the top), `--keep-frames`.
 
+## Captions
+
+Timed text over the video, in any template that draws them (`games/shorts-demo` does): a question, a reaction, "wait for it", a call to
+action. `bin/jumphp video:make shorts-demo --caption "Wait for it@2-5@middle@pop" --caption "Follow for more@20-@bottom@box"`,
+or `--captions captions.json`, or project.yaml `video: {captions: [...]}`:
+
+```json
+[{"text": "Wait for it", "from": 2, "to": 5, "at": "middle", "style": "pop", "scale": 3, "color": "#ffd23f"}]
+```
+
+- `TEXT@FROM-TO[@place][@style]`: seconds (`10-` = to the end), place `top` / `middle` / `bottom` or a y in pixels.
+- styles: `plain` (shadow), `box` (a dark band that fades in and out), `pop` (grows in with a small overshoot), `type` (typed letter by letter).
+- long texts are cut into lines that fit. In your own scene: `Captions::fromList($params['captions'])`, then
+  `$captions->render($r, $this->font(), $this->time, $this->width(), $this->height())` last in `render()`. The engine cannot fade text
+  (no alpha on textures): only the box fades.
+
+## A film of any game (video:replay)
+
+`bin/jumphp video:replay <game> [--input <json|file>] [--scene CLASS] [--params JSON] [--seconds S] [--scale N] [--name N]`: the game runs
+headless, frame by frame at 60 FPS, with scripted input (`JUMPHP_INPUT`: `[[frame, "action", "hold"|"release"], ...]`), what it plays is
+logged (`JUMPHP_AUDIO_LOG`: sound effects, generated sounds, music, with the game's own clock) and mixed offline, then ffmpeg:
+`games/<game>/dist/video/<game>-replay.mp4` (1280 x 720 for a 320 x 180 game: the smallest side is brought to 720 at least,
+`--scale` to choose) and a `.png` cover. The seconds default to the last input + 3.
+
+Film a real session: play with `JUMPHP_INPUT_RECORD=session.json bin/jumphp run <game>` (the actions held and let go are written as you
+play: a tap shorter than one frame is not seen), then `bin/jumphp video:replay <game> --input session.json`. The same file works for
+`JUMPHP_INPUT=$(cat session.json) bin/jumphp shot <game>` and for a game test. The game must be deterministic for the film to
+look like the session (a seeded random, the fixed step).
+
 ## How it works
 
 1. project.yaml `video: {scene, params, seconds, scale, title}` says which scene; video:make starts it with its params

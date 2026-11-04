@@ -45,6 +45,7 @@ use Symfony\Component\DependencyInjection\Reference;
  *   JUMPHP_LIVE=f         the current frame written to the PNG f every JUMPHP_LIVE_EVERY frames (default 10), replaced
  *                         at once (a viewer reads whole pictures only): what the Claude Code pane jumphp-live shows
  *   JUMPHP_INPUT=json     scripted input: [[frame, "action"], [frame, "action", "hold"|"release"], ...]
+ *   JUMPHP_INPUT_RECORD=file  writes the actions held / let go as the game is played, in that same format (InputRecorder)
  *   JUMPHP_SCENE=Class    first scene (JUMPHP_SCENE_PARAMS={"json":1})
  *   JUMPHP_REALTIME=1     headless frames paced in real time (network tests between two processes)
  */
@@ -56,6 +57,7 @@ final class Application
     private ?\Throwable $crash = null;
     private int $exitCode = 0;
     private array $script = [];
+    private ?\JumPHP\Input\InputRecorder $recorder = null;
 
     private function __construct(public readonly ContainerInterface $container, public readonly GameConfig $config)
     {
@@ -102,6 +104,8 @@ final class Application
         if (Platform::isHeadless()) {
             $app->engine->fixedDelta = 1 / 60;
             $app->script = json_decode((string)Platform::setting('JUMPHP_INPUT', '[]'), true) ?: [];
+            $record = (string)Platform::setting('JUMPHP_INPUT_RECORD', '');
+            $app->recorder = $record !== '' ? new \JumPHP\Input\InputRecorder($record) : null;
         }
         $app->engine->boot();
 
@@ -179,6 +183,7 @@ final class Application
                 }
             }
             $this->engine->tick();
+            $this->recorder?->observe($frame, $this->engine->actions);
             if (!$this->engine->isRunning()) {
                 $this->engine->gameLoop->stop();
                 return;
