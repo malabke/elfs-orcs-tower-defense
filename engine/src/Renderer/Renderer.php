@@ -9,6 +9,10 @@ use JumPHP\Util\Color;
  * then scales it to the window with letterboxing and nearest-neighbour filtering: crisp retro pixels
  * at any window size.
  *
+ * HD (game.yaml `hd`, setHd()): the view texture is made hd() times bigger and SDL scales every drawing call
+ * to it, so the coordinates stay view pixels while text (TtfFont renders at the real size), circles and
+ * whatever is placed at a fraction of a view pixel come out sharp; sprites stay crisp (nearest).
+ *
  * All coordinates are view pixels. The SDL binding has no SDL_SetRenderDrawBlendMode: a colour with
  * alpha < 255 is drawn with a cached 1x1 translucent texture instead (fillRect handles it).
  */
@@ -20,6 +24,11 @@ class Renderer
     private int $viewWidth;
     private int $viewHeight;
     private bool $integerScale = false;
+    /** HD wanted: 1 = off, 0 = follow the window, 2..4 = fixed */
+    private int $hdMode = 1;
+    /** HD of the view texture now, and for the next frame */
+    private int $hd = 1;
+    private int $hdNext = 1;
     /** @var array<string, mixed> 1x1 textures of translucent colours */
     private array $alphaTextures = [];
     /** @var array{0:int,1:int,2:int,3:int} letterbox of the last frame */
@@ -84,12 +93,60 @@ class Renderer
     /** New virtual resolution (zoom, other aspect ratio). */
     public function resizeView(int $width, int $height): void
     {
+        $wasTarget = $this->viewTexture !== null && $this->currentTarget === $this->viewTexture;
         if ($this->viewTexture) {
             \SDL_DestroyTexture($this->viewTexture);
         }
         $this->viewWidth = $width;
         $this->viewHeight = $height;
-        $this->viewTexture = $this->createTargetTexture($width, $height);
+        $this->viewTexture = $this->createTargetTexture($width * $this->hd, $height * $this->hd);
+        if ($wasTarget) {
+            $this->setTarget($this->viewTexture);
+        }
+    }
+
+    /**
+     * Draws the 2D at $factor times the view's size, its coordinates unchanged: sharp text, shapes and
+     * positions at fractions of a view pixel. 1 = off (retro pixels, the default), 0 = follow the window (its
+     * scale, 1 to 4), 2..4 = fixed. Takes effect at the next frame.
+     */
+    public function setHd(int $factor): void
+    {
+        $this->hdMode = max(0, min(4, $factor));
+        $this->hdNext = $this->hdMode === 0 ? $this->windowHd() : max(1, $this->hdMode);
+        if ($this->currentTarget === null) {
+            $this->applyHd();
+        }
+    }
+
+    /** How many texture pixels a view pixel has (1: no HD). */
+    public function hd(): int
+    {
+        return $this->hd;
+    }
+
+    /** The view texture's size in pixels (the view's size x hd()). @return array{0: int, 1: int} */
+    public function viewPixels(): array
+    {
+        return [$this->viewWidth * $this->hd, $this->viewHeight * $this->hd];
+    }
+
+    /** The HD that fits the window now (the window must be the target: SDL reports the target's size). */
+    private function windowHd(): int
+    {
+        [$ow, $oh] = $this->outputSize();
+        $scale = min($ow / max(1, $this->viewWidth), $oh / max(1, $this->viewHeight));
+        return max(1, min(4, (int)round($scale)));
+    }
+
+    /** A new view texture when the HD changed (between frames). */
+    private function applyHd(): void
+    {
+        if ($this->hdNext === $this->hd) {
+            return;
+        }
+        $this->hd = $this->hdNext;
+        $this->resizeView($this->viewWidth, $this->viewHeight);
     }
 
     public function createTargetTexture(int $width, int $height)
@@ -110,6 +167,7 @@ class Renderer
 
     public function beginFrame(Color|array|string $background = [0, 0, 0]): void
     {
+        $this->applyHd();
         $this->setTarget($this->viewTexture);
         $this->clear($background);
     }
@@ -123,6 +181,9 @@ class Renderer
         $this->setTarget(null);
         \SDL_SetRenderDrawColor($this->renderer, 0, 0, 0, 255);
         \SDL_RenderClear($this->renderer);
+        if ($this->hdMode === 0) {
+            $this->hdNext = $this->windowHd();
+        }
         [$x, $y, $w, $h] = $this->letterbox = $this->computeLetterbox();
         \SDL_RenderCopy($this->renderer, $this->viewTexture, null, new \SDL_Rect($x, $y, $w, $h));
         foreach ($this->windowHooks as $hook) {
@@ -152,7 +213,7 @@ class Renderer
     {
         $target = $this->currentTarget;
         \SDL_SetRenderTarget($this->renderer, $target === null ? $this->viewTexture : null);
-        \SDL_SetRenderTarget($this->renderer, $target);
+        $this->setTarget($target);
     }
 
     /**
@@ -192,6 +253,10 @@ class Renderer
         $previous = $this->currentTarget;
         $this->currentTarget = $texture;
         \SDL_SetRenderTarget($this->renderer, $texture);
+        if ($this->hd > 1 && $texture !== null && $texture === $this->viewTexture) {
+            // SDL resets the scale of each new target: the HD view texture is drawn in view pixels, scaled by SDL
+            \SDL_RenderSetLogicalSize($this->renderer, $this->viewWidth, $this->viewHeight);
+        }
         return $previous;
     }
 
@@ -255,10 +320,11 @@ class Renderer
         \SDL_SetRenderDrawColor($this->renderer, $r, $g, $b, $a);
     }
 
+    /** Fills the target; a colour with alpha < 255 leaves it that transparent (a WebGL layer composed by alpha). */
     public function clear(Color|array|string $color = [0, 0, 0]): void
     {
         $c = Color::of($color);
-        \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, 255);
+        \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, $c->a);
         \SDL_RenderClear($this->renderer);
     }
 
@@ -266,6 +332,17 @@ class Renderer
     {
         $c = Color::of($color);
         if ($c->a <= 0) {
+            return;
+        }
+        if ($this->hd > 1) {
+            // HD: fractions of a view pixel are real pixels
+            $rect = new \SDL_FRect($x, $y, $w, $h);
+            if ($c->a < 255) {
+                \SDL_RenderCopyF($this->renderer, $this->alphaTexture($c), null, $rect);
+                return;
+            }
+            \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, 255);
+            \SDL_RenderFillRectF($this->renderer, $rect);
             return;
         }
         $rect = new \SDL_Rect((int)round($x), (int)round($y), (int)round($w), (int)round($h));
@@ -289,6 +366,10 @@ class Renderer
     {
         $c = Color::of($color);
         \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, 255);
+        if ($this->hd > 1) {
+            \SDL_RenderDrawLineF($this->renderer, $x1, $y1, $x2, $y2);
+            return;
+        }
         \SDL_RenderDrawLine($this->renderer, (int)round($x1), (int)round($y1), (int)round($x2), (int)round($y2));
     }
 
@@ -296,12 +377,28 @@ class Renderer
     {
         $c = Color::of($color);
         \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, 255);
+        if ($this->hd > 1) {
+            \SDL_RenderDrawPointF($this->renderer, $x, $y);
+            return;
+        }
         \SDL_RenderDrawPoint($this->renderer, (int)round($x), (int)round($y));
     }
 
-    /** Filled circle (scanlines): balls, particles. */
+    /** Filled circle (scanlines): balls, particles. In HD, one scanline per real pixel: a round edge. */
     public function fillCircle(float $cx, float $cy, float $radius, Color|array|string $color): void
     {
+        if ($this->hd > 1) {
+            $k = $this->hd;
+            $rows = (int)ceil($radius * $k);
+            for ($i = -$rows; $i < $rows; $i++) {
+                $dy = ($i + 0.5) / $k;
+                $dx = sqrt(max(0.0, $radius * $radius - $dy * $dy));
+                if ($dx > 0) {
+                    $this->fillRect($cx - $dx, $cy + $i / $k, 2 * $dx, 1 / $k, $color);
+                }
+            }
+            return;
+        }
         $r = (int)round($radius);
         for ($dy = -$r; $dy <= $r; $dy++) {
             $dx = (int)floor(sqrt($r * $r - $dy * $dy));
@@ -328,12 +425,21 @@ class Renderer
                 $h ??= $th;
             }
         }
+        $flip = ($flipH ? \SDL_FLIP_HORIZONTAL : 0) | ($flipV ? \SDL_FLIP_VERTICAL : 0);
+        if ($this->hd > 1) {
+            $dst = new \SDL_FRect($x, $y, $w, $h);
+            if ($flip === 0 && $angle == 0.0) {
+                \SDL_RenderCopyF($this->renderer, $texture, $srcRect, $dst);
+            } else {
+                \SDL_RenderCopyExF($this->renderer, $texture, $srcRect, $dst, $angle, null, $flip);
+            }
+            return;
+        }
         $dst = new \SDL_Rect((int)round($x), (int)round($y), (int)round($w), (int)round($h));
-        if (!$flipH && !$flipV && $angle == 0.0) {
+        if ($flip === 0 && $angle == 0.0) {
             \SDL_RenderCopy($this->renderer, $texture, $srcRect, $dst);
             return;
         }
-        $flip = ($flipH ? \SDL_FLIP_HORIZONTAL : 0) | ($flipV ? \SDL_FLIP_VERTICAL : 0);
         \SDL_RenderCopyEx($this->renderer, $texture, $srcRect, $dst, $angle, null, $flip);
     }
 
