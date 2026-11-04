@@ -172,6 +172,27 @@ A project's IDE settings: `.jumphp/ide.json` (its jumphp.net project, a CPC disc
 See the playground's README ("Le JumPHP IDE"): `bin/ide-install --from ../JumPHP` copies `ide/src` and `ide/ui` into it;
 routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Bearer `jpi_…`) and `/api/ide/<slug>/invoke`.
 
+## AI: online, local, and for the code
+
+**Generate… in the resource editors** (sprites, sound effects, tunes, levels) asks one of:
+
+| provider | needs | where it runs |
+|---|---|---|
+| Claude | the `claude` command, your login | Anthropic |
+| OpenCode | the `opencode` command ([opencode.ai](https://opencode.ai)); Model: `provider/model`, the list is `opencode models` | the model OpenCode is set up for |
+| OpenAI, Mistral, Groq, OpenRouter, Google Gemini | your API key (kept in the IDE on this computer, never in the project) | online |
+| **Ollama**, **LM Studio**, **llama.cpp**'s server, any other OpenAI-compatible server (address + model) | nothing | **your computer: nothing leaves it** |
+| OpenAI Images | your API key | online (sprites only: the picture is made pixel art) |
+
+The chat services speak OpenAI's chat completions API (`<server>/chat/completions`, JSON answers); the Model field lists
+what the server has (`<server>/models`). Models without structured output get the JSON schema in the prompt, the JSON is found
+wherever the model put it, and an answer the editor cannot use is sent back once with what is wrong (small local models
+often need that second try). The core checks every answer before an editor gets it.
+
+**Code**: Tools > **OpenCode (code assistant, local models)** opens `opencode` in the Terminal, in the project's folder;
+**Ask OpenCode…** sends one request (`opencode run -m <model> "<prompt>"`). With a local model set up in OpenCode, the code
+stays on your computer too. Claude stays the Claude window's assistant (Alt+8).
+
 ## Debugging from a terminal's Claude Code
 
 `bin/jumphp debug` is the same debugger as an MCP server (stdin / stdout, in Docker), for Claude Code run in a terminal:

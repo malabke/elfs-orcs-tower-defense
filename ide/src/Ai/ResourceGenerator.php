@@ -35,20 +35,57 @@ final class ResourceGenerator
         $this->images += [OpenAiImages::ID => new OpenAiImages()];
     }
 
-    /** @return list<array{id: string, name: string, needsKey: bool}> */
+    /**
+     * What "Generate…" can ask: Claude (this computer's claude command), OpenCode (its `opencode run`, with whatever model it
+     * is set up for: local ones too), the chat services (ChatModels: online with a key, local without), the picture services.
+     *
+     * @return list<array{id: string, name: string, needsKey: bool, kind: string, local: bool, baseUrl: string, model: string}>
+     */
     public function providers(): array
     {
-        $list = [['id' => 'claude', 'name' => 'Claude (this computer\'s claude command)', 'needsKey' => false]];
+        $list = [
+            ['id' => 'claude', 'name' => 'Claude (this computer\'s claude command)', 'needsKey' => false, 'kind' => 'claude', 'local' => false, 'baseUrl' => '', 'model' => ''],
+            ['id' => 'opencode', 'name' => 'OpenCode (this computer\'s opencode command, any model it has)', 'needsKey' => false, 'kind' => 'opencode', 'local' => false, 'baseUrl' => '', 'model' => ''],
+        ];
+        foreach (ChatModels::PRESETS as $id => [$name, $base, $local, $needsKey, $model]) {
+            $list[] = ['id' => $id, 'name' => $name, 'needsKey' => $needsKey, 'kind' => 'chat', 'local' => $local, 'baseUrl' => $base, 'model' => $model];
+        }
         foreach ($this->images as $id => $p) {
-            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true];
+            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true, 'kind' => 'image', 'local' => false, 'baseUrl' => '', 'model' => ''];
         }
         return $list;
     }
 
     /**
+     * The models a provider has, to choose from: a chat server's GET <base>/models (Ollama, LM Studio...: nothing leaves the
+     * computer), OpenCode's `opencode models`.
+     *
+     * @return Deferred resolved with a list of names
+     */
+    public function models(string $provider, ?string $baseUrl = null, string $key = ''): Deferred
+    {
+        try {
+            if ($provider === 'opencode') {
+                return ($this->run)(['opencode', 'models'])->then(fn (array $r) => array_values(array_filter(array_map('trim', explode("\n", (string)preg_replace('/\e\[[0-9;?]*[A-Za-z]/', '', (string)($r['stdout'] ?? '')))))));
+            }
+            if (!ChatModels::has($provider)) {
+                return Deferred::resolved([]);
+            }
+            $base = rtrim(trim((string)$baseUrl) !== '' ? trim((string)$baseUrl) : ChatModels::PRESETS[$provider][1], '/');
+            if (!preg_match('#^https?://[^\s"<>]+$#', $base)) {
+                throw new \InvalidArgumentException('The server address must start with http:// or https://.');
+            }
+            $req = ['url' => "$base/models", 'headers' => trim($key) !== '' ? ['Authorization: Bearer ' . trim($key)] : [], 'body' => ''];
+            return $this->post($req, 'GET', 8)->then(fn (string $out) => ChatModels::models($out));
+        } catch (\Throwable $e) {
+            return Deferred::rejected($e);
+        }
+    }
+
+    /**
      * @param array<string, mixed> $options sprite: width, height, frames; music: bars; level: width, height
      */
-    public function generate(string $kind, string $prompt, array $options = [], string $provider = 'claude', string $key = '', ?string $model = null): Deferred
+    public function generate(string $kind, string $prompt, array $options = [], string $provider = 'claude', string $key = '', ?string $model = null, ?string $baseUrl = null): Deferred
     {
         try {
             if (!in_array($kind, self::KINDS, true)) {
@@ -59,6 +96,9 @@ final class ResourceGenerator
                 throw new \InvalidArgumentException('Describe what to make first.');
             }
             $options = $this->options($kind, $options);
+            if ($provider === 'opencode' || ChatModels::has($provider)) {
+                return $this->text($provider, $kind, $prompt, $options, $key, $model, $baseUrl);
+            }
             if ($provider !== 'claude') {
                 return $this->image($provider, $kind, $prompt, $options, $key);
             }
@@ -275,7 +315,67 @@ final class ResourceGenerator
             throw new \InvalidArgumentException($service->name() . ' needs your API key (kept in the IDE on this computer).');
         }
         $req = $service->request("Pixel art sprite for a retro 2D game, plain transparent or single-colour background, centred: $prompt", trim($key));
-        // the key in a file, not on the command line (other users of the computer see command lines)
+        return $this->post($req)->then(function (string $out) use ($service, $o) {
+            $png = $service->decode($out);
+            return $this->validate('sprite', Pixelize::sprite($png, $o['width'], $o['height']), ['frames' => 1] + $o);
+        });
+    }
+
+    /**
+     * A text model (OpenCode, or a chat service: online with a key, local without) makes it: the prompt carries the JSON schema
+     * since these have no structured output, the JSON is found in the answer, and an answer the editor cannot use is sent back
+     * once with what is wrong (small local models often need that second try).
+     */
+    private function text(string $provider, string $kind, string $prompt, array $o, string $key, ?string $model, ?string $baseUrl): Deferred
+    {
+        $schema = json_encode($this->schema($kind, $o), JSON_UNESCAPED_SLASHES);
+        $ask = $this->prompt($kind, $prompt, $o) . "\nThe JSON must follow this JSON schema exactly: $schema";
+        $system = 'You make assets for a retro 2D game. You answer with one JSON object and nothing else.';
+        if (ChatModels::has($provider) && ChatModels::PRESETS[$provider][3] && trim($key) === '') {
+            throw new \InvalidArgumentException(ChatModels::PRESETS[$provider][0] . ' needs your API key (kept in the IDE on this computer).');
+        }
+        $send = function (string $user) use ($provider, $model, $key, $baseUrl, $system): Deferred {
+            if ($provider === 'opencode') {
+                $command = ['opencode', 'run', "$system\n\n$user"];
+                if ($model !== null && trim($model) !== '') {
+                    array_push($command, '-m', trim($model));
+                }
+                return ($this->run)($command)->then(function (array $r) {
+                    $out = (string)($r['stdout'] ?? '');
+                    if (($r['code'] ?? 0) !== 0 && trim($out) === '') {
+                        throw new \RuntimeException('OpenCode: ' . trim((string)($r['stderr'] ?? 'it did not answer')));
+                    }
+                    return $out;
+                });
+            }
+            return $this->post(ChatModels::request($provider, $baseUrl, (string)$model, $key, $system, $user))->then(fn (string $out) => ChatModels::decode($out));
+        };
+        $parse = function (string $text) use ($kind, $o): array {
+            $data = ChatModels::extractJson($text);
+            if ($data === null) {
+                throw new \UnexpectedValueException('there is no JSON in the answer');
+            }
+            return $this->validate($kind, $data, $o);
+        };
+        return $send($ask)->then(function (string $text) use ($parse, $send, $ask) {
+            try {
+                return $parse($text);
+            } catch (\UnexpectedValueException $e) {
+                // once more, told what was wrong
+                return $send("$ask\nYour previous answer was refused: " . $e->getMessage() . ' Answer again, with the JSON only.')
+                    ->then($parse);
+            }
+        });
+    }
+
+    /**
+     * A request through curl; the key goes in a file, not on the command line (other users of the computer see command lines).
+     *
+     * @param array{url: string, headers: list<string>, body: string} $req
+     * @return Deferred resolved with the answer's body
+     */
+    private function post(array $req, string $method = 'POST', int $timeout = 180): Deferred
+    {
         $headers = tempnam(sys_get_temp_dir(), 'jumphp-ai');
         $body = tempnam(sys_get_temp_dir(), 'jumphp-ai');
         file_put_contents($headers, implode("\n", $req['headers']) . "\n");
@@ -284,14 +384,20 @@ final class ResourceGenerator
             @unlink($headers);
             @unlink($body);
         };
-        return ($this->run)(['curl', '-sS', '--max-time', '180', '-X', 'POST', '-H', "@$headers", '--data-binary', "@$body", $req['url']])
-            ->then(function (array $r) use ($service, $o, $clean) {
-                $clean();
-                $png = $service->decode((string)($r['stdout'] ?? ''));
-                return $this->validate('sprite', Pixelize::sprite($png, $o['width'], $o['height']), ['frames' => 1] + $o);
-            }, function (\Throwable $e) use ($clean) {
-                $clean();
-                throw $e;
-            });
+        $command = ['curl', '-sS', '--max-time', (string)$timeout, '-X', $method, '-H', "@$headers"];
+        if ($method === 'POST') {
+            array_push($command, '--data-binary', "@$body");
+        }
+        $command[] = $req['url'];
+        return ($this->run)($command)->then(function (array $r) use ($clean): string {
+            $clean();
+            if (($r['code'] ?? 0) !== 0 && trim((string)($r['stdout'] ?? '')) === '') {
+                throw new \RuntimeException('The server cannot be reached: ' . trim((string)($r['stderr'] ?? '')));
+            }
+            return (string)($r['stdout'] ?? '');
+        }, function (\Throwable $e) use ($clean) {
+            $clean();
+            throw $e;
+        });
     }
 }

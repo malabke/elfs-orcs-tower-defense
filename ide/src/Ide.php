@@ -144,7 +144,9 @@ final class Ide
             $this->register('ai.providers', fn () => $ai->providers());
             $this->register('ai.generate', fn (array $p) => $ai->generate((string)($p['kind'] ?? ''), (string)($p['prompt'] ?? ''),
                 (array)($p['options'] ?? []), (string)($p['provider'] ?? 'claude') ?: 'claude', (string)($p['key'] ?? ''),
-                isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null));
+                isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
+                isset($p['baseUrl']) && $p['baseUrl'] !== '' ? (string)$p['baseUrl'] : null));
+            $this->register('ai.models', fn (array $p) => $ai->models((string)($p['provider'] ?? ''), isset($p['baseUrl']) ? (string)$p['baseUrl'] : null, (string)($p['key'] ?? '')));
             $this->register('claude.close', function (array $p): bool {
                 $this->claude?->close((string)($p['conv'] ?? ''));
                 return true;
