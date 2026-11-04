@@ -41,7 +41,18 @@ Rules: pure PHP, as in a game (AGENTS.md §2): the browser build packs the game'
 with the extensions' services, so an extension works in the browser without anything more. Not on jumphp.net yet: its
 shared engine does not load a game's own Composer packages.
 
+## Which JumPHP it works with
+
+`extra.jumphp.engine` is a version constraint on JumPHP (`"^0.5"`, `">=0.5 <0.7"`, `"0.5.*"`, `"^0.5 || ^0.9"`). At boot the engine
+compares it with the project's `VERSION`: a game on a JumPHP the extension does not accept stops with
+`acme/stars works with JumPHP ^0.6, this game runs JumPHP 0.5.7: update JumPHP (bin/jumphp update) or the extension`.
+Without the key, or when the version is unknown (some builds without a `VERSION` file), nothing is checked. Declare it in
+every extension you publish, and widen it after trying the newer JumPHP.
+
 ## Making one
+
+In the JumPHP IDE: New Project > **Engine extension** (your own GitHub repository, the package and its example game, README with the
+publishing steps). On the command line:
 
 ```bash
 bin/jumphp extension:new star-field "Star Field"

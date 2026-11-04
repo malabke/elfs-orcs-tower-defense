@@ -21,6 +21,7 @@ use Symfony\Component\DependencyInjection\Reference;
  *       "boot": "JumPHP\\Particles\\ParticlesExtension",        optional: an Extension, boot() before the first scene
  *       "loaders": {".particles.json": "JumPHP\\Particles\\EmitterLoader"},   optional: AssetLoader per file name end
  *       "config": {"particles": {"default": {"max": 4000}, "doc": "..."}}     optional: project.yaml keys + defaults
+ *       "engine": "^0.5"                                       optional: the JumPHP versions it works with (Constraint), checked at boot
  *   }}
  *
  * Pure PHP: the same in the browser (the build packs vendor/, the container is compiled with them).
@@ -125,10 +126,32 @@ final class Extensions
         return false;
     }
 
+    /**
+     * The extensions whose extra.jumphp.engine does not accept the JumPHP version ($version, else VERSION): what they need
+     * and what runs. Nothing when the version is unknown or an extension says nothing.
+     *
+     * @return list<array{package: string, requires: string, engine: string}>
+     */
+    public function incompatible(?string $version = null): array
+    {
+        $version ??= EngineVersion::current();
+        $bad = [];
+        foreach ($version === null ? [] : $this->list as $e) {
+            $needs = $e['jumphp']['engine'] ?? null;
+            if (is_string($needs) && $needs !== '' && !Constraint::satisfies($version, $needs)) {
+                $bad[] = ['package' => $e['package'], 'requires' => $needs, 'engine' => $version];
+            }
+        }
+        return $bad;
+    }
+
     /** Runs each extension's boot class when the engine is ready (its 'boot' event, before the first scene). */
     public function attach(Engine $engine): void
     {
         $engine->on('boot', function () use ($engine): void {
+            foreach ($this->incompatible() as $b) {
+                throw new \RuntimeException("{$b['package']} works with JumPHP {$b['requires']}, this game runs JumPHP {$b['engine']}: update JumPHP (bin/jumphp update) or the extension (composer update {$b['package']})");
+            }
             foreach ($this->list as $e) {
                 $class = $e['jumphp']['boot'] ?? null;
                 if (is_string($class) && $class !== '') {

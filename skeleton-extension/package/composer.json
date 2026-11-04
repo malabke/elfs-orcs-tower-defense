@@ -12,6 +12,7 @@
     "extra": {
         "jumphp": {
             "name": "Skeleton Extension",
+            "engine": "^0.5",
             "services": ["JumphpExtensions\\SkeletonExtension\\Flash"],
             "boot": "JumphpExtensions\\SkeletonExtension\\SkeletonExtension",
             "config": {

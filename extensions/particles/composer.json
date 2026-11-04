@@ -25,6 +25,7 @@
     "extra": {
         "jumphp": {
             "name": "Particles",
+            "engine": "^0.5",
             "services": [
                 "JumPHP\\Particles\\ParticleSystem"
             ],
