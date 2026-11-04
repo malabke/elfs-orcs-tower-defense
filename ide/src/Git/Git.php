@@ -303,7 +303,7 @@ final class Git
     {
         return $this->author()->then(fn (array $author) => $this->run([...self::identity($author), 'merge', '--no-edit', $branch]))
             ->then(fn () => ['conflicts' => []], fn (\Throwable $e) => $this->status()->then(function (array $status) use ($e) {
-                $conflicts = array_values(array_column(array_filter($status['files'], fn (array $f) => $f['conflict']), 'path'));
+                $conflicts = array_column(array_filter($status['files'], fn (array $f) => $f['conflict']), 'path');
                 if (!$conflicts) {
                     throw $e;
                 }

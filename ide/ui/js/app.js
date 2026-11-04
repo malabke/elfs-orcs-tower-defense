@@ -386,7 +386,7 @@ class App {
       backend.on('docker.state', (s) => this.dockerChanged(s));
     }
     this.dockerWait ??= backend.invoke('docker.ensure').catch((e) => ({ state: 'failed', message: e.message || String(e) }))
-      .then((s) => { if (s?.state !== 'ready') this.dockerWait = null; return s; });
+      .then((s) => { if (s?.state !== 'ready' && s?.state !== 'wsl') this.dockerWait = null; return s; });
     return this.dockerWait;
   }
 
@@ -453,6 +453,7 @@ class App {
     this.dockerTask?.();
     this.dockerTask = null;
     if (state === 'ready' && this.dockerStarted) notify(message, 'success', { title: 'Docker' });
+    if (state === 'wsl' && !this.dockerWslSaid) { this.dockerWslSaid = true; notify(message, 'info', { title: 'Docker' }); }
     if (state === 'missing' || state === 'failed') notify(message, 'error', { title: 'Docker', actions: [{ label: 'Retry', action: () => this.docker() }] });
     this.dockerStarted = false;
   }

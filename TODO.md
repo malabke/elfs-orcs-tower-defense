@@ -174,7 +174,9 @@ later iOS).
 
 ## Windows: Docker through WSL, and a composer install that seemed to loop
 
-- Docker inside WSL without Docker Desktop (Docker Engine installed in a WSL distribution: no Docker Desktop licence, often
+- done (2026-11-04, not tried on a real Windows yet): Docker inside WSL without Docker Desktop (tools/wsl.sh, the IDE's
+  Docker state `wsl`, docs/windows-wsl.md; the ide-windows workflow runs its tests). Before:
+  Docker inside WSL without Docker Desktop (Docker Engine installed in a WSL distribution: no Docker Desktop licence, often
   faster): when `docker info` does not answer on Windows but `wsl -e docker info` does, run bin/jumphp inside WSL
   (`wsl -e bash -lc 'cd "$(wslpath ...)" && bin/jumphp ...'`), from the IDE (JumPHP\Ide\Async\Docker: a "wsl" state,
   the Runner wraps the commands) and from bin/jumphp itself. To try on a real Windows: the project on C:\ seen as /mnt/c

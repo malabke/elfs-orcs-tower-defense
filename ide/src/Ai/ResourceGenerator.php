@@ -114,6 +114,7 @@ final class ResourceGenerator
                 . "characters: '.' empty, '#' solid ground or wall, '=' a platform one can jump through from below, 'P' the player's start "
                 . "(exactly one, standing just above ground), 'C' a coin, 'E' an enemy (standing on ground). The bottom row is ground "
                 . 'except for pits; every jump must be possible (gaps of at most 3 tiles, steps of at most 3 tiles up).',
+            default => throw new \InvalidArgumentException("Unknown resource kind: $kind"),
         };
         return "$ask\nWhat to make: $what\nAnswer with the JSON only.";
     }
@@ -136,6 +137,7 @@ final class ResourceGenerator
                 'voices' => ['type' => 'array', 'minItems' => 4, 'maxItems' => 4, 'items' => ['type' => 'object', 'required' => ['notes'], 'properties' => [
                     'volume' => $int, 'notes' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => $int]]]]]]],
             'level' => ['type' => 'object', 'required' => ['rows'], 'properties' => ['rows' => $rows($o['width'] ?? 40, $o['height'] ?? 12)]],
+            default => throw new \InvalidArgumentException("Unknown resource kind: $kind"),
         };
     }
 

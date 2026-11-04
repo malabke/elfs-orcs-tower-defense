@@ -117,6 +117,9 @@ final class Ide
             $this->docker = new Docker($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
             $this->register('docker.ensure', fn () => $this->docker->ensure());
             $this->register('docker.state', fn () => $this->docker->state());
+            if ($this->runner !== null) {
+                $this->runner->dockerVia = fn (): string => $this->docker?->via() ?? 'native';
+            }
             // the project's JumPHP kept as new as the IDE's (bin/jumphp, engine, tools...; never games/)
             $updater = new JumphpUpdater($this->processes, $root);
             $this->register('jumphp.check', fn () => $updater->check());

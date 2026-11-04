@@ -49,6 +49,9 @@ PhpStorm's keyboard shortcuts: Double Shift, Ctrl twice, `Ctrl+N`, `Ctrl+Shift+N
 `Ctrl+F12`, `Ctrl+P`, `Ctrl+Q`, `Ctrl+Shift+F` / `R`, `Ctrl+K`, `Ctrl+Shift+K`, `Ctrl+T`, `Shift+F10`, `Ctrl+Shift+F10`, `Ctrl+F2`, `Shift+F9`, `F7` / `F8` / `F9`, `Ctrl+F8`,
 `Ctrl+D`, `Ctrl+Y`, `Ctrl+W`, `Ctrl+Alt+L`, `Alt+1/0/3/4/6/7/9`, `Ctrl+Alt+Left/Right`, `Alt+Insert`… (Help > Keyboard Shortcuts).
 
+Windows without Docker Desktop: the IDE finds Docker Engine inside WSL and runs bin/jumphp there
+([windows-wsl.md](windows-wsl.md)).
+
 ## How it works
 
 One interface, one PHP core, two hosts:

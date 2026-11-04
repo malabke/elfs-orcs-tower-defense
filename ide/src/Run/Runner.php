@@ -3,6 +3,7 @@
 namespace JumPHP\Ide\Run;
 
 use JumPHP\Ide\Async\Environment;
+use JumPHP\Ide\Async\Wsl;
 use JumPHP\Ide\Async\Processes;
 use JumPHP\Ide\Project\ProjectInfo;
 
@@ -20,7 +21,10 @@ final class Runner
     private string $toolkitRepo = 'https://github.com/davidnurdin/jumPhp.git';
 
     /** @param callable(string $event, array $payload): void $emit */
-    public function __construct(private Processes $processes, private string $root, private $emit)
+    /** @var (\Closure(): string)|null how bin/jumphp reaches Docker ('native', or 'wsl': Docker::via()) */
+    public ?\Closure $dockerVia = null;
+
+    public function __construct(private Processes $processes, private string $root, private $emit, private string $os = PHP_OS_FAMILY)
     {
         $this->toolkit = (getenv('HOME') ?: sys_get_temp_dir()) . '/.jumphp/toolkit';
     }
@@ -54,6 +58,21 @@ final class Runner
     }
 
     /**
+     * Windows: bin/jumphp and shell scripts through Git for Windows' bash (bin/jumphp then hops into WSL itself when
+     * Docker is there); without Git for Windows but with Docker in WSL, the command runs inside WSL directly.
+     *
+     * @param list<string> $command
+     * @return list<string>
+     */
+    public static function windowsCommand(array $command, string $root, string $os, bool $wsl, ?string $bash): array
+    {
+        if ($os === 'Windows' && $wsl && $bash === null) {
+            return Wsl::command($command, $root, Environment::which('wsl') ?? 'wsl.exe');
+        }
+        return Environment::runnable($command, $root, $os, $bash);
+    }
+
+    /**
      * @param array<string, mixed> $config a configuration of ProjectInfo::runConfigurations()
      * @param array<string, string> $env
      * @return array{id: int, label: string}
@@ -61,18 +80,25 @@ final class Runner
     public function start(array $config, array $env = []): array
     {
         $command = $config['command'];
+        $wsl = $this->dockerVia !== null && ($this->dockerVia)() === 'wsl';
+        if ($wsl) {
+            // Docker Engine inside WSL: bin/jumphp goes there itself (JUMPHP_DOCKER=wsl skips its check), the JUMPHP_*
+            // variables through WSLENV
+            $env['JUMPHP_DOCKER'] = 'wsl';
+            $env['WSLENV'] = Wsl::wslenv($env + ['JUMPHP_IDE' => '1'], (string)getenv('WSLENV'));
+        }
         if (isset($config['game']) || in_array('@jumphp-update', $command, true)) {
             $command = $this->linkedCommand($command, preg_replace('/[^a-z0-9-]/', '', (string)($config['game'] ?? 'game')) ?: 'game');
-            if (Environment::which('docker') === null) {
+            if (!$wsl && Environment::which('docker') === null) {
                 throw new \RuntimeException('Docker was not found: bin/jumphp runs everything in Docker. Install Docker (https://docs.docker.com/engine/install/).');
             }
         } elseif (in_array('bin/jumphp', $command, true) || str_contains(implode(' ', $command), 'bin/jumphp ')) {
-            if (Environment::which('docker') === null) {
+            if (!$wsl && Environment::which('docker') === null) {
                 throw new \RuntimeException("Docker was not found: bin/jumphp runs everything in Docker. Install Docker (https://docs.docker.com/engine/install/), "
                     . "or if it is installed somewhere unusual, start the IDE from a terminal where `docker` works. Searched: " . Environment::path());
             }
         }
-        $command = Environment::runnable($command, $this->root);     // Windows: bin/jumphp through Git's bash
+        $command = self::windowsCommand($command, $this->root, $this->os, $wsl, $this->os === 'Windows' ? Environment::gitBash() : null);
         if (is_file('/usr/bin/setsid') || is_file('/bin/setsid')) {
             // its own process group: stop() ends docker and what it started too
             array_unshift($command, 'setsid');

@@ -20,7 +20,8 @@ pour jouer sur le bureau). Jamais de PHP, d'emscripten ou de node à installer.
 ### Nouveau projet
 
 En une ligne (Linux, macOS, WSL ; sous Windows dans PowerShell : `irm https://jumphp.net/install.ps1 | iex`) :
-la commande `jumphp` ([install.sh](install.sh)), puis le projet.
+la commande `jumphp` ([install.sh](install.sh)), puis le projet. Windows sans Docker Desktop : Docker Engine dans
+WSL marche aussi ([docs/windows-wsl.md](docs/windows-wsl.md)).
 
 ```bash
 curl -fsSL https://jumphp.net/install.sh | sh -s -- mon-jeu
@@ -223,7 +224,8 @@ the desktop). Never install PHP, emscripten or node.
 ### New project
 
 In one line (Linux, macOS, WSL; on Windows in PowerShell: `irm https://jumphp.net/install.ps1 | iex`): the
-`jumphp` command ([install.sh](install.sh)), then the project.
+`jumphp` command ([install.sh](install.sh)), then the project. Windows without Docker Desktop: Docker Engine inside
+WSL works too ([docs/windows-wsl.md](docs/windows-wsl.md)).
 
 ```bash
 curl -fsSL https://jumphp.net/install.sh | sh -s -- my-game

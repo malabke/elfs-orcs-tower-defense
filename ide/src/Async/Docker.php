@@ -8,8 +8,9 @@ namespace JumPHP\Ide\Async;
  * Linux when it is installed) and waited for, without blocking anything. The interface shows it in the status bar
  * (event docker.state) and the runs that need Docker wait for ensure().
  *
- * States: unknown, checking, starting (Docker Desktop launched, waiting for it), ready, missing (no docker command),
- * failed (it did not answer in time: message says what to do).
+ * States: unknown, checking, starting (Docker Desktop launched, waiting for it), ready, wsl (Windows: Docker Engine
+ * inside WSL answers, bin/jumphp runs there: Wsl, docs/windows-wsl.md), missing (no docker command), failed (it did not
+ * answer in time: message says what to do).
  */
 final class Docker
 {
@@ -25,6 +26,7 @@ final class Docker
     private float $startedAt = 0.0;
     private float $nextCheck = 0.0;
     private bool $launched = false;
+    private bool $triedWsl = false;
 
     /**
      * @param callable(string $event, array $payload): void $emit
@@ -40,10 +42,16 @@ final class Docker
         return ['state' => $this->state, 'message' => $this->message];
     }
 
+    /** How bin/jumphp reaches Docker: 'wsl' when only WSL's Docker answers, else 'native'. */
+    public function via(): string
+    {
+        return $this->state === 'wsl' ? 'wsl' : 'native';
+    }
+
     /** Resolves with state() once Docker answers, or once it is known that it will not (missing, failed). */
     public function ensure(): Deferred
     {
-        if ($this->state === 'ready') {
+        if ($this->state === 'ready' || $this->state === 'wsl') {
             return Deferred::resolved($this->state());
         }
         if ($this->ready !== null) {
@@ -51,6 +59,7 @@ final class Docker
         }
         $ready = $this->ready = new Deferred();
         $this->launched = false;
+        $this->triedWsl = false;
         $this->startedAt = 0.0;
         $this->set('checking', 'Checking that Docker is running…');
         $this->ask();            // may settle it at once (no docker command)
@@ -78,7 +87,10 @@ final class Docker
         // Windows: Docker Desktop's own docker.exe when its folder is not in the PATH the IDE got
         $docker = Environment::which('docker') ?? (($exe = self::windowsDesktop()) !== null && is_file($cli = dirname($exe) . '\\resources\\bin\\docker.exe') ? $cli : null);
         if ($docker === null) {
-            $this->finish('missing', 'Docker is not installed: JumPHP runs everything in it. Install Docker Desktop (https://docs.docker.com/get-docker/), then reopen the project.');
+            if ($this->askWsl()) {
+                return;
+            }
+            $this->missing();
             return;
         }
         $started = $this->processes->start([$docker, 'info', '--format', '{{.ServerVersion}}'], $this->root);
@@ -103,6 +115,9 @@ final class Docker
             $this->finish('failed', 'Docker refuses this user: add it to the docker group (sudo usermod -aG docker $USER), log in again, then reopen the project.');
             return;
         }
+        if ($this->askWsl()) {
+            return;
+        }
         if (!$this->launched && $this->launch()) {
             $this->launched = true;
             $this->startedAt = microtime(true);
@@ -113,6 +128,39 @@ final class Docker
         $this->finish('failed', $this->os === 'Linux'
             ? 'Docker does not answer: start it (sudo systemctl start docker, or Docker Desktop), then run again.'
             : 'Docker does not answer: start Docker Desktop, wait until it says it is running, then run again.');
+    }
+
+    /**
+     * Windows: `wsl -e docker info`, once per ensure(), before Docker Desktop is started. False when there is no WSL
+     * (or not on Windows): the caller goes on as before.
+     */
+    private function askWsl(): bool
+    {
+        if ($this->os !== 'Windows' || $this->triedWsl || $this->state === 'starting' || ($wsl = Environment::which('wsl')) === null) {
+            return false;
+        }
+        $this->triedWsl = true;
+        $started = $this->processes->start([$wsl, '-e', 'docker', 'info', '--format', '{{.ServerVersion}}'], $this->root);
+        $this->check = $started['id'];
+        $this->checkStarted = microtime(true);
+        $started['done']->then(fn (array $r) => $this->answeredWsl($r['code'] === 0 ? trim($r['stdout']) : null),
+            fn () => $this->answeredWsl(null));
+        return true;
+    }
+
+    private function answeredWsl(?string $version): void
+    {
+        $this->check = null;
+        if ($version !== null && $version !== '' && preg_match('/^[\w.+-]+$/', $version)) {
+            $this->finish('wsl', "Docker $version is running in WSL: bin/jumphp runs there");
+            return;
+        }
+        // no Docker in WSL either: what the Windows Docker check would have done
+        if (Environment::which('docker') === null) {
+            $this->missing();
+            return;
+        }
+        $this->answered(null, '');
     }
 
     /** Starts Docker Desktop, detached (it outlives the IDE). False when there is none to start. */
@@ -143,6 +191,12 @@ final class Docker
             }
         }
         return null;
+    }
+
+    private function missing(): void
+    {
+        $this->finish('missing', 'Docker is not installed: JumPHP runs everything in it. Install Docker Desktop (https://docs.docker.com/get-docker/), '
+            . ($this->os === 'Windows' ? 'or Docker Engine inside WSL (docs/windows-wsl.md), ' : '') . 'then reopen the project.');
     }
 
     private function finish(string $state, string $message): void

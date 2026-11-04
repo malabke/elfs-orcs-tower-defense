@@ -9,6 +9,9 @@ cd "$ROOT"
 [ -f .env ] && set -a && . ./.env && set +a
 # JUMPHP_APP is the new name of JUMPHP_GAME (both read; the project a command means when none is named)
 JUMPHP_GAME="${JUMPHP_APP:-${JUMPHP_GAME:-}}"
+# Windows with Docker Engine inside WSL (no Docker Desktop): this run goes on inside WSL (tools/wsl.sh, docs/windows-wsl.md)
+. "$ROOT/tools/wsl.sh"
+if jumphp_wsl_wanted; then jumphp_wsl_exec "$(pwd -W 2>/dev/null || pwd)" "$(cd "$CALLER_DIR" && { pwd -W 2>/dev/null || pwd; })" "$@"; fi
 
 DESKTOP_IMAGE="${JUMPHP_DESKTOP_IMAGE:-jumphp/desktop:dev}"
 XDEBUG_IMAGE="${JUMPHP_XDEBUG_IMAGE:-jumphp/desktop-xdebug:dev}"

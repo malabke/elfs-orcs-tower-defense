@@ -29,6 +29,13 @@ jobs:
           Stop-Service docker -ErrorAction SilentlyContinue
           Get-Service docker -ErrorAction SilentlyContinue | Format-Table -AutoSize
           docker info --format '{{.ServerVersion}}'; "docker info exit: $LASTEXITCODE (1 expected)"; exit 0
+      - name: Docker inside WSL (bin/jumphp's detection; this runner has no WSL Docker, so the fallback is expected)
+        shell: bash
+        run: |
+          bash tools/tests/wsl.test.sh
+          . tools/wsl.sh
+          if timeout 60 bash -c '. tools/wsl.sh; jumphp_wsl_wanted'; then echo "WSL's Docker answers: bin/jumphp would run inside WSL"
+          else echo "no Docker inside WSL here: bin/jumphp goes on with Windows' Docker (and says what to do)"; fi
       - name: The tests on Windows
         working-directory: ide
         run: vendor/bin/phpunit tests/WindowsTest.php --testdox --display-skipped
