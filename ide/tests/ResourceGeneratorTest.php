@@ -132,7 +132,7 @@ final class ResourceGeneratorTest extends TestCase
     {
         $gen = $this->generator('');
         self::assertStringContainsString('needs your API key', $gen->generate('sprite', 'x', [], OpenAiImages::ID, '')->error()?->getMessage() ?? '');
-        self::assertStringContainsString('sprites only', $gen->generate('sfx', 'x', [], OpenAiImages::ID, 'k')->error()?->getMessage() ?? '');
+        self::assertStringContainsString('sprites and tilesets only', $gen->generate('sfx', 'x', [], OpenAiImages::ID, 'k')->error()?->getMessage() ?? '');
         self::assertSame([], $this->commands);
     }
 
@@ -238,5 +238,59 @@ final class ResourceGeneratorTest extends TestCase
         self::assertTrue($byId['openai']['needsKey']);
         self::assertSame('opencode', $byId['opencode']['kind']);
         self::assertSame('image', $byId['openai-images']['kind']);
+    }
+
+    public function testATilesetIsASheetOfTilesWithTheirCollisions(): void
+    {
+        $row = fn (string $a, string $b) => str_repeat($a, 8) . str_repeat($b, 8);
+        $sheet = ['palette' => ['g' => '#3a9d23', 'e' => '#6b4423'], 'frames' => [[$row('g', 'e'), $row('g', 'e'), $row('e', 'e'), $row('e', 'e'), $row('e', 'e'), $row('e', 'e'), $row('e', 'e'), $row('e', 'e')]],
+            'tiles' => [['name' => 'grass', 'collision' => 'full'], ['name' => 'earth', 'collision' => 'oneway']]];
+        $out = self::settled($this->sequence(self::chat(json_encode($sheet)))->generate('tileset', 'a grassy ground', ['tile' => 8, 'columns' => 2, 'rows' => 1], 'ollama', '', 'm'));
+        self::assertSame([8, 2, 1, 16, 8], [$out['tile'], $out['columns'], $out['rows'], $out['width'], $out['height']]);
+        self::assertSame(['full', 'oneway'], array_column($out['tiles'], 'collision'));
+        self::assertSame(8, count($out['frames'][0]));
+        self::assertStringContainsString("2 x 1 tiles of 8 x 8 pixels", $this->generator("")->prompt("tileset", "x", ["tile" => 8, "columns" => 2, "rows" => 1]));
+    }
+
+    public function testATileWithAnUnknownCollisionIsRefused(): void
+    {
+        $g = new ResourceGenerator(new Processes(), sys_get_temp_dir());
+        $this->expectExceptionMessage("tile 1 has the collision 'lava'");
+        $g->validate('tileset', ['palette' => ['a' => '#ffffff'], 'frames' => [array_fill(0, 8, str_repeat('a', 8))], 'tiles' => [['collision' => 'lava']]], ['tile' => 8, 'columns' => 1, 'rows' => 1]);
+    }
+
+    public function testARealSoundComesBackAsAnMp3ForTheProjectToKeep(): void
+    {
+        $mp3 = "ID3\x04\x00\x00\x00\x00\x00\x00" . str_repeat("\xFF\xFB\x90\x00", 20);
+        $out = self::settled($this->sequence($mp3)->generate('sfx', 'a coin pickup, bright', ['seconds' => 3], 'elevenlabs', 'xi-live'));
+        self::assertSame(['mp3', 'sfx'], [$out['ext'], $out['kind']]);
+        self::assertSame($mp3, base64_decode(substr($out['audio'], strlen('data:audio/mpeg;base64,'))));
+        $command = $this->commands[0];
+        self::assertStringContainsString('/v1/sound-generation', end($command));
+        self::assertStringNotContainsString('xi-live', implode(' ', $command));
+        self::assertStringContainsString('xi-api-key: xi-live', $this->headersSent[0]);
+    }
+
+    public function testTheMusicRequestAndTheServicesErrors(): void
+    {
+        $req = (new \JumPHP\Ide\Ai\ElevenLabsAudio())->request('music', 'calm forest', 45, 'k');
+        self::assertStringContainsString('/v1/music', $req['url']);
+        self::assertSame(['prompt' => 'calm forest', 'music_length_ms' => 45000], json_decode($req['body'], true));
+        $sfx = (new \JumPHP\Ide\Ai\ElevenLabsAudio())->request('sfx', 'boom', 100, 'k');
+        self::assertEquals(30, json_decode($sfx['body'], true)['duration_seconds'], 'at most 30 seconds');
+        $this->expectExceptionMessage('ElevenLabs: Invalid API key');
+        (new \JumPHP\Ide\Ai\ElevenLabsAudio())->decode((string)json_encode(['detail' => ['status' => 'invalid_api_key', 'message' => 'Invalid API key']]));
+    }
+
+    public function testASoundServiceNeedsAKeyAndMakesSoundsOnly(): void
+    {
+        $gen = $this->generator('');
+        self::assertStringContainsString('needs your API key', $gen->generate('sfx', 'x', [], 'elevenlabs', '')->error()?->getMessage() ?? '');
+        self::assertStringContainsString('sfx and music only', $gen->generate('sprite', 'x', [], 'elevenlabs', 'k')->error()?->getMessage() ?? '');
+        self::assertSame([], $this->commands);
+        $byId = array_column($gen->providers(), null, 'id');
+        self::assertSame(['sfx', 'music'], $byId['elevenlabs']['makes']);
+        self::assertContains('tileset', $byId['openai-images']['makes']);
+        self::assertContains('tileset', $byId['ollama']['makes']);
     }
 }

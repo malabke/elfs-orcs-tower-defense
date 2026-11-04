@@ -38,7 +38,7 @@ export class MusicEditor {
         el('label.res-inline', {}, 'Volume of this voice', this.volume), el('span.res-sep'),
         el('button.btn.small', { onclick: () => this.restore(this.undo, this.redo), title: 'Undo (Ctrl+Z)' }, '↶'),
         el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷'),
-        ...(ai ? [generateButton('music', {
+        ...(ai ? [generateButton('music', { dir: this.path.replace(/\/[^/]*$/, ''),
           fields: () => [{ key: 'bars', label: 'Bars', value: Math.min(16, this.music.bars), min: 1, max: 16 }],
           apply: (d) => { this.remember(); this.music = S.musicOf(d); this.fields(); this.layout(); this.changed(); this.scrollToNotes(); } })] : []),
         el('span.res-note', {}, `Saving (Ctrl+S) also writes ${S.wavPathOf(path).split('/').pop()}: $this->sound()->loadMusic('${name(path)}', '${S.wavPathOf(path)}')`)),

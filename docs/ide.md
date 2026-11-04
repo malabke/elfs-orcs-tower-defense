@@ -174,7 +174,7 @@ routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Beare
 
 ## AI: online, local, and for the code
 
-**Generate… in the resource editors** (sprites, sound effects, tunes, levels) asks one of:
+**Generate… in the resource editors** (sprites, sound effects, tunes, levels, tilesets) asks one of:
 
 | provider | needs | where it runs |
 |---|---|---|
@@ -182,7 +182,14 @@ routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Beare
 | OpenCode | the `opencode` command ([opencode.ai](https://opencode.ai)); Model: `provider/model`, the list is `opencode models` | the model OpenCode is set up for |
 | OpenAI, Mistral, Groq, OpenRouter, Google Gemini | your API key (kept in the IDE on this computer, never in the project) | online |
 | **Ollama**, **LM Studio**, **llama.cpp**'s server, any other OpenAI-compatible server (address + model) | nothing | **your computer: nothing leaves it** |
-| OpenAI Images | your API key | online (sprites only: the picture is made pixel art) |
+| OpenAI Images | your API key | online (sprites and tilesets: the picture is made pixel art) |
+| **ElevenLabs** sound effects and music | your API key | online: a **real sound** (mp3, 1-30 s for an effect, 10-300 s for music) |
+
+A **tileset** (the tileset editor's Generate…: tile size, columns, rows) comes back as a sheet of tiles that fit side by side, drawn as a
+PNG next to the `.tsj`, with the collision each tile should have (full, one-way, none): the editor then goes on as with any tileset
+(click a tile to change its collision). A **real sound** is not an editor's setting but an audio file: it is saved as an mp3 next to
+the resource being edited (`assets/sfx/<description>-<code>.mp3`, `assets/music/…`) and the notification opens it; a game plays mp3
+as it is (`SoundManager::loadSfx`, `loadMusic`).
 
 The chat services speak OpenAI's chat completions API (`<server>/chat/completions`, JSON answers); the Model field lists
 what the server has (`<server>/models`). Models without structured output get the JSON schema in the prompt, the JSON is found

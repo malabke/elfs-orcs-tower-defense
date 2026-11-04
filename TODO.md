@@ -163,8 +163,10 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 - done (2026-11-04, not released): "Generate…" also with OpenCode, online chat models with the user's key (OpenAI, Mistral, Groq,
   OpenRouter, Gemini) and LOCAL ones (Ollama, LM Studio, llama.cpp, any OpenAI-compatible server: nothing leaves the computer), model
   lists from the server, one retry with the refusal; Tools > OpenCode / Ask OpenCode… as a code assistant in the Terminal (docs/ide.md "AI").
-  Left: real audio services (a text-to-sound model: the editors make sounds from synth settings), tilesets generation, OpenCode inside
-  the Claude window (a conversation, not the Terminal), picture models run locally (Stable Diffusion servers)
+- done (2026-11-04, not released): OpenCode as the assistant of the Claude window (assistant selector, its events told as Claude's);
+  tileset generation (sheet + collisions, text models and picture services); real sounds and music from ElevenLabs (mp3 saved in the
+  project; only tried against fake answers, no key here). Left: other sound services (Stability Audio, a local AudioCraft server), a
+  text-to-sound model run locally, picture models run locally (Stable Diffusion servers), animated tiles in generated tilesets
 - done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): Claude's usage in the IDE's Claude pane: the open conversation's context, the 5-hour
   and the weekly limits with when they start again (from claude's rate_limit_event and its usage)
 

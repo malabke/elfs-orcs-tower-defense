@@ -35,7 +35,7 @@ export class SfxEditor {
         el('span.res-sep'),
         el('button.btn.small', { onclick: () => this.restore(this.undo, this.redo), title: 'Undo (Ctrl+Z)' }, '↶'),
         el('button.btn.small', { onclick: () => this.restore(this.redo, this.undo), title: 'Redo (Ctrl+Y)' }, '↷'),
-        ...(ai ? [el('span.res-sep'), generateButton('sfx', { apply: (d) => { this.remember(); this.sfx = S.sfxOf(d); this.fields(); this.changed(true); } })] : [])),
+        ...(ai ? [el('span.res-sep'), generateButton('sfx', { dir: this.path.replace(/\/[^/]*$/, ''), apply: (d) => { this.remember(); this.sfx = S.sfxOf(d); this.fields(); this.changed(true); } })] : [])),
       el('div.res-body', {},
         el('div.res-fields', {}, el('label.res-row', {}, el('span.res-label', {}, 'Wave'), this.wave), ...rows),
         el('div.res-side', {}, this.canvas,

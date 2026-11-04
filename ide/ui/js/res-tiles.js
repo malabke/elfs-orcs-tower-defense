@@ -1,5 +1,6 @@
 // The tileset editor (*.tsj) and the level editor (*.tmj): Tiled's JSON formats, what the engine's TiledJsonLoader
 // reads. The JSON stays in the file (the tab's text); paths inside it are relative to the file, as Tiled writes them.
+import { backend } from './backend.js';
 import { el, clear, notify } from './ui.js';
 import { generateButton } from './res-ai.js';
 
@@ -88,11 +89,12 @@ function drawCollision(g, spec, x, y, w, h, z = 1) {
 
 export class TilesetEditor {
   /** host: the view; text: the .tsj; onChange(text); readImage(path) -> data URL; files: the project's files */
-  constructor(host, { path, text, onChange, readImage, files = [] }) {
+  constructor(host, { path, text, onChange, readImage, files = [], ai = false }) {
     this.path = path;
     this.dir = dirOf(path);
     this.onChange = onChange;
     this.readImage = readImage;
+    this.files = files;
     this.ts = this.normalise(parse(text) || {});
     this.zoom = 3;
     this.selected = new Set([0]);
@@ -113,7 +115,10 @@ export class TilesetEditor {
         el('span.res-inline', {}, 'Margin', this.inputs.margin, 'Spacing', this.inputs.spacing),
         el('span.res-sep'),
         el('button.btn.small', { onclick: () => this.setZoom(this.zoom - 1), title: 'Zoom out' }, '−'),
-        el('button.btn.small', { onclick: () => this.setZoom(this.zoom + 1), title: 'Zoom in' }, '+')),
+        el('button.btn.small', { onclick: () => this.setZoom(this.zoom + 1), title: 'Zoom in' }, '+'),
+        ...(ai ? [el('span.res-sep'), generateButton('tileset', { apply: (d) => this.generated(d),
+          fields: () => [{ key: 'tile', label: 'Tile size (px)', value: this.ts.tilewidth || 16, min: 8, max: 32 },
+            { key: 'columns', label: 'Columns', value: 4, min: 1, max: 8 }, { key: 'rows', label: 'Rows', value: 2, min: 1, max: 4 }] })] : [])),
       el('div.res-body', {}, el('div.res-canvas-box', {}, this.canvas), this.panel));
     host.append(this.node);
     this.fields();
@@ -237,6 +242,32 @@ export class TilesetEditor {
     if (props.length) tiles.push({ ...rest, id, properties: props });
     else if (Object.keys(rest).length > 1) tiles.push({ ...rest, id });
     this.ts.tiles = tiles.sort((a, b) => a.id - b.id);
+  }
+
+  /**
+   * A generated tileset (ResourceGenerator 'tileset'): the sheet drawn as a PNG next to the .tsj, the tile size, the grid and the
+   * collisions the model proposed (full / one-way) put in the tileset, which then goes on like any other.
+   */
+  async generated({ tile, columns, rows, width, height, palette, frames, tiles }) {
+    const canvas = el('canvas', { width, height });
+    const g = canvas.getContext('2d');
+    frames[0].forEach((row, y) => [...row].forEach((c, x) => { if (palette[c]) { g.fillStyle = palette[c]; g.fillRect(x, y, 1, 1); } }));
+    const base = this.path.split('/').pop().replace(/\.tsj$/i, '');
+    const taken = new Set(this.files || []);
+    let name = `${base}.png`;
+    for (let n = 2; taken.has(this.dir ? `${this.dir}/${name}` : name) || (this.ts.image && name === this.ts.image.split('/').pop()); n++) name = `${base}-${n}.png`;
+    const file = this.dir ? `${this.dir}/${name}` : name;
+    await backend.invoke('file.write', { path: file, base64: canvas.toDataURL('image/png').split(',')[1] });
+    this.ts.tilewidth = tile;
+    this.ts.tileheight = tile;
+    this.ts.margin = 0;
+    this.ts.spacing = 0;
+    this.ts.image = relative(this.dir, file);
+    this.ts.tiles = tiles.map((t, id) => (t.collision === 'none' ? null : { id, properties: setProp([], 'collision', t.collision) })).filter(Boolean);
+    this.fields();
+    await this.loadImage();
+    this.changed();
+    notify(`${file}: ${columns * rows} tiles of ${tile} x ${tile}. Click a tile to change its collision.`, 'success', { title: 'Tileset generated' });
   }
 
   changed() { this.onChange?.(stringify(this.ts)); }

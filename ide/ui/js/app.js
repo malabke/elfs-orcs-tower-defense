@@ -71,6 +71,8 @@ class App {
     backend.on('ide.error', (p) => notify(`${p.message} (${p.at})`, 'error', { title: `${p.where}: an error` }));
     backend.on('files.changed', debounce(() => { this.tree?.refresh(); this.git?.refresh(); this.editors?.reloadFromDisk(); }, 300));
     backend.on('project.closed', () => location.reload());
+    // a generated sound or other file the editors want shown (res-ai.js)
+    document.addEventListener('jumphp:open-file', (e) => this.editors?.open(e.detail?.path));
     backend.on('bridge.status', (st) => this.bridgeStatus(st));
     if (backend.kind === 'native') backend.invoke('bridge.status').then((st) => this.bridgeStatus(st)).catch(() => null);
     if (backend.kind === 'native') {

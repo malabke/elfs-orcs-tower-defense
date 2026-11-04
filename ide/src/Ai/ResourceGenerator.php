@@ -13,7 +13,9 @@ use JumPHP\Ide\Async\Processes;
  */
 final class ResourceGenerator
 {
-    public const KINDS = ['sprite', 'sfx', 'music', 'level'];
+    public const KINDS = ['sprite', 'sfx', 'music', 'level', 'tileset'];
+    /** what a tile of a generated tileset may be (the engine's collision property) */
+    public const TILE_COLLISIONS = ['full', 'none', 'oneway'];
     public const WAVES = ['square', 'pulse', 'triangle', 'sawtooth', 'sine', 'noise'];
     /** the sound effect editor's settings: [min, max] (ide/ui/js/res-sound.js SFX_KEYS) */
     public const SFX = ['start' => [40, 4000], 'end' => [40, 4000], 'attack' => [0, 300], 'sustain' => [0, 1000], 'decay' => [0, 2000],
@@ -28,30 +30,37 @@ final class ResourceGenerator
     /** @var callable(list<string>): Deferred runs a command, resolves {code, stdout, stderr} */
     private $run;
 
-    /** @param array<string, ImageProvider> $images picture services by id */
-    public function __construct(private Processes $processes, private string $root, ?callable $run = null, private array $images = [])
+    /**
+     * @param array<string, ImageProvider> $images picture services by id
+     * @param array<string, AudioProvider> $audio  sound services by id
+     */
+    public function __construct(private Processes $processes, private string $root, ?callable $run = null, private array $images = [], private array $audio = [])
     {
         $this->run = $run ?? fn (array $command): Deferred => $this->processes->start($command, $this->root)['done'];
         $this->images += [OpenAiImages::ID => new OpenAiImages()];
+        $this->audio += [ElevenLabsAudio::ID => new ElevenLabsAudio()];
     }
 
     /**
      * What "Generate…" can ask: Claude (this computer's claude command), OpenCode (its `opencode run`, with whatever model it
      * is set up for: local ones too), the chat services (ChatModels: online with a key, local without), the picture services.
      *
-     * @return list<array{id: string, name: string, needsKey: bool, kind: string, local: bool, baseUrl: string, model: string}>
+     * @return list<array{id: string, name: string, needsKey: bool, kind: string, local: bool, baseUrl: string, model: string, makes: list<string>}>
      */
     public function providers(): array
     {
         $list = [
-            ['id' => 'claude', 'name' => 'Claude (this computer\'s claude command)', 'needsKey' => false, 'kind' => 'claude', 'local' => false, 'baseUrl' => '', 'model' => ''],
-            ['id' => 'opencode', 'name' => 'OpenCode (this computer\'s opencode command, any model it has)', 'needsKey' => false, 'kind' => 'opencode', 'local' => false, 'baseUrl' => '', 'model' => ''],
+            ['id' => 'claude', 'name' => 'Claude (this computer\'s claude command)', 'needsKey' => false, 'kind' => 'claude', 'local' => false, 'baseUrl' => '', 'model' => '', 'makes' => self::KINDS],
+            ['id' => 'opencode', 'name' => 'OpenCode (this computer\'s opencode command, any model it has)', 'needsKey' => false, 'kind' => 'opencode', 'local' => false, 'baseUrl' => '', 'model' => '', 'makes' => self::KINDS],
         ];
         foreach (ChatModels::PRESETS as $id => [$name, $base, $local, $needsKey, $model]) {
-            $list[] = ['id' => $id, 'name' => $name, 'needsKey' => $needsKey, 'kind' => 'chat', 'local' => $local, 'baseUrl' => $base, 'model' => $model];
+            $list[] = ['id' => $id, 'name' => $name, 'needsKey' => $needsKey, 'kind' => 'chat', 'local' => $local, 'baseUrl' => $base, 'model' => $model, 'makes' => self::KINDS];
         }
         foreach ($this->images as $id => $p) {
-            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true, 'kind' => 'image', 'local' => false, 'baseUrl' => '', 'model' => ''];
+            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true, 'kind' => 'image', 'local' => false, 'baseUrl' => '', 'model' => '', 'makes' => ['sprite', 'tileset']];
+        }
+        foreach ($this->audio as $id => $p) {
+            $list[] = ['id' => $id, 'name' => $p->name(), 'needsKey' => true, 'kind' => 'audio', 'local' => false, 'baseUrl' => '', 'model' => '', 'makes' => $p->kinds()];
         }
         return $list;
     }
@@ -96,6 +105,9 @@ final class ResourceGenerator
                 throw new \InvalidArgumentException('Describe what to make first.');
             }
             $options = $this->options($kind, $options);
+            if (isset($this->audio[$provider])) {
+                return $this->sound($provider, $kind, $prompt, $options, $key);
+            }
             if ($provider === 'opencode' || ChatModels::has($provider)) {
                 return $this->text($provider, $kind, $prompt, $options, $key, $model, $baseUrl);
             }
@@ -130,7 +142,9 @@ final class ResourceGenerator
         $int = fn (string $k, int $default, int $min, int $max): int => max($min, min($max, (int)($o[$k] ?? $default)));
         return match ($kind) {
             'sprite' => ['width' => $int('width', 16, 1, 64), 'height' => $int('height', 16, 1, 64), 'frames' => $int('frames', 1, 1, 8)],
-            'music' => ['bars' => $int('bars', 4, 1, 16)],
+            'music' => ['bars' => $int('bars', 4, 1, 16), 'seconds' => $int('seconds', 30, 10, 300)],
+            'sfx' => ['seconds' => $int('seconds', 2, 1, 30)],
+            'tileset' => ['tile' => $int('tile', 16, 8, 32), 'columns' => $int('columns', 4, 1, 8), 'rows' => $int('rows', 2, 1, 4)],
             'level' => ['width' => $int('width', 40, 4, 200), 'height' => $int('height', 12, 4, 60)],
             default => [],
         };
@@ -143,6 +157,12 @@ final class ResourceGenerator
                 . "there are several: the frames in order). 'palette' maps single characters (not '.') to colours #rrggbb, at most 16; "
                 . "each frame is exactly {$o['height']} strings of exactly {$o['width']} characters; '.' is a transparent pixel. "
                 . 'Clear silhouette, a dark outline, few colours.',
+            'tileset' => "A tileset for a retro 2D platformer: a sheet of {$o['columns']} x {$o['rows']} tiles of {$o['tile']} x {$o['tile']} pixels, "
+                . ($o['columns'] * $o['tile']) . ' x ' . ($o['rows'] * $o['tile']) . " pixels in all, the tiles read left to right, top to bottom. Tiles that fit side by side "
+                . "(a grass-topped ground, plain earth, a brick wall, a platform one can jump through, a sky / background filler, a few decorations), a consistent style, "
+                . "a dark outline, few colours. 'palette' maps single characters (not '.') to colours #rrggbb, at most 16; 'frames' has ONE picture of exactly "
+                . ($o['rows'] * $o['tile']) . ' strings of exactly ' . ($o['columns'] * $o['tile']) . " characters ('.' is transparent). 'tiles' lists every tile in "
+                . "order (" . ($o['columns'] * $o['rows']) . " entries) as {name, collision}: collision 'full' (solid), 'oneway' (a platform: solid from above only) or 'none'.",
             'sfx' => 'A retro game sound effect made by a simple synthesizer: wave (' . implode(', ', self::WAVES) . '), a pitch going from '
                 . "'start' Hz to 'end' Hz, an envelope attack / sustain / decay in ms, volume 0-10, vibrato depth 0-100 and speed in Hz, "
                 . "'repeat' times with 'gap' ms between. Ranges: " . json_encode(self::SFX) . '.',
@@ -170,6 +190,11 @@ final class ResourceGenerator
                 'palette' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'pattern' => '^#[0-9a-fA-F]{6}$']],
                 'frames' => ['type' => 'array', 'minItems' => $o['frames'] ?? 1, 'maxItems' => $o['frames'] ?? 8,
                     'items' => $rows($o['width'] ?? 16, $o['height'] ?? 16)]]],
+            'tileset' => ['type' => 'object', 'required' => ['palette', 'frames', 'tiles'], 'properties' => [
+                'palette' => ['type' => 'object', 'additionalProperties' => ['type' => 'string', 'pattern' => '^#[0-9a-fA-F]{6}$']],
+                'frames' => ['type' => 'array', 'minItems' => 1, 'maxItems' => 1, 'items' => $rows(($o['columns'] ?? 4) * ($o['tile'] ?? 16), ($o['rows'] ?? 2) * ($o['tile'] ?? 16))],
+                'tiles' => ['type' => 'array', 'items' => ['type' => 'object', 'required' => ['collision'], 'properties' => [
+                    'name' => ['type' => 'string'], 'collision' => ['type' => 'string', 'enum' => self::TILE_COLLISIONS]]]]]],
             'sfx' => ['type' => 'object', 'required' => ['wave', ...array_keys(self::SFX)],
                 'properties' => ['wave' => ['type' => 'string', 'enum' => self::WAVES]] + array_map(fn () => $int, self::SFX)],
             'music' => ['type' => 'object', 'required' => ['tempo', 'voices'], 'properties' => [
@@ -226,6 +251,23 @@ final class ResourceGenerator
                     $frames[$i] = array_map('strval', $rows);
                 }
                 return ['width' => $o['width'], 'height' => $o['height'], 'palette' => $palette, 'frames' => $frames];
+            case 'tileset':
+                $w = $o['columns'] * $o['tile'];
+                $h = $o['rows'] * $o['tile'];
+                $sheet = $this->validate('sprite', $d, ['width' => $w, 'height' => $h, 'frames' => 1]);
+                $count = $o['columns'] * $o['rows'];
+                $given = array_values((array)($d['tiles'] ?? []));
+                $tiles = [];
+                for ($i = 0; $i < $count; $i++) {
+                    $t = (array)($given[$i] ?? []);
+                    $collision = (string)($t['collision'] ?? 'none');
+                    if (!in_array($collision, self::TILE_COLLISIONS, true)) {
+                        $fail("tile " . ($i + 1) . " has the collision '$collision'");
+                    }
+                    $tiles[] = ['name' => mb_substr((string)($t['name'] ?? ''), 0, 40), 'collision' => $collision];
+                }
+                return ['tile' => $o['tile'], 'columns' => $o['columns'], 'rows' => $o['rows'], 'width' => $w, 'height' => $h,
+                    'palette' => $sheet['palette'], 'frames' => $sheet['frames'], 'tiles' => $tiles];
             case 'sfx':
                 if (!in_array($d['wave'] ?? null, self::WAVES, true)) {
                     $fail("the wave '" . json_encode($d['wave'] ?? null) . "'");
@@ -308,16 +350,40 @@ final class ResourceGenerator
         if ($service === null) {
             throw new \InvalidArgumentException("No picture service '$provider'.");
         }
-        if ($kind !== 'sprite') {
-            throw new \InvalidArgumentException($service->name() . ' makes pictures: sprites only.');
+        if ($kind !== 'sprite' && $kind !== 'tileset') {
+            throw new \InvalidArgumentException($service->name() . ' makes pictures: sprites and tilesets only.');
         }
         if (trim($key) === '') {
             throw new \InvalidArgumentException($service->name() . ' needs your API key (kept in the IDE on this computer).');
         }
-        $req = $service->request("Pixel art sprite for a retro 2D game, plain transparent or single-colour background, centred: $prompt", trim($key));
-        return $this->post($req)->then(function (string $out) use ($service, $o) {
+        $what = $kind === 'tileset'
+            ? "Pixel art tileset sheet for a retro 2D platformer, a regular grid of {$o['columns']} x {$o['rows']} square tiles that fit side by side (ground, earth, bricks, a platform, sky filler, decorations), consistent style, no gaps between tiles: $prompt"
+            : "Pixel art sprite for a retro 2D game, plain transparent or single-colour background, centred: $prompt";
+        $req = $service->request($what, trim($key));
+        return $this->post($req)->then(function (string $out) use ($service, $o, $kind) {
             $png = $service->decode($out);
+            if ($kind === 'tileset') {
+                $sheet = Pixelize::sprite($png, $o['columns'] * $o['tile'], $o['rows'] * $o['tile']);
+                return $this->validate('tileset', $sheet + ['tiles' => []], $o);     // the picture's collisions are for the editor to set
+            }
             return $this->validate('sprite', Pixelize::sprite($png, $o['width'], $o['height']), ['frames' => 1] + $o);
+        });
+    }
+
+    /** A sound service makes the real sound: the audio file comes back for the editor's page to save in the project (mp3, played as it is). */
+    private function sound(string $provider, string $kind, string $prompt, array $o, string $key): Deferred
+    {
+        $service = $this->audio[$provider];
+        if (!in_array($kind, $service->kinds(), true)) {
+            throw new \InvalidArgumentException($service->name() . ' makes ' . implode(' and ', $service->kinds()) . ' only.');
+        }
+        if (trim($key) === '') {
+            throw new \InvalidArgumentException($service->name() . ' needs your API key (kept in the IDE on this computer).');
+        }
+        $req = $service->request($kind, $prompt, (float)($o['seconds'] ?? 2), trim($key));
+        return $this->post($req)->then(function (string $out) use ($service, $kind, $o): array {
+            $bytes = $service->decode($out);
+            return ['audio' => 'data:audio/mpeg;base64,' . base64_encode($bytes), 'ext' => 'mp3', 'kind' => $kind, 'seconds' => $o['seconds'] ?? 0, 'size' => strlen($bytes)];
         });
     }
 
