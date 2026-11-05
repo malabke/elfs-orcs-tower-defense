@@ -281,7 +281,20 @@ class OpenGl extends EventEmitter
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, $id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        // desktop GL: SDL leaves the row length of its last texture upload set; ours are tightly packed (without
+        // this, a texture made after SDL updated one of its own is read with the wrong rows). WebGL 1 and the phone
+        // apps' OpenGL ES 2 have no row length.
+        $unpack = [];
+        if (!\JumPHP\Kernel\Platform::isWasm() && !\JumPHP\Kernel\Platform::isPhoneApp()) {
+            foreach ([GL_UNPACK_ROW_LENGTH, GL_UNPACK_SKIP_ROWS, GL_UNPACK_SKIP_PIXELS] as $param) {
+                $unpack[$param] = (int)glGetIntegerv($param);
+                glPixelStorei($param, 0);
+            }
+        }
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, $width, $height, 0, GL_RGBA, GL_UNSIGNED_BYTE, $rgba);
+        foreach ($unpack as $param => $value) {
+            glPixelStorei($param, $value);
+        }
         // WebGL 1 repeats power-of-two textures only
         $pot = ($width & ($width - 1)) === 0 && ($height & ($height - 1)) === 0;
         $this->params($smooth, $repeat && $pot);
