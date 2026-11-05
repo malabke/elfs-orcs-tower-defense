@@ -17,6 +17,10 @@ use JumPHP\Util\Color;
  *                     ├─ composite ─> post shader (optional) ─> screen
  *   3D layer ─────────┘   'below': the 3D shows through the 2D where the 2D has the key colour (HUD over 3D);
  *                                  a darker shade of the key shows a darker 3D (fades, translucent menus)
+ *                         'below' with no key (null), 'view' resolution: the 2D's own alpha says where the 3D
+ *                                  shows: clear the 2D with clear([0, 0, 0, 0], true), then anything drawn over it (smooth
+ *                                  text, translucent colours) is mixed over the 3D as it is (with an HD renderer
+ *                                  the view is the window's resolution: Renderer::setHd())
  *                         'above': the 3D is drawn over the 2D (its transparent pixels show the 2D)
  *
  * Resources are created once (enter()), they get an id; drawing is immediate mode: draw() in render(), every
@@ -64,8 +68,9 @@ class WebGl extends EventEmitter
         GLSL;
 
     // the 3D layer mixed with the 2D picture: u_mode 0 = below (the key colour shows the layer), 1 = above (alpha),
-    // 2 = the picture only (before a post shader). Below: a pixel equal to the key colour times s (0..1) shows the
-    // layer times s, so translucent black over the key (pause menus, scene fades) darkens the 3D too.
+    // 2 = the picture only (before a post shader), 3 = below by the 2D's alpha (premultiplied: SDL blended it over
+    // a transparent clear). Below: a pixel equal to the key colour times s (0..1) shows the layer times s, so
+    // translucent black over the key (pause menus, scene fades) darkens the 3D too.
     private const COMPOSITE = <<<'GLSL'
         precision mediump float;
         varying vec2 v_uv;
@@ -82,7 +87,10 @@ class WebGl extends EventEmitter
                 f = f.bgra;
             }
             vec3 c = f.rgb;
-            if (u_mode < 1.5) {
+            if (u_mode > 2.5) {
+                vec4 l = texture2D(u_layer, v_uv);
+                c = f.rgb + l.rgb * l.a * (1.0 - f.a);
+            } else if (u_mode < 1.5) {
                 vec4 l = texture2D(u_layer, v_uv);
                 if (u_mode < 0.5) {
                     float s = clamp(dot(f.rgb, u_key) / dot(u_key, u_key), 0.0, 1.0);
@@ -98,7 +106,7 @@ class WebGl extends EventEmitter
     private int $nextId = 1;
     /** @var array<int, array{0: string, 1: int}> id => [kind, GL name] */
     private array $res = [];
-    /** @var array{position: string, resolution: string, key: float[]}|null */
+    /** @var array{position: string, resolution: string, key: float[], alpha: bool}|null */
     private ?array $layer = null;
     /** @var array{program: int, uniforms: array<string, mixed>}|null */
     private ?array $post = null;
@@ -109,8 +117,8 @@ class WebGl extends EventEmitter
     /** @var array{fb: int, tex: int, depth: int, w: int, h: int, smooth?: bool}|null */
     private ?array $compTarget = null;
     private int $frameTex = 0;
-    /** @var int[] size of $frameTex */
-    private array $frameSize = [0, 0];
+    /** @var array{0: int, 1: int, 2: bool} size of $frameTex, with alpha or not */
+    private array $frameSize = [0, 0, false];
     private int $composite = 0;
     private bool $hooked = false;
     private int $supersample = 1;
@@ -139,16 +147,22 @@ class WebGl extends EventEmitter
     /**
      * Turns the 3D layer on.
      * @param string $position 'below' (2D over 3D, through the key colour) or 'above' (3D over the 2D)
-     * @param string $resolution 'view' (game.yaml size: big retro pixels) or 'native' (window pixels: smooth)
-     * @param Color|array|string $key 'below' only: the 2D colour that shows the 3D (exact match)
+     * @param string $resolution 'view' (the view texture: game.yaml size, big retro pixels; the window's
+     *        resolution with an HD renderer) or 'native' (window pixels: smooth)
+     * @param Color|array|string|null $key 'below' only: the 2D colour that shows the 3D (exact match); null: the
+     *        2D's own alpha (clear it with clear([0, 0, 0, 0], true); 'view' resolution only: the window has no alpha)
      */
-    public function setLayer(string $position = 'below', string $resolution = 'view', Color|array|string $key = [255, 0, 255]): void
+    public function setLayer(string $position = 'below', string $resolution = 'view', Color|array|string|null $key = [255, 0, 255]): void
     {
         if (!in_array($position, ['below', 'above'], true) || !in_array($resolution, ['view', 'native'], true)) {
             throw new \InvalidArgumentException("setLayer: position below|above, resolution view|native");
         }
-        $c = Color::of($key);
-        $this->layer = ['position' => $position, 'resolution' => $resolution, 'key' => [$c->r / 255, $c->g / 255, $c->b / 255]];
+        if ($key === null && ($position !== 'below' || $resolution !== 'view')) {
+            throw new \InvalidArgumentException("setLayer: no key colour (the 2D's alpha) needs 'below' and 'view'");
+        }
+        $c = Color::of($key ?? [255, 0, 255]);
+        $this->layer = ['position' => $position, 'resolution' => $resolution, 'key' => [$c->r / 255, $c->g / 255, $c->b / 255],
+            'alpha' => $key === null];
         $this->hook();
     }
 
@@ -357,7 +371,9 @@ class WebGl extends EventEmitter
         $gl->save();
         $sdlFb = (int)glGetIntegerv(GL_FRAMEBUFFER_BINDING);
         if ($stage === 'view') {
-            [$x, $y, $w, $h] = [0, 0, $r->getWidth(), $r->getHeight()];
+            // the view texture's pixels: the view's size, times the renderer's HD
+            [$w, $h] = $r->viewPixels();
+            [$x, $y] = [0, 0];
         } else {
             [$ow, $oh] = $r->outputSize();
             [$lx, $ly, $w, $h] = $r->letterbox();
@@ -388,14 +404,16 @@ class WebGl extends EventEmitter
         }
         $this->commands = [];
 
-        // the 2D picture, copied from SDL's target (an SDL target texture stores its top row first)
+        // the 2D picture, copied from SDL's target (an SDL target texture stores its top row first); with its
+        // alpha when the layer is composed by it (the view texture has an alpha, the window has not)
+        $alpha = (bool)($this->layer['alpha'] ?? false);
         glBindFramebuffer(GL_FRAMEBUFFER, $sdlFb);
-        $this->frameTexture($w, $h);
+        $this->frameTexture($w, $h, $alpha);
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, $x, $y, $w, $h);
         $intoSdl = $stage === 'view';
 
         $composite = $this->compositeProgram();
-        $mode = $this->layer === null ? 2.0 : ($this->layer['position'] === 'above' ? 1.0 : 0.0);
+        $mode = $this->layer === null ? 2.0 : ($this->layer['position'] === 'above' ? 1.0 : ($alpha ? 3.0 : 0.0));
         $swap = $intoSdl && $gl->sdlSwapsRedBlue() ? 1.0 : 0.0;     // colours as SDL's GLES2 targets store them
         $setup = function (int $p, bool $flip) use ($gl, $mode, $intoSdl, $swap): void {
             $gl->uniform($p, 'u_flip', $flip ? 1.0 : 0.0);
@@ -453,7 +471,7 @@ class WebGl extends EventEmitter
         return ['smooth' => $smooth] + $this->gl->renderTarget($w, $h, $depth, $smooth);
     }
 
-    private function frameTexture(int $w, int $h): void
+    private function frameTexture(int $w, int $h, bool $alpha = false): void
     {
         if ($this->frameTex === 0) {
             $names = [];
@@ -462,15 +480,17 @@ class WebGl extends EventEmitter
         }
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, $this->frameTex);
-        if ($this->frameSize !== [$w, $h]) {
-            // RGB: WebGL refuses to copy a framebuffer without alpha (the window, 'native') into an RGBA texture
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, $w, $h, 0, GL_RGB, GL_UNSIGNED_BYTE, null);
+        if ($this->frameSize !== [$w, $h, $alpha]) {
+            // RGB: WebGL refuses to copy a framebuffer without alpha (the window, 'native') into an RGBA texture;
+            // RGBA only when the 2D's alpha composes the layer (copied from the view texture, which has one)
+            $format = $alpha ? GL_RGBA : GL_RGB;
+            glTexImage2D(GL_TEXTURE_2D, 0, $format, $w, $h, 0, $format, GL_UNSIGNED_BYTE, null);
             foreach ([GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER] as $p) {
                 glTexParameteri(GL_TEXTURE_2D, $p, GL_NEAREST);
             }
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            $this->frameSize = [$w, $h];
+            $this->frameSize = [$w, $h, $alpha];
         }
     }
 

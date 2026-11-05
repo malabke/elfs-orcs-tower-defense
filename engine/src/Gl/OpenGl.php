@@ -107,7 +107,8 @@ class OpenGl extends EventEmitter
         $r = $this->sdl->getRenderer();
         $this->sdlSwapsRedBlue();        // measured with SDL calls: before the state is saved
         $this->save();
-        $t = $this->target($r->getWidth() * $this->supersample, $r->getHeight() * $this->supersample);
+        [$vw, $vh] = $r->viewPixels();   // the view texture's pixels (bigger than the view in HD)
+        $t = $this->target($vw * $this->supersample, $vh * $this->supersample);
         glBindFramebuffer(GL_FRAMEBUFFER, $t['fb']);
         glViewport(0, 0, $t['w'], $t['h']);
         if ($clear !== null) {
@@ -128,9 +129,9 @@ class OpenGl extends EventEmitter
             return;
         }
         // into the scene's target: the view texture (SDL sets its viewport lazily: never trust the current one)
-        $r = $this->sdl->getRenderer();
+        [$vw, $vh] = $this->sdl->getRenderer()->viewPixels();
         glBindFramebuffer(GL_FRAMEBUFFER, $this->saved['fb']);
-        glViewport(0, 0, $r->getWidth(), $r->getHeight());
+        glViewport(0, 0, $vw, $vh);
         $this->blit($this->target['tex'], true, true);
         $this->restore();
     }
