@@ -8,7 +8,7 @@ use JumPHP\Renderer\TextDrawer;
 /**
  * On-screen controls drawn by the engine itself (the native Android app: no browser, so no engine/web/touch.js):
  * the same d-pad or floating joystick and A / B / START / SELECT buttons, the same game.yaml `touch` options
- * (pad, a, b, start, select, labels), the same places (the black bands beside the game when they are wide enough).
+ * (pad: dpad, stick or none; a, b, start, select, labels), the same places (the black bands beside the game when they are wide enough).
  * The buttons press the game's real keys; a touch elsewhere is a mouse click on the game (menus); the Android back
  * button is Escape. On with JUMPHP_TOUCH_CONTROLS=1 (the app sets it; on desktop, to try them with the mouse).
  */
@@ -26,6 +26,8 @@ class TouchControls
     /** @var array<string, string> */
     private array $labels;
     private bool $stick;
+    /** game.yaml `touch: {pad: none}`: no pad and no buttons, every touch is a click on the game */
+    private bool $none;
     /** @var array<string, array{x: float, y: float, w: float, h: float, round: bool, key: string, label: string}> */
     private array $buttons = [];
     /** @var array{x: float, y: float, w: float, h: float} the joystick's zone */
@@ -60,6 +62,7 @@ class TouchControls
         }
         $this->labels = array_merge(['a' => 'A', 'b' => 'B', 'start' => 'START', 'select' => 'SELECT'], (array)($config['labels'] ?? []));
         $this->stick = ($config['pad'] ?? null) === 'stick';
+        $this->none = ($config['pad'] ?? null) === 'none';
         if (function_exists('SDL_SetHint')) {
             // the touches are ours: no mouse events made from them by SDL (a button would click the game under it)
             \SDL_SetHint('SDL_TOUCH_MOUSE_EVENTS', '0');
@@ -201,6 +204,11 @@ class TouchControls
         }
         $this->ow = $ow;
         $this->oh = $oh;
+        if ($this->none) {
+            // no controls: the touches all go to the game as clicks
+            $this->buttons = [];
+            return;
+        }
         // a CSS pixel of the browser version: a phone held sideways is ~400 of them high
         $u = $this->unit = max(1.0, min($ow, $oh) / 400);
         $box = fn (float $x, float $y, float $w, float $h, bool $round, string $key, string $label): array
