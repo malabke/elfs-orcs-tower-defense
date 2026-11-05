@@ -317,7 +317,9 @@ textarea.input { resize: vertical; font-family: var(--font); }
 .welcome .w-nav button { width: 100%; text-align: left; height: 32px; border: 0; background: none; border-radius: var(--radius); padding: 0 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--text); }
 .welcome .w-nav button:hover { background: var(--hover); }
 .welcome .w-nav button.on { background: var(--selection); }
-.welcome .w-user { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 6px 0; border-top: 1px solid var(--border-2); }
+.welcome .w-lang { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 6px 6px 8px; color: var(--text-2); }
+.welcome .w-lang select { flex: 1; min-width: 0; font-size: 12px; }
+.welcome .w-user { margin-top: 0; display: flex; align-items: center; gap: 10px; padding: 10px 6px 0; border-top: 1px solid var(--border-2); }
 .welcome .w-user img { width: 30px; height: 30px; border-radius: 50%; }
 .welcome .w-main { padding: 28px 40px; overflow: auto; }
 .welcome .w-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 22px; }

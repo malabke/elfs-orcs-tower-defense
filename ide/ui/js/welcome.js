@@ -58,6 +58,8 @@ export class Welcome {
     const side = el('div.w-side', {},
       el('div.w-brand', {}, el('img', { src: 'img/icon.png', alt: '' }), el('div', {}, el('b', {}, 'JumPHP IDE'), el('small', {}, s.version ? 'version ' + s.version : ''))),
       el('div.w-nav', {}, nav('projects', 'Projects', 'folder'), nav('new', 'New Project', 'plus'), nav('news', 'News', 'bell'), nav('learn', 'Learn', 'star')),
+      // the language (of the news): always visible, beside the account
+      el('div.w-lang', { title: 'Language of the news' }, icon('globe'), languageSelect(() => { if (this.section === 'news') this.render(); })),
       el('div.w-user', {}, s.user
         ? [el('img', { src: s.user.avatar || '', alt: '' }), el('div', { style: { flex: 1, minWidth: 0, cursor: 'pointer' }, title: 'GitHub accounts', onclick: (e) => this.accountsMenu(e.currentTarget) }, el('b', {}, s.user.login), el('div', { style: { fontSize: '12px', color: 'var(--text-3)' } }, s.server)),
           el('button.icon-btn', { title: 'Sign out', onclick: () => this.logout() }, icon('logout'))]
