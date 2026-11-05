@@ -5,6 +5,8 @@
 //   pad: stick       a floating joystick instead of the d-pad: touch anywhere on the left half of the screen and
 //                    slide (8 directions, diagonals included: walk + jump with one thumb); a short tap there
 //                    without sliding is a mouse click on the game
+//   pad: none        no pad and no buttons at all: a game played by tapping the picture (it gets the touches as
+//                    mouse clicks); the hint to turn the phone stays
 //   select: P        a 4th small button (SELECT) next to START
 //   labels: {a: JUMP, b: FIRE, start: START, select: PAUSE, rotate: 'TURN YOUR PHONE'}   texts
 //   fullscreen: false   do not go fullscreen (and landscape) at the first tap (jumphp.js)
@@ -169,6 +171,7 @@
 		const labels = Object.assign({ a: 'A', b: 'B', start: 'START', select: 'SELECT' }, cfg.labels || {});
 		const game = window.JUMPHP_GAME || {};
 		if ((game.width || 16) > (game.height || 9)) rotateHint(labels.rotate || 'TURN YOUR PHONE');
+		if (cfg.pad === 'none') return;
 		let zone = null;
 		if (cfg.pad === 'stick') {
 			zone = stick();

@@ -256,7 +256,7 @@ Replace its scenes and entities with your game:
    | `net_url` | ws://localhost:8090/ws | relay server |
    | `smoke` | | `{scene: ..., params: {...}}` run 600 frames by `bin/jumphp test`: make it a self-playing demo |
    | `online` | false | the game has online play (shown by the portal) |
-   | `touch` | | phone pad keys: `{a: Space, b: Escape, start: Return}`; optional `pad: stick` (floating joystick, 8 directions), `select: P` (4th button), `labels: {a: JUMP, ..., rotate: TEXT}`; phones go fullscreen + landscape at the first tap (`fullscreen: false` to disable) |
+   | `touch` | | phone pad keys: `{a: Space, b: Escape, start: Return}`; optional `pad: stick` (floating joystick, 8 directions) or `pad: none` (no pad, no buttons: games played by tapping, the touches are mouse clicks), `select: P` (4th button), `labels: {a: JUMP, ..., rotate: TEXT}`; phones go fullscreen + landscape at the first tap (`fullscreen: false` to disable) |
    | `controls` | | one line of help text shown by the web page / portal |
    | `runtime` | default | `async`: desktop runs on PHP 8.6 ZTS + TrueAsync (real threads, §9 Threads) |
    | `pause_scene` | | pushed when the tab is hidden / the window loses the focus (not over menus) |
