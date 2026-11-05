@@ -30,9 +30,11 @@ stays winnable, `site/` (the game's home page) and `assets/thumbnail.png` / `ass
 **The battle is drawn in 3D, painted like a storybook** (the user wants neither pixel art nor a crude low-poly look:
 soft painted ground, lush round trees, warm light, cool shadows): a WebGL layer under the 2D scene (`$engine->gl()`, layer
 'below', 'native' resolution, key colour magenta). Pure classes in `src/View3d/` (excluded from the container, unit-tested
-by `tests/ViewTest.php`): `Mesh` (boxes, cylinders, balls with colour gradients and lumps, triangles, quads -> one buffer;
-10 floats per vertex, the last one the material), `Units` (every creature, round "picture book" characters, 4 walking
-frames), `Towers` (20 towers by level / specialization, front towards +z), `Props` (shots, walls, traps, disc / ring /
+by `tests/ViewTest.php`): `Mesh` (boxes, cylinders, balls with colour gradients and lumps, triangles, quads, and for
+sculpting `lathe()` (a smooth surface through rings: torsos, heads, helmets), `limb()` (along a profile), `plate()` (a
+flat shape with a thickness: blades, axe heads, feathers), `sheet()` (an open surface: capes) -> one buffer; 10 floats
+per vertex, the last one the material), `Units` (every creature, see "Creatures" below), `Skeleton` (bones turning
+about their joints -> u_bones matrices), `Towers` (20 towers by level / specialization, front towards +z), `Props` (shots, walls, traps, disc / ring /
 ball / soft shadow), `MapModel` (the land of a map: terrain with hills outside the board, the forest around it, trees,
 bushes, grass tufts, flowers, rocks, floating specks of light, platforms, the castle; one mesh per map and side),
 `GroundMap` (a 512 x 256 RGBA texture per map: road, water, sun / shadows, sky light), `Rig` (the camera: fits every
@@ -81,6 +83,24 @@ drawn smoothed by `Sprites::drawPortrait()` (false when missing: the old pixel d
 through `World3d::studio()` (no land, plain background), over black then white; the difference gives the alpha. Re-run
 it after changing a model (`bin/jumphp test <id> --filter PortraitShotsTest`): it rewrites the PNGs. The 2D fallback
 battle (no WebGL) still draws the pixel sprites of `Sprites`.
+**Creatures** (`App\View3d\Units`; the user found the old round dolls "gross" and gave a 3D strategy game of the 2000s
+as the bar: sturdy readable shapes, not a copy of its characters). Sculpted with `Mesh::lathe()` / `limb()` / `plate()`:
+each people its build (`RACES`: orcs hunched with big fists, trolls huge, goblins with a big head and long ears, dwarves
+stocky, elves slender, the little folk round), heads from rings (`HEADS`: jaw, brow, cranium) with eyes, brows, nose,
+mouth, ears, tusks, hair (long, crest, curls), beards, helmets / hoods / caps / hats / crowns, cuirasses and pauldrons
+that shine (metal), weapons in volume and oversized (`growAbout()`), shields, capes. Mounts (horse, wolf) with their
+rider as a second model (`parts()`), flyers with flapping wings, the ram with turning wheels. **Skeletons**: each vertex
+belongs to a bone (`Mesh::bone()`: the material is `Mesh::BONE` + bone, `METAL_BONE` + bone when it shines); a person
+has 16 bones (`HIPS` ... `FOOT_L`), a mount 12, a flyer 7, the ram 6. `Units::pose($sprite, $anim, $t, $part)` gives
+the bones' matrices (cached: 32 steps a cycle, 8 a second for idle / stun); the shader moves each vertex by
+`u_bones[bone]` (a `mat4[16]` uniform: works on the playground's released engine too) and adds a sun glint on metal.
+Animations: `walk` (t: cycles; the scenes give distance / `stride()` so the feet keep in step with the ground), `fight`
+(the blow lands in the first quarter, with `PlayScene::lunge()`; archers draw their bow), `idle` (breathing, looking
+about), `stun`, `fly`; riders sit astride (`personPose($seated)`), feet stay flat (`FOOT_*` bones). `World3d::creature()`
+draws one (and its rider); `PlayScene::gait()` picks the animation. `tests/ViewTest.php` checks every creature builds
+and poses and keeps its feet on the ground; `tests/CreatureShotsTest.php` photographs them
+(`var/screenshots/tests/creatures-idle|walk|fight.png`, `creatures-battle-*.png`): look at them after a change, then
+re-run `PortraitShotsTest` (the interface's portraits). A human is 7-11k vertices, 30-50 ms to build (lazily, once).
 **Particles** (3D only): `App\View3d\Particles` (pure, seeded, at most `MAX` = 240) holds sparks and dust where shots
 land, puffs and coins of kills, dust and golden motes of builds / upgrades, dust of sales, green motes of heals, the
 power's shower, red flares of leaks, embers over burning enemies and trails behind glowing shots. `PlayScene` emits them

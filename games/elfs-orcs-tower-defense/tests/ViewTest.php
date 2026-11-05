@@ -8,6 +8,7 @@ use App\View3d\MapModel;
 use App\View3d\Mesh;
 use App\View3d\Props;
 use App\View3d\Rig;
+use App\View3d\Skeleton;
 use App\View3d\Towers;
 use App\View3d\Units;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -39,18 +40,88 @@ final class ViewTest extends TestCase
                 self::assertGreaterThanOrEqual(0.0, $m->v[$i + $k]);
                 self::assertLessThan(2.1, $m->v[$i + $k]);
             }
-            self::assertTrue($m->v[$i + 9] >= 0.0 && $m->v[$i + 9] < 7.0, "$what: unknown material {$m->v[$i + 9]}");
+            $mat = $m->v[$i + 9];
+            $bone = $mat >= Mesh::METAL_BONE ? $mat - Mesh::METAL_BONE : $mat - Mesh::BONE;
+            self::assertTrue(($mat >= 0.0 && $mat < 7.0) || ($mat >= Mesh::BONE && $bone >= 0 && $bone < Skeleton::MAX), "$what: unknown material $mat");
         }
     }
 
-    public function testEveryCreatureBuildsInEveryWalkingFrame(): void
+    public function testEveryCreatureIsBuiltAndPosedInEveryAnimation(): void
     {
         foreach (array_keys(Units::KINDS) as $sprite) {
-            for ($frame = 0; $frame < Units::FRAMES; $frame++) {
-                self::assertSound(Units::build($sprite, $frame), "$sprite/$frame");
+            foreach (Units::parts($sprite) as $part) {
+                $mesh = Units::build($sprite, $part);
+                self::assertSound($mesh, "$sprite $part");
+                // every vertex moves with a bone of its skeleton
+                $bones = Units::skeleton($sprite, $part)->count();
+                for ($i = 9, $n = count($mesh->v); $i < $n; $i += Mesh::STRIDE) {
+                    $mat = $mesh->v[$i];
+                    self::assertGreaterThanOrEqual(Mesh::BONE, $mat, "$sprite $part: a vertex without a bone");
+                    self::assertLessThan($bones, $mat >= Mesh::METAL_BONE ? $mat - Mesh::METAL_BONE : $mat - Mesh::BONE, "$sprite $part: a bone it has not");
+                }
+                foreach (Units::ANIMS as $anim) {
+                    foreach ([0.0, 0.3, 0.7, 2.6] as $t) {
+                        $pose = Units::pose($sprite, $anim, $t, $part);
+                        self::assertCount(16 * Skeleton::MAX, $pose);
+                        foreach ($pose as $value) {
+                            self::assertTrue(is_finite($value), "$sprite $part $anim $t: a matrix is not finite");
+                        }
+                    }
+                }
             }
             self::assertGreaterThan(3.0, Units::height($sprite));
+            self::assertGreaterThan(3.0, Units::stride($sprite));
         }
+    }
+
+    /** People and mounts keep their feet on the ground whatever they do: they neither sink nor float. */
+    public function testCreaturesKeepTheirFeetOnTheGround(): void
+    {
+        foreach (Units::KINDS as $sprite => $d) {
+            if ($d['k'] === 'wings') {
+                continue;
+            }
+            foreach (['walk', 'fight', 'idle', 'stun'] as $anim) {
+                foreach ([0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875] as $t) {
+                    $low = INF;
+                    foreach (Units::posed(Units::build($sprite), Units::pose($sprite, $anim, $t)) as $p) {
+                        $low = min($low, $p[1]);
+                    }
+                    self::assertGreaterThan(-0.6, $low, "$sprite sinks into the ground ($anim at $t)");
+                    self::assertLessThan(0.8, $low, "$sprite floats above the ground ($anim at $t)");
+                }
+            }
+        }
+    }
+
+    /** A rider sits on its saddle, above its mount's back, in every pose. */
+    public function testRidersSitOnTheirMounts(): void
+    {
+        foreach (Units::KINDS as $sprite => $d) {
+            if (!isset($d['rider'])) {
+                continue;
+            }
+            foreach (['walk', 'fight', 'idle'] as $anim) {
+                [$min] = self::partBounds($sprite, 'rider', $anim, 0.3);
+                [, $mountMax] = self::partBounds($sprite, 'body', $anim, 0.3);
+                self::assertGreaterThan(5.0, $min[1], "$sprite: the rider's feet hang along the flanks, above the ground");
+                self::assertGreaterThan($mountMax[1] - 9.0, $min[1] + 4.0);
+            }
+        }
+    }
+
+    /** @return array{0: array<int, float>, 1: array<int, float>} */
+    private static function partBounds(string $sprite, string $part, string $anim, float $t): array
+    {
+        $min = [INF, INF, INF];
+        $max = [-INF, -INF, -INF];
+        foreach (Units::posed(Units::build($sprite, $part), Units::pose($sprite, $anim, $t, $part)) as $p) {
+            for ($a = 0; $a < 3; $a++) {
+                $min[$a] = min($min[$a], $p[$a]);
+                $max[$a] = max($max[$a], $p[$a]);
+            }
+        }
+        return [$min, $max];
     }
 
     public function testEveryCreatureOfTheDataHasAModel(): void

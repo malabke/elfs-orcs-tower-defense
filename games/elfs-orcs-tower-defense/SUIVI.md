@@ -84,7 +84,19 @@ Dernière mise à jour : 2026-11-05.
    Vérifié aussi avec le moteur partagé avant de publier (`bin/jumphp build:remote <id>` puis `JUMPHP_WEB=remote
    bin/jumphp webshot <id> 9 '[[1,"Enter"]]'`) : police pixel en repli, vignettes 3D affichées, textes en place.
    Idée pour la suite (pas demandée) : des vignettes pour l'écran des cartes. `composer.lock` du jeu est suivi par git.
-6. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (1er PC, voir les pièges).
+6. **Personnages 3D refaits (2026-11-05, 1er PC, pas encore publiés).** L'utilisateur a trouvé les personnages
+   « encore bien dégueu », avec pour repère un jeu de stratégie 3D d'il y a 25 ans « moins crade » : on vise ce niveau
+   de finition sans copier ses personnages. Chaque peuple a maintenant sa carrure (orcs voûtés aux gros poings, trolls
+   énormes, gobelins à grosse tête, nains trapus, elfes élancés, petits-hommes ronds). Les corps sont sculptés en
+   surfaces lisses (`Mesh::lathe/limb/plate/sheet`). Les visages ont arcade, mâchoire, nez, oreilles et défenses ;
+   casques, cuirasses et épaulières brillent ; les armes ont du volume et sont surdimensionnées ; il y a des boucliers
+   et des capes. **Squelette animé par le shader** (`Skeleton`, `u_bones`) : marche au pas du sol, coups au-dessus de
+   la tête synchronisés avec l'élan, archers qui bandent l'arc, repos, étourdissement, cavaliers en selle, vol. Les
+   pieds restent à plat. Détails dans `AGENTS.md` (« Creatures »). Tests : `ViewTest` (tout se construit et se pose,
+   les pieds restent au sol), `CreatureShotsTest` (planches `creatures-*.png` et batailles `creatures-battle-*.png` à
+   regarder après chaque retouche). Les portraits de l'interface sont refaits par `PortraitShotsTest`.
+7. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (1er PC, voir les pièges : 4e fois le
+   2026-11-05).
 
 ## Décisions de l'utilisateur (à respecter)
 
@@ -95,7 +107,7 @@ Dernière mise à jour : 2026-11-05.
 ## Pièges de cet environnement (Windows)
 
 - Projet dans `C:\Users\NXTC\AppData\Local\Temp\...` : Windows y efface les fichiers à date ancienne → des fichiers
-  de `vendor/` disparaissent (3 fois). Remède : `rm -rf` du `vendor` touché puis `bin/jumphp test engine` (moteur)
+  de `vendor/` disparaissent (4 fois, dont `engine/vendor` et celui du jeu le 2026-11-05). Remède : `rm -rf` du `vendor` touché puis `bin/jumphp test engine` (moteur)
   ou `bin/jumphp install elfs-orcs-tower-defense` (jeu).
 - Git Bash (pas PowerShell). `bin/jumphp` a des correctifs MSYS (chemins Docker) ; fichiers en LF dans l'arbre de
   travail, `git config core.autocrlf false` sur les deux PC (depuis le 2026-11-05 sur le 1er) : ne pas committer de
@@ -143,3 +155,5 @@ Dernière mise à jour : 2026-11-05.
   capture (cadrage, île qui flotte, ciel 3D, place des textes, fondu, pause) et terminées sur la branche `vignettes`
   (`4948282`) ; vérifiées avec le moteur partagé, puis publiées (« publie ») : `vignettes` fusionnée dans `main`,
   poussée, branche supprimée.
+- 2026-11-05 (1er PC, suite) : tests du playground relancés (coupés à 120 s, voir « Publication ») ; personnages 3D
+  entièrement refaits avec squelette et animations (voir « En cours » 6).

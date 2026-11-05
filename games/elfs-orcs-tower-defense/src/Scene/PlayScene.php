@@ -1013,17 +1013,20 @@ final class PlayScene extends AbstractScene implements HotReloadable
                     $sprite = (string)$t->stats['soldiers']['sprite'];
                     $yaw = $this->headingOf($s->x, $s->y, $s->target, $s->facingLeft);
                     [$lx, $lz] = $this->lunge($yaw, $s->isFighting(), $s->age);
-                    $this->creature3d($sprite, 1.0, $s->x + $lx, $s->y + $lz, $yaw, self::walkFrame($s->age));
+                    $walking = $s->target !== null || hypot($s->x - $s->homeX, $s->y - $s->homeY) > 0.8;
+                    [$anim, $at] = $this->gait($sprite, 1.0, $s->isFighting(), $walking, $s->age, 60.0, $s->homeX * 0.37);
+                    $this->creature3d($sprite, 1.0, $s->x + $lx, $s->y + $lz, $yaw, $anim, $at);
                 }
             }
         }
         if ($b->hero?->isAlive()) {
             $h = $b->hero;
-            $moving = $h->isWalking() || $h->isFighting();
+            $sprite = (string)$h->def['sprite'];
+            $scale = (float)($h->def['scale'] ?? 1.0);
             $yaw = $this->headingOf($h->x, $h->y, $h->target, $h->facingLeft);
             [$lx, $lz] = $this->lunge($yaw, $h->isFighting(), $h->age);
-            $this->creature3d((string)$h->def['sprite'], (float)($h->def['scale'] ?? 1.0), $h->x + $lx, $h->y + $lz,
-                $yaw, $moving ? self::walkFrame($h->age) : 0);
+            [$anim, $at] = $this->gait($sprite, $scale, $h->isFighting(), $h->isWalking(), $h->age, (float)$h->def['speed'], 0.0);
+            $this->creature3d($sprite, $scale, $h->x + $lx, $h->y + $lz, $yaw, $anim, $at);
         }
         foreach ($b->enemies as $e) {
             $this->enemy3d($e);
@@ -1058,16 +1061,32 @@ final class PlayScene extends AbstractScene implements HotReloadable
         return $left ? M_PI : 0.0;
     }
 
-    /** The walking frame of a creature that has lived $age seconds (about two steps a second). */
-    private static function walkFrame(float $age): int
+    /**
+     * What a creature is doing and how far into it, for World3d::creature(): fighting (the blow in step with lunge()),
+     * walking ($age: its walking time; $speed px/s: its legs in step with the ground), else resting ($seed: each in
+     * its own time). @return array{0: string, 1: float}
+     */
+    private function gait(string $sprite, float $size, bool $fighting, bool $walking, float $age, float $speed, float $seed): array
     {
-        return (int)($age * 9.0) % Units::FRAMES;
+        if ($fighting) {
+            return ['fight', $age * 2.2];
+        }
+        if ($walking) {
+            return ['walk', $age * $speed / $this->strideOf($sprite, $size)];
+        }
+        return ['idle', $this->time + $seed];
     }
 
-    private function creature3d(string $sprite, float $size, float $x, float $y, float $yaw, int $frame, array $tint = [1.0, 1.0, 1.0],
+    /** How far (map px) a creature goes in one walking cycle at a size. */
+    private function strideOf(string $sprite, float $size): float
+    {
+        return max(1.0, Units::stride($sprite) * Units::size($sprite) * $size * self::UNIT_SCALE);
+    }
+
+    private function creature3d(string $sprite, float $size, float $x, float $y, float $yaw, string $anim, float $t, array $tint = [1.0, 1.0, 1.0],
                                 float $alpha = 1.0, float $lift = 0.3): void
     {
-        $this->world->draw("u:$sprite:$frame", static fn () => Units::build($sprite, $frame), $x, $lift, $y, $yaw, $size * self::UNIT_SCALE, $tint, $alpha);
+        $this->world->creature($sprite, $anim, $t, $x, $lift, $y, $yaw, $size * self::UNIT_SCALE, $tint, $alpha);
     }
 
     private function enemy3d(Enemy $e): void
@@ -1091,9 +1110,17 @@ final class PlayScene extends AbstractScene implements HotReloadable
         $lift = $e->isFlying() ? 15.0 + sin($e->age * 5) * 1.5 : 0.3;
         $yaw = -atan2($e->dirY, $e->dirX);
         // held by a soldier or a wall: it strikes at what holds it
-        [$lx, $lz] = $this->lunge($yaw, $e->isHeld() && !$e->isStunned(), $e->age + 0.4);
-        $this->creature3d((string)$def['sprite'], (float)($def['scale'] ?? 1.0), $e->x + $lx, $e->y + $lz, $yaw,
-            $e->isStunned() ? 0 : self::walkFrame($e->age), $tint, $alpha, $lift);
+        $fighting = $e->isHeld() && !$e->isStunned();
+        [$lx, $lz] = $this->lunge($yaw, $fighting, $e->age + 0.4);
+        $sprite = (string)$def['sprite'];
+        $scale = (float)($def['scale'] ?? 1.0);
+        [$anim, $at] = match (true) {
+            $e->isStunned() => ['stun', $e->age],
+            $fighting => ['fight', ($e->age + 0.4) * 2.2],
+            $e->isFlying() => ['fly', $e->age * 2.0],
+            default => ['walk', $e->distance / $this->strideOf($sprite, $scale)],
+        };
+        $this->creature3d($sprite, $scale, $e->x + $lx, $e->y + $lz, $yaw, $anim, $at, $tint, $alpha, $lift);
     }
 
     /**

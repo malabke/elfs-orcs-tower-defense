@@ -150,9 +150,9 @@ final class TitleScene extends GameMenuScene
             [$x, $z, $dx, $dz] = $this->road->at($d);
             $flying = $sprite === 'bat';
             $w->shadow($x + $sx * 3.0, $z + $sz * 3.0, 9.0, 7.0, $shadowYaw, $flying ? 0.2 : 0.4);
-            $frame = (int)($t * 9.0 + $i) % Units::FRAMES;
-            $w->draw("u:$sprite:$frame", static fn () => Units::build($sprite, $frame), $x, $flying ? 15.0 + sin($t * 5 + $i) * 1.5 : 0.3, $z,
-                -atan2($dz, $dx), 2.0);
+            // the legs in step with the road (2: the battle's scale)
+            $step = $flying ? $t * 2.0 + $i * 0.3 : $d / (Units::stride($sprite) * Units::size($sprite) * 2.0);
+            $w->creature($sprite, $flying ? 'fly' : 'walk', $step, $x, $flying ? 15.0 + sin($t * 5 + $i) * 1.5 : 0.3, $z, -atan2($dz, $dx), 2.0);
         }
         // a veil of evening blue over the land so that the menu reads well, deeper towards the title, in soft steps
         $r->fillRect(0, 0, $this->width(), $this->height(), World3d::veil([12, 16, 34, 70]));

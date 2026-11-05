@@ -118,6 +118,12 @@ final class Diorama
         return [[0.0, -$mid / $c * self::SCALE, 0.0], $distance * self::SCALE];
     }
 
+    /** About how far (units) a foe has walked round the island at time $t: its legs keep in step with it. */
+    public static function walked(float $t): float
+    {
+        return $t * 0.32 * self::RADIUS * 0.73;
+    }
+
     /** Where foe $i of $n walks at time $t, round the towers: [x, z, yaw] (the yaw of World3d::draw()). @return array{0: float, 1: float, 2: float} */
     public static function walker(int $i, int $n, float $t): array
     {

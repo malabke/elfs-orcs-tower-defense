@@ -251,10 +251,12 @@ final class FactionSelectScene extends AbstractScene
         }
         $foes = $this->foes($faction);
         foreach ($foes as $n => $sprite) {
-            [$ux, $uz, $yaw] = Diorama::walker($n, count($foes), $this->time + $i * 0.7);
-            $step = (int)(($this->time + $n * 0.3) * 9.0) % Units::FRAMES;
+            $time = $this->time + $i * 0.7;
+            [$ux, $uz, $yaw] = Diorama::walker($n, count($foes), $time);
+            // the legs in step with the walk round the island
+            $step = Diorama::walked($time) / (Units::stride($sprite) * Units::size($sprite) * Diorama::UNIT) + $n * 0.3;
             $w->shadow($ux * $k, $uz * $k, 5.0 * $k, 4.0 * $k, 0.0, Diorama::SHADOW, 0.3);
-            $w->draw("u:$sprite:$step", static fn () => Units::build($sprite, $step), $ux * $k, 0.3, $uz * $k, $yaw, Diorama::UNIT * $k);
+            $w->creature($sprite, 'walk', $step, $ux * $k, 0.3, $uz * $k, $yaw, Diorama::UNIT * $k);
         }
     }
 

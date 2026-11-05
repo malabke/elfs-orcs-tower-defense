@@ -7,6 +7,7 @@ use App\View3d\MapModel;
 use App\View3d\Mesh;
 use App\View3d\Props;
 use App\View3d\Rig;
+use App\View3d\Units;
 use JumPHP\Gl\WebGl;
 
 /**
@@ -45,6 +46,7 @@ final class World3d
         uniform vec3 u_eye;
         uniform vec4 u_rect;
         uniform vec2 u_cloud;
+        uniform mat4 u_bones[16];
         varying vec3 v_color;
         varying vec3 v_normal;
         varying vec3 v_view;
@@ -52,29 +54,40 @@ final class World3d
         varying vec4 v_sky;
         varying vec4 v_misc;
         void main() {
-            vec4 w = u_model * vec4(a_pos, 1.0);
+            vec4 rest = vec4(a_pos, 1.0);
+            vec3 nrm = a_normal;
+            float mat = a_mat;
+            if (a_mat > 9.5) {
+                // a creature's vertex, posed by its bone (Mesh::BONE + bone, METAL_BONE + bone: it shines)
+                float b = a_mat > 29.5 ? a_mat - 30.0 : a_mat - 10.0;
+                mat4 bone = u_bones[int(b + 0.5)];
+                rest = bone * rest;
+                nrm = (bone * vec4(a_normal, 0.0)).xyz;
+                mat = a_mat > 29.5 ? 7.0 : 0.0;
+            }
+            vec4 w = u_model * rest;
             float extra = length(a_pos.xz);
-            if (a_mat > 0.01 && a_mat <= 1.0) {
+            if (mat > 0.01 && mat <= 1.0) {
                 // leaves, grass: the wind, more at the top
                 float ph = u_time * 1.7 + w.x * 0.05 + w.z * 0.037;
-                float sway = (sin(ph) + 0.35 * sin(ph * 2.7 + 1.3)) * a_mat * max(a_pos.y, 0.0) * 0.11;
+                float sway = (sin(ph) + 0.35 * sin(ph * 2.7 + 1.3)) * mat * max(a_pos.y, 0.0) * 0.11;
                 w.x += sway;
                 w.z += sway * 0.35;
-            } else if (a_mat > 3.5 && a_mat < 5.0) {
+            } else if (mat > 3.5 && mat < 5.0) {
                 // a speck of light drifting about
-                float s = (a_mat - 4.0) * 6.2831;
+                float s = (mat - 4.0) * 6.2831;
                 w.xyz += vec3(sin(u_time * 0.31 + s) * 10.0, sin(u_time * 0.47 + s * 2.0) * 4.0, cos(u_time * 0.23 + s * 3.0) * 8.0);
                 extra = 0.55 + 0.45 * sin(u_time * 2.3 + s * 5.0);
             }
             gl_Position = u_vp * w;
-            v_normal = (u_model * vec4(a_normal, 0.0)).xyz;
+            v_normal = (u_model * vec4(nrm, 0.0)).xyz;
             v_color = a_color;
             v_view = u_eye - w.xyz;
             v_uv = vec4((w.xz - u_rect.xy) * u_rect.zw, w.xz * 0.01);
             // the clip position as it is: the fragment shader divides it by w (exact where a triangle crosses an edge)
             v_sky = vec4(w.xz * (1.0 / 700.0) + u_cloud, gl_Position.xy);
-            v_misc = vec4(a_pos.y, extra, a_mat, gl_Position.w);
-            if (a_mat > 2.5 && a_mat < 3.5) {
+            v_misc = vec4(a_pos.y, extra, mat, gl_Position.w);
+            if (mat > 2.5 && mat < 3.5) {
                 // the sky of a vignette: two sizes of clouds drifting by, and how low in its frame (-1 top, 1 bottom)
                 v_uv = vec4(w.xz * 0.021 - u_cloud * 1.7, w.xz * 0.01 + u_cloud);
                 v_misc.y = a_pos.z / 36.0;
@@ -129,7 +142,7 @@ final class World3d
             vec2 corner = (ndc - u_vig.xy) * u_vig.zw;
             float edge = 1.0 - 0.12 * dot(corner, corner);
             float mat = v_misc.z;
-            if (mat > 5.5) {
+            if (mat > 5.5 && mat < 6.5) {
                 // a soft shadow: its colour (u_tint), fading out towards its edge
                 gl_FragColor = vec4(u_tint * u_fade, u_alpha * (1.0 - smoothstep(0.2, 1.0, v_misc.y)));
                 return;
@@ -189,8 +202,14 @@ final class World3d
             }
             float foot = mix(1.0, mix(0.58, 1.0, smoothstep(0.0, 7.0, v_misc.x)), u_ao);
             vec3 col = base * light * foot;
-            float rim = pow(1.0 - clamp(dot(n, normalize(v_view)), 0.0, 1.0), 3.0);
+            vec3 eye = normalize(v_view);
+            float rim = pow(1.0 - clamp(dot(n, eye), 0.0, 1.0), 3.0);
             col += u_sky * rim * 0.2 * u_ao;
+            if (mat > 6.5 && mat < 7.5) {
+                // metal: a glint of the sun, the sky in its edges
+                float spec = pow(max(dot(n, normalize(u_light + eye)), 0.0), 24.0) * sunVis * cloud;
+                col = col * 0.85 + u_sun * spec * 0.7 + u_sky * rim * 0.25;
+            }
             col += wet * u_sky * 0.16 + glow;
             if (mat > 3.5 && mat < 5.0) {
                 col = base * v_misc.y;
@@ -481,9 +500,10 @@ final class World3d
      * @param float|array{0: float, 1: float, 2: float} $scale
      * @param array{0: float, 1: float, 2: float} $tint multiplies the colours (above 1: brighter)
      * @param float $ao how much its foot is darkened (things standing on the ground: 1)
+     * @param list<float>|null $bones a posed creature's bone matrices (Skeleton::matrices())
      */
     public function draw(string $key, callable $build, float $x, float $y, float $z, float $yaw = 0.0, float|array $scale = 1.0,
-                         array $tint = [1.0, 1.0, 1.0], float $alpha = 1.0, float $emit = 0.0, float $ao = 1.0): void
+                         array $tint = [1.0, 1.0, 1.0], float $alpha = 1.0, float $emit = 0.0, float $ao = 1.0, ?array $bones = null): void
     {
         if ($this->gl === null || ($this->scene === null && !$this->inStudio)) {
             return;
@@ -494,14 +514,37 @@ final class World3d
         }
         [$sx, $sy, $sz] = is_array($scale) ? $scale : [$scale, $scale, $scale];
         $textures = $this->pending !== [] ? ['u_ground' => $this->noise, 'u_noise' => $this->noise] : [];
-        $this->gl->draw($this->prog, $this->options($buffer, $count, $this->pending + [
+        $uniforms = $this->pending + [
             'u_model' => self::matrix($x, $y, $z, $yaw, $sx, $sy, $sz),
             'u_tint' => $tint,
             'u_alpha' => $alpha,
             'u_emit' => $emit,
             'u_ao' => $ao,
-        ], $alpha < 1.0, $textures));
+        ];
+        if ($bones !== null) {
+            $uniforms['u_bones'] = $bones;
+        }
+        $this->gl->draw($this->prog, $this->options($buffer, $count, $uniforms, $alpha < 1.0, $textures));
         $this->pending = [];
+    }
+
+    /**
+     * A creature (Units: an enemy, a soldier, a hero, with its rider when it has one) in a pose: $anim (walk, fight,
+     * idle, stun; fly for flyers) at $t (cycles for walk / fight / fly, seconds for idle / stun), its feet at
+     * ($x, $y, $z), facing $yaw (as draw()), $scale times its own size.
+     * @param array{0: float, 1: float, 2: float} $tint
+     */
+    public function creature(string $sprite, string $anim, float $t, float $x, float $y, float $z, float $yaw = 0.0, float $scale = 1.0,
+                             array $tint = [1.0, 1.0, 1.0], float $alpha = 1.0): void
+    {
+        if ($this->gl === null) {
+            return;
+        }
+        $k = $scale * Units::size($sprite);
+        foreach (Units::parts($sprite) as $part) {
+            $this->draw("c:$sprite:$part", static fn () => Units::build($sprite, $part), $x, $y, $z, $yaw, $k, $tint, $alpha, 0.0, 0.7,
+                Units::pose($sprite, $anim, $t, $part));
+        }
     }
 
     /**
