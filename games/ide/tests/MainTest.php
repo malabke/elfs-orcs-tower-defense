@@ -92,9 +92,9 @@ final class MainTest extends AppTestCase
         $this->frames(2);
     }
 
-    public function testEveryKindOfNewProjectNeedsItsOwnRepositoryHenceTheSignIn(): void
+    public function testAPluginOrAnExtensionNeedsItsGitHubRepositoryAtOnceHenceTheSignIn(): void
     {
-        foreach (['original', 'gui', 'gui-mobile', 'app', 'cli', 'plugin', 'hybrid'] as $kind) {
+        foreach (['plugin', 'extension'] as $kind) {   // a game or an application is made on this computer: no account, no repository until it is published
             try {
                 $this->ide('projects.create', ['kind' => $kind, 'title' => 'Todo', 'folder' => $this->project . '/new']);
                 self::fail("$kind was created without a GitHub repository of its own");

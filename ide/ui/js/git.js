@@ -170,6 +170,7 @@ export class Git {
 
   async commit(push) {
     await this.app.editors.saveAll(true);
+    if (push && this.app.project.needsRepository) { push = false; this.noRepoHint = true; }   // a local project: nothing to push to yet
     const paths = this.caps.gitMode === 'drafts' ? undefined : [...this.checked];
     const message = this.message.trim();
     if (!message) return;
@@ -180,7 +181,9 @@ export class Git {
       prefs.set('commitMessage:' + this.app.projectKey, '');
       this.checked = null;
       notify(`${result.pushed ? 'Committed and pushed' : 'Committed'} ${String(result.sha || '').slice(0, 8)}`, 'success', {
-        title: 'Git', actions: result.url ? [{ label: 'Open on GitHub', action: () => this.app.openUrl(result.url) }] : [] });
+        title: 'Git', actions: result.url ? [{ label: 'Open on GitHub', action: () => this.app.openUrl(result.url) }]
+          : this.noRepoHint ? [{ label: 'Create its GitHub repository…', action: () => this.app.createRepository() }] : [] });
+      this.noRepoHint = false;
       this.app.afterCommit?.(result);
     } catch (e) {
       notify(e.message, 'error', { title: push ? 'Commit and push failed' : 'Commit failed' });
@@ -201,10 +204,12 @@ export class Git {
     this.lastQuickMessage = message;
     const task = this.app.task?.('Committing and pushing (git)…', { open: () => this.app.showTool('commit') });
     try {
-      const result = await backend.invoke('git.commit', { message, paths: this.caps.gitMode === 'drafts' ? undefined : files.map((f) => f.path), push: true });
+      const local = !!this.app.project.needsRepository;   // a local project: committed here, nothing to push to until it has its repository
+      const result = await backend.invoke('git.commit', { message, paths: this.caps.gitMode === 'drafts' ? undefined : files.map((f) => f.path), push: !local });
       this.checked = null;
-      notify(`Committed and pushed ${String(result.sha || '').slice(0, 8)}`, 'success', {
-        title: 'Git', actions: result.url ? [{ label: 'Open on GitHub', action: () => this.app.openUrl(result.url) }] : [] });
+      notify(`${local ? 'Committed' : 'Committed and pushed'} ${String(result.sha || '').slice(0, 8)}`, 'success', {
+        title: 'Git', actions: result.url ? [{ label: 'Open on GitHub', action: () => this.app.openUrl(result.url) }]
+          : local ? [{ label: 'Create its GitHub repository…', action: () => this.app.createRepository() }] : [] });
       this.app.afterCommit?.(result);
     } catch (e) {
       notify(e.message, 'error', { title: 'Commit and push failed' });

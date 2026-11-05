@@ -140,6 +140,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 - todo (David, 2026-11-05): on the welcome screen's project list, beside the "x" that removes a project from the list, a trash icon: a red warning
   that it deletes the project's FILES on this computer; in its dialog an unchecked-by-default box "Delete the repository" (dangerous) that also deletes
   the GitHub repository AND the project on jumphp.net (the GitHub delete needs the delete_repo scope: ask for it only then, with a second confirmation).
+- done (2026-11-05, IDE 0.1.44): New Project (game / app) is made on the computer only (template cloned, skeleton run in the IDE's own PHP, one commit): no account, no GitHub repository, no jumphp.net entry until Publish / "Create its GitHub repository…" (which exists already: repository + push + import). Not tried for real: the whole flow in the GUI (the scaffold is tested, the clone needs the network); a slug already taken on jumphp.net at import (the repository is then made but the project is not taken: choose another id).
 - idea (2026-11-05): several GitHub accounts signed in the IDE, one assigned to each project (a token or a credential helper of the IDE,
   no Windows credential manager), the account shown; an integrated Git client with its own authentication. (Pinning is done, see above.)
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons

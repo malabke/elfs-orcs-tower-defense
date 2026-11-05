@@ -166,9 +166,11 @@ class App {
     this.docker();   // in the background: Docker Desktop started if needed, before the first run asks for it
     this.updateJumphp();   // the project's JumPHP as new as the IDE (bin/jumphp, engine...; games/ and apps/ never touched)
     // a project made before New Project created repositories: its own GitHub repository, then jumphp.net
-    if (backend.kind === 'native' && info.needsRepository) {
-      notify('This project has no GitHub repository of its own: commits cannot be pushed and it cannot be published on jumphp.net.', 'warning',
-        { title: 'GitHub', timeout: 0, actions: [{ label: 'Create its GitHub repository…', action: () => this.createRepository() }] });
+    // (a new project is made on this computer only: nothing is online until the user publishes; said once per project)
+    if (backend.kind === 'native' && info.needsRepository && !prefs.get('repoHint:' + this.projectKey, false)) {
+      prefs.set('repoHint:' + this.projectKey, true);
+      notify('This project is on this computer only. Publish (or “Create its GitHub repository”) puts it on your GitHub account and on jumphp.net when you want.', 'info',
+        { title: 'Local project', timeout: 0, actions: [{ label: 'Create its GitHub repository…', action: () => this.createRepository() }, { label: 'Later', action: () => null }] });
     }
     setInterval(() => { if (document.visibilityState === 'visible') this.git.refresh(); }, 15000);
     window.addEventListener('focus', () => { this.git.refresh(); this.editors.reloadFromDisk(); this.tree.refresh(); });

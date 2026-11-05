@@ -162,21 +162,23 @@ export class Welcome {
       extra.append(el('label.field', {}, el('span', {}, 'Source code of the original (git URL)'), source));
       extra.source = source;
     }
+    const shared = kind.id === 'plugin' || kind.id === 'extension';
     if (kind.playground) {
-      if (!s.user) {
-        form.append(el('p', {}, 'Every project gets its own GitHub repository, on your account: jumphp.net creates it (sign in with GitHub), the IDE clones it, commits and pushes there, and publishes it on jumphp.net.'),
+      // a game or an application is made on this computer (no account needed); a plugin / extension gets its GitHub repository at once
+      if (!s.user && shared) {
+        form.append(el('p', {}, 'This project gets its own GitHub repository, on your account, right away: sign in with GitHub through jumphp.net.'),
           el('button.btn.primary', { onclick: () => this.login() }, icon('user'), 'Sign in with jumphp.net'));
         return;
       }
     }
-    if (kind.game) {
+    if (kind.game && shared) {
       category = el('select.input');
       backend.invoke('projects.categories').then((list) => { for (const c of list) category.append(el('option', { value: c.slug }, c.name)); }).catch(() => null);
     }
     form.append(
       el('label.field', {}, el('span', {}, 'Title'), title),
       el('label.field', {}, el('span', {}, 'Description'), description),
-      category ? el('label.field', {}, el('span', {}, 'Category on jumphp.net'), category) : null,
+      category && shared ? el('label.field', {}, el('span', {}, 'Category on jumphp.net'), category) : null,
       extra,
       el('label.field', {}, el('span', {}, 'Brief'), brief),
       el('label.field', {}, el('span', {}, 'Folder (the project goes in a new folder inside)'), el('div', { style: { display: 'flex', gap: '6px' } }, folder,
@@ -185,7 +187,7 @@ export class Welcome {
         ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the extension and its example game there (bin/jumphp extension:new), pushes it and opens it.`
         : kind.id === 'plugin'
         ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the plugin there (bin/jumphp plugin:new), pushes it and opens it. Share it with Tools > Plugins… > Publish on jumphp.net.`
-        : `Creates the GitHub repository ${s.user?.login || 'you'}/<name> on your account through jumphp.net (from the JumPHP template, with BRIEF.md), clones it here and opens it. Commit and push go there; Publish puts it on jumphp.net.`),
+        : 'Made on this computer, from the JumPHP template, with BRIEF.md: nothing goes online until you want it. Publish (or “Create its GitHub repository”) then puts it on your GitHub account and on jumphp.net.'),
       el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('button.btn.primary', { onclick: async (e) => {
         const button = e.currentTarget;
         if (extra.dsk && !extra.dsk.value.trim() && !(await extra.pick())) { notify('Choose the .dsk disc of the game to remake.', 'warning', { title: 'Amstrad CPC remake' }); return; }

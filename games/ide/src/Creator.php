@@ -39,10 +39,10 @@ final class Creator
         if ($title === '') {
             return Deferred::rejected(new \InvalidArgumentException('A title, please.'));
         }
-        if ($this->main->user() === null) {
-            return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first: it creates the project\'s GitHub repository on your account.'));
-        }
         if ($kind === 'plugin' || $kind === 'extension') {
+            if ($this->main->user() === null) {
+                return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first: it creates the project\'s GitHub repository on your account.'));
+            }
             return $this->local($kind, $title, $p);
         }
         if (!isset(self::PLAYGROUND_KINDS[$kind])) {
@@ -51,6 +51,10 @@ final class Creator
         return $this->onPlayground($kind, $title, $p);
     }
 
+    /**
+     * A game or an application, made on this computer only: nothing is created on GitHub or jumphp.net until the user publishes
+     * (Publish, or "Create its GitHub repository"): a project made to try the IDE leaves no trace online.
+     */
     private function onPlayground(string $kind, string $title, array $p): Deferred
     {
         $brief = trim((string)($p['brief'] ?? ''));
@@ -61,49 +65,114 @@ final class Creator
             // the disc stays on this computer: only its name goes into the brief
             $brief = "Remake of the Amstrad CPC game on the disc " . basename((string)$p['dsk']) . " (kept on the author's computer, never committed).\n\n" . $brief;
         }
-        $this->progress('Creating the repository on jumphp.net…');
-        return self::deferred($this->playground->create([
-            'title' => $title, 'description' => (string)($p['description'] ?? ''), 'category' => $p['category'] ?? null,
-            'kind' => self::PLAYGROUND_KINDS[$kind], 'brief' => $brief,
-        ]))->then(fn (array $project) => $this->waitReady((string)$project['slug'], 0))
-            ->then(function (array $project) use ($p, $kind) {
-                $this->progress('Cloning ' . ($project['repoUrl'] ?? $project['slug']) . '…');
-                return $this->main->cloneProject((string)$project['cloneUrl'], (string)$project['slug'], $this->folder($p))
-                    ->then(function (string $path) use ($p, $kind, $project) {
-                        if ($kind === 'cpc' && !empty($p['dsk'])) {
-                            $this->main->saveProjectSettings($path, array_filter(['dsk' => (string)$p['dsk'], 'roms' => (string)($p['roms'] ?? '')]));
-                        }
-                        $this->noPushToJumphp($path);
-                        $yaml = $path . '/' . trim((string)($project['gameDir'] ?? 'games/' . $project['slug']), '/') . '/config/project.yaml';
-                        $yaml = is_file($yaml) ? $yaml : dirname($yaml) . '/game.yaml';
-                        if ($kind !== 'hybrid' || !$this->makeHybrid($yaml)) {
-                            return $this->main->openProject($path);
-                        }
-                        $this->progress('ui: hybrid in game.yaml, pushed…');
-                        return $this->git($path)
-                            ->then(fn (Git $git) => $git->commit('A hybrid game: SDL + HTML windows (ui: hybrid)', ['.'])->then(fn () => $git->push()))
-                            ->then(fn () => $this->main->openProject($path));
-                    });
-            });
+        $id = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-') ?: 'project';
+        if (!preg_match('/^[a-z]/', $id)) {
+            $id = "project-$id";
+        }
+        $parent = $this->folder($p);
+        @mkdir($parent, 0777, true);
+        $root = "$parent/$id";
+        for ($n = 2; file_exists($root); $n++) {
+            $root = "$parent/$id-$n";
+        }
+        $description = (string)($p['description'] ?? '');
+        $login = (string)($this->main->user()['login'] ?? 'jumphp');
+        return $this->template($root, $parent)
+            ->then(function () use ($root, $kind, $id, $title, $description, $brief, $p) {
+                $this->progress('The skeleton of your project…');
+                $dir = $this->scaffold($root, self::PLAYGROUND_KINDS[$kind], $id, $title, $description, $brief);
+                if ($kind === 'cpc' && !empty($p['dsk'])) {
+                    $this->main->saveProjectSettings($root, array_filter(['dsk' => (string)$p['dsk'], 'roms' => (string)($p['roms'] ?? '')]));
+                }
+                if ($kind === 'hybrid') {
+                    $yaml = "$root/$dir/config/project.yaml";
+                    $this->makeHybrid(is_file($yaml) ? $yaml : "$root/$dir/config/game.yaml");
+                }
+                return $dir;
+            })
+            ->then(function (string $dir) use ($root, $title, $login, $kind) {
+                $git = new Git($this->processes, $root);
+                $git->setFallbackAuthor(['name' => $login, 'email' => $login . '@users.noreply.github.com']);
+                return $git->commit($title . ': a new JumPHP ' . (in_array($kind, ['original', 'cpc', 'port', 'hybrid'], true) ? 'game' : 'application'), ['.']);
+            })
+            ->then(fn () => $this->main->openProject($root));
     }
 
-    /** jumphp.net makes the repository in the background: ask again every 2 s (a minute at most). */
-    private function waitReady(string $slug, int $tries): Deferred
+    /**
+     * What jumphp.net used to do on its server: the skeleton of the project's kind in games/<id> (or apps/<id>), named after the project.
+     *
+     * @return string the project's folder, relative to $root
+     */
+    private function scaffold(string $root, string $pk, string $id, string $title, string $description, string $brief): string
     {
-        return self::deferred($this->playground->project($slug))->then(function (array $project) use ($slug, $tries) {
-            if (($project['status'] ?? '') !== 'creating' && !empty($project['cloneUrl'])) {
-                if (in_array($project['status'] ?? '', ['error', 'failed'], true)) {
-                    throw new \RuntimeException('jumphp.net could not create the project: ' . ($project['statusMessage'] ?? 'unknown error'));
+        foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/extensions/*", GLOB_ONLYDIR) ?: [])] as $example) {
+            self::removeTree($example);
+        }
+        self::removeTree("$root/.github/workflows");   // JumPHP's own CI is not the project's (and pushing it needs a token scope)
+        [$skeleton, $script, $extra] = match ($pk) {
+            'gui' => ['skeleton-gui', 'new-gui.php', ['0']],
+            'mobile' => ['skeleton-gui', 'new-gui.php', ['1']],
+            'desktop' => ['skeleton-app', 'new-app.php', []],
+            'cli' => ['skeleton-cli', 'new-app.php', []],
+            default => ['skeleton', 'new-game.php', []],
+        };
+        if (!is_dir("$root/$skeleton") || !is_file("$root/tools/$script")) {
+            throw new \RuntimeException("This version of JumPHP has no $skeleton/: an application needs a newer one");
+        }
+        // applications go to apps/<id> with a JumPHP that knows that folder (bin/jumphp's project_path), else games/
+        $isApp = in_array($pk, ['gui', 'mobile', 'desktop', 'cli'], true);
+        $dir = ($isApp && str_contains((string)@file_get_contents("$root/bin/jumphp"), 'project_path()') ? 'apps' : 'games') . "/$id";
+        self::copyTree("$root/$skeleton", "$root/$dir");
+        self::runScript("$root/tools/$script", "$root/$dir", [$id, $title, ...$extra]);
+        $yamlFile = is_file("$root/$dir/config/project.yaml") ? "$root/$dir/config/project.yaml" : "$root/$dir/config/game.yaml";
+        file_put_contents($yamlFile, preg_replace('/^(\s*description:\s*).*/m', '${1}' . json_encode($description, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            (string)file_get_contents($yamlFile), 1));
+        file_put_contents("$root/$dir/BRIEF.md", "# $title\n\n" . ($description !== '' ? "$description\n\n" : '') . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
+        file_put_contents("$root/README.md", "# $title\n\n" . ($description !== '' ? "$description\n\n" : '') . "Made with [JumPHP](https://jumphp.net).\n");
+        return $dir;
+    }
+
+    /** tools/new-game.php, new-gui.php, new-app.php: small scripts that read their folder and argv; run here, in this process, so that no PHP or Docker is needed. */
+    private static function runScript(string $script, string $dir, array $args): void
+    {
+        $cwd = getcwd();
+        chdir($dir);
+        ob_start();
+        try {
+            (static function () use ($script, $args): void {
+                $argv = [$script, ...$args];
+                include $script;
+            })();
+        } finally {
+            ob_end_clean();
+            $cwd !== false && chdir($cwd);
+        }
+    }
+
+    private static function copyTree(string $from, string $to): void
+    {
+        @mkdir($to, 0777, true);
+        foreach (scandir($from) ?: [] as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            is_dir("$from/$name") && !is_link("$from/$name") ? self::copyTree("$from/$name", "$to/$name") : copy("$from/$name", "$to/$name");
+        }
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        foreach (scandir($dir) ?: [] as $name) {
+            if ($name !== '.' && $name !== '..') {
+                if (is_dir("$dir/$name") && !is_link("$dir/$name")) {
+                    self::removeTree("$dir/$name");
+                } else {
+                    @chmod("$dir/$name", 0666);   // git's packs are read-only: Windows refuses to delete them
+                    @unlink("$dir/$name");
                 }
-                return $project;
             }
-            if ($tries > 30) {
-                throw new \RuntimeException('jumphp.net is still creating the repository: open it from the project list in a moment.');
-            }
-            $later = new Deferred();
-            \JumPHP\Tauri\App::current()?->gameLoop->addTimer(2.0, fn () => $later->resolve(null));
-            return $later->then(fn () => $this->waitReady($slug, $tries + 1));
-        });
+        }
+        @rmdir($dir);
     }
 
     /** An IDE plugin: the template, bin/jumphp plugin:new, then the user's own public repository (created here) and a push. */
@@ -120,32 +189,7 @@ final class Creator
         if (file_exists($root)) {
             return Deferred::rejected(new \RuntimeException("$root already exists"));
         }
-        $this->progress('Getting the JumPHP template…');
-        return $this->run(['git', 'clone', '--depth', '1', self::TEMPLATE, $root], $parent)
-            ->then(fn () => $this->run(['git', 'rev-parse', 'HEAD'], $root))
-            ->then(function ($head) use ($root) {
-                // the JumPHP commit its files come from: the IDE keeps them up to date from there (JumphpUpdater)
-                $commit = trim((string)(is_array($head) ? ($head['stdout'] ?? '') : $head));
-                if (preg_match('/^[0-9a-f]{40}$/', $commit)) {
-                    @mkdir("$root/.jumphp", 0777, true);
-                    file_put_contents("$root/" . \JumPHP\Ide\Project\JumphpUpdater::RECORD, json_encode(['repository' => self::TEMPLATE,
-                        'commit' => $commit, 'updated' => gmdate('c')], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
-                }
-                // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
-                exec('rm -rf ' . escapeshellarg("$root/.git"));
-                // a project of its own: JumPHP's examples, extensions and development files are not in it (tools/project-clean.sh, the same for every
-                // New Project); an older JumPHP without that script: its examples at least
-                if (is_file("$root/tools/project-clean.sh")) {
-                    exec('cd ' . escapeshellarg($root) . ' && bash tools/project-clean.sh --new >/dev/null 2>&1');
-                } else {
-                    foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/extensions/*", GLOB_ONLYDIR) ?: [])] as $example) {
-                        exec('rm -rf ' . escapeshellarg($example));
-                    }
-                }
-                return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
-                    ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root))
-                    ->then(fn () => $this->noPushToJumphp($root));
-            })
+        return $this->template($root, $parent)
             ->then(function () use ($root, $id, $title, $extension) {
                 $command = $extension ? 'extension:new' : 'plugin:new';
                 $this->progress("bin/jumphp {$command}…");
@@ -164,6 +208,40 @@ final class Creator
                     }));
             })
             ->then(fn () => $this->main->openProject($root));
+    }
+
+    /** A new project folder made of JumPHP's files: the template cloned, its history dropped, cleaned of JumPHP's own extensions / examples, a fresh git repository. */
+    private function template(string $root, string $parent): Deferred
+    {
+        $this->progress('Getting the JumPHP template…');
+        return $this->run(['git', 'clone', '--depth', '1', self::TEMPLATE, $root], $parent)
+            ->then(fn () => $this->run(['git', 'rev-parse', 'HEAD'], $root))
+            ->then(function ($head) use ($root) {
+                // the JumPHP commit its files come from: the IDE keeps them up to date from there (JumphpUpdater)
+                $commit = trim((string)(is_array($head) ? ($head['stdout'] ?? '') : $head));
+                if (preg_match('/^[0-9a-f]{40}$/', $commit)) {
+                    @mkdir("$root/.jumphp", 0777, true);
+                    file_put_contents("$root/" . \JumPHP\Ide\Project\JumphpUpdater::RECORD, json_encode(['repository' => self::TEMPLATE,
+                        'commit' => $commit, 'updated' => gmdate('c')], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+                }
+                // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
+                self::removeTree("$root/.git");
+                // a project of its own: JumPHP's examples, extensions and development files are not in it (tools/project-clean.sh, the same for every
+                // New Project); an older JumPHP without that script: its examples at least
+                if (is_file("$root/tools/project-clean.sh")) {
+                    exec('cd ' . escapeshellarg($root) . ' && bash tools/project-clean.sh --new >/dev/null 2>&1', $out, $code);
+                } else {
+                    $code = 1;
+                }
+                if ($code !== 0) {   // no bash here (Windows without Git Bash), or an older JumPHP: the examples at least
+                    foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/extensions/*", GLOB_ONLYDIR) ?: [])] as $example) {
+                        self::removeTree($example);
+                    }
+                }
+                return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
+                    ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root))
+                    ->then(fn () => $this->noPushToJumphp($root));
+            });
     }
 
     /** The user's public repository <login>/<name> (GitHub's API, the user's token): <name>-2, -3... when taken. */
