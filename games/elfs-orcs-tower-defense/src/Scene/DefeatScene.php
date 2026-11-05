@@ -12,7 +12,6 @@ final class DefeatScene extends GameMenuScene
 {
     protected string $title = 'DEFEAT';
     protected array $titleColor = [240, 90, 80];
-    protected float $menuTop = 0.55;
     private int $wave = 0;
     private array $restart = [];
 

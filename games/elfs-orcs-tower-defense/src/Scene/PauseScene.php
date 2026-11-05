@@ -13,7 +13,6 @@ final class PauseScene extends GameMenuScene
 {
     protected string $title = 'PAUSE';
     protected int $titlePixels = 16;
-    protected float $menuTop = 0.36;
     /** the PlayScene's parameters, to restart the same map */
     private array $restart = [];
 

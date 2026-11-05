@@ -99,7 +99,7 @@ Dernière mise à jour : 2026-11-05.
 7. **Le projet doit être dans `C:\JUMPHP\elfs-orcs-tower-defense`** (l'utilisateur, le 2026-11-05 : « ça n'a rien
    à foutre dans temp »). Les commits faits par erreur dans `%TEMP%` sont récupérés et poussés. Si une session
    démarre dans `%TEMP%`, le signaler tout de suite.
-8. **Moins rétro (2026-11-05, 1er PC, publié `3567919`, suite en cours)** : l'utilisateur trouvait l'écran titre
+8. **Moins rétro (2026-11-05, 1er PC, tout publié)** : l'utilisateur trouvait l'écran titre
    (« jouer » / « réglages ») et les boutons tactiles (flèches, A, B, START) trop rétro pour un jeu qui se joue au clic
    ou au doigt.
    - **Plus d'écran titre** (`TitleScene` supprimée) : le jeu démarre sur le choix du peuple ; un **engrenage** en haut
@@ -111,7 +111,10 @@ Dernière mise à jour : 2026-11-05.
      que JumPHP n'a pas cette option : à inclure dans la contribution au moteur (point 9).
    - **Réglages refaits en panneau peint** (`OptionsScene`, plus une liste « < SON 80% > ») : barre de volume avec − et
      +, flèches pour la langue, interrupteur plein écran (PC), boutons en bois RETOUR / QUITTER. Test `OptionsTest`.
-     Le menu de pause, la victoire et la défaite gardent encore la liste de `GameMenuScene` : à proposer.
+   - **Plus aucun menu en liste** (« vire TOUT le rétro ») : `GameMenuScene` dessine un panneau peint (titre doré
+     entre deux filets, textes, une place pour les étoiles de la victoire via `extraHeight()` / `renderExtra()`, un
+     bouton en bois par choix). Pause, victoire et défaite en profitent. Test `MenusTest` (captures `menu-*.png`).
+   - Le seul rétro qui reste vient du playground : sa police pixel et sa croix tactile (moteur 0.4.0), voir point 9.
 9. **Suite demandée (« on fera 4 et 5 »)** : proposer au projet JumPHP les ajouts du moteur faits ici (2D en HD,
    composition par transparence, options de TtfFont, `touch: {pad: none}`) pour que le playground les ait ; puis des
    vignettes 3D vivantes sur l'écran des cartes.
@@ -120,6 +123,7 @@ Dernière mise à jour : 2026-11-05.
 
 - Commits réguliers ; publier seulement sur demande.
 - Pas de pixel art à l'ancienne ; style peint « livre d'images » ; pas de contours noirs façon BD.
+- Rien de rétro dans l'interface (2026-11-05) : pas d'écran titre à menu, pas de menus en liste, pas de manette à l'écran ; des panneaux peints et des boutons en bois.
 - Choix de conception faits sans réponse (modifiables) : voir `AGENTS.md` (« Design choices »).
 
 ## Pièges de cet environnement (Windows)
@@ -174,6 +178,6 @@ Dernière mise à jour : 2026-11-05.
   (`4948282`) ; vérifiées avec le moteur partagé, puis publiées (« publie ») : `vignettes` fusionnée dans `main`,
   poussée, branche supprimée.
 - 2026-11-05 (1er PC, fin de journée) : personnages poussés (publiés) ; plus d'écran titre ni de manette à l'écran
-  (`3567919`, publié) ; réglages en panneau peint (voir « En cours » 8).
+  (`3567919`, publié) ; réglages, pause, victoire et défaite en panneaux peints, publiés (voir « En cours » 8).
 - 2026-11-05 (1er PC, suite) : tests du playground relancés (coupés à 120 s, voir « Publication ») ; personnages 3D
   entièrement refaits avec squelette et animations (voir « En cours » 6).

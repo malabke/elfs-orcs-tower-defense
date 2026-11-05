@@ -150,7 +150,9 @@ the bot play every side and prints lives / gold per wave and the enemies that go
 - **Scenes**: `FactionSelectScene` (the first screen, 5 cards; tap / arrows pick, a second tap / confirm plays; gear: settings) →
   `MapSelectScene` (6 maps, locks, stars, hard mode switch) → `PlayScene` (map, faction, hard) ; overlays `PauseScene` (also `game.yaml pause_scene`),
   `VictoryScene` (stars), `DefeatScene`, `OptionsScene` (painted panel: sound, language, fullscreen). The other
-  menus extend `App\Ui\GameMenuScene` (MenuScene + mouse / touch rows of 22 px + the language's font).
+  menus extend `App\Ui\GameMenuScene`: the engine's MenuScene for the keys, drawn as a painted panel (gold title, texts,
+  `extraHeight()` / `renderExtra()` for a picture such as the victory's stars, one wooden button per item; mouse / touch
+  press the buttons). No list menus anywhere (the user wants nothing retro).
 - **Logic** (`src/Td/`, pure PHP, no SDL, excluded from the container, unit-tested): `Battle` (economy, lives, waves,
   towers, enemies, projectiles, soldiers, walls, traps, auras, income; `step()` at 60 Hz; what happened goes to
   `$events`), `Enemy` (path distance, slow / stun / burn / fear / shred, blocked, hidden, underground), `Soldier`,

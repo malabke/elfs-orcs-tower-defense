@@ -14,7 +14,6 @@ final class VictoryScene extends GameMenuScene
 {
     protected string $title = 'VICTORY!';
     protected array $titleColor = [255, 220, 90];
-    protected float $menuTop = 0.56;
     private int $stars = 0;
     private int $lives = 0;
     private array $restart = [];
@@ -62,15 +61,19 @@ final class VictoryScene extends GameMenuScene
         parent::update($dt);
     }
 
-    public function render(Renderer $r): void
+    protected function extraHeight(): float
     {
-        parent::render($r);
+        return 32.0;
+    }
+
+    protected function renderExtra(Renderer $r, float $cx, float $y): void
+    {
         // the stars, one after the other
         for ($i = 0; $i < 3; $i++) {
             $earned = $i < $this->stars && $this->time > 0.3 + $i * 0.35;
             // each star grows in when it is won
             $grow = $earned ? min(1.0, ($this->time - 0.3 - $i * 0.35) * 6) : 1.0;
-            \App\Ui\Paint::icon($r, $earned ? 'star' : 'star_off', $this->width() / 2 - 34 + $i * 34, $this->height() * 0.42 + 13, 28 * (0.6 + 0.4 * $grow));
+            \App\Ui\Paint::icon($r, $earned ? 'star' : 'star_off', $cx - 34 + $i * 34, $y + 15, 28 * (0.6 + 0.4 * $grow));
         }
     }
 }
