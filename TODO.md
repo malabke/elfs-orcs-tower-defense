@@ -142,6 +142,9 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.53): what Claude must do for a user's engine extension (AGENTS.md section 20, skeleton-extension/package/AGENTS.md, the IDE's instructions to Claude):
+  code + tests, doc/index.md, ONE doc/samples/*.php per feature (LABEL, runnable alone), SamplesTest (in the skeleton's example game), README, extra.jumphp filled; publishing is the
+  user's click (Publish extension). The new extension's example game gets the SamplesTest from the skeleton.
 - done (2026-11-05, IDE 0.1.52, JumPHP 0.5.13): the samples of the engine extensions moved to `doc/samples/` (still read from `samples/`), three new ones (effects
   EasingSample, collision WorldSample, dialogue QuestSample), `games/physics-demo`, a SamplesTest in every demo game (each sample 90 frames), the demo games autoload
   and autowire `extensions/<id>/doc/samples/` (written by `extension:new` too); in the IDE a ▶ on the `class` line of a scene runs that scene only (JUMPHP_SCENE;

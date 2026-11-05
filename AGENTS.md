@@ -1185,6 +1185,20 @@ note, `bin/jumphp video:make <game> [--seed N] [--count N] [--seconds S]` -> MP4
   requiring it through a path repository; its game tests are the extension's tests (`bin/jumphp test <id>-demo`).
 - Pure PHP (the browser build packs vendor/ and compiles the container with it): rules of §2 apply. Not on jumphp.net
   yet (its shared engine ignores a game's own packages).
+- **When the user asks for an extension** (IDE: New Project > Engine extension, or `bin/jumphp extension:new <id> "Title"`; it is made on the
+  computer, nothing online), do not stop at the code. A finished extension has, in `extensions/<id>/`:
+  1. the code in `src/` + its tests (unit tests and game tests, in `games/<id>-demo/tests/`);
+  2. **`doc/index.md`**: what it brings, short usage code, the project.yaml keys, the list of samples (the IDE shows it, `extension:add` copies it);
+  3. **`doc/samples/*.php`: one sample for each thing it does**, each a scene (`final class <Thing>Sample extends AbstractScene`, namespace
+     `App\Extensions\<Pascal of the id>`, `public const LABEL = 'one line on what it shows'`, a comment saying what to press and how to run it, the engine's
+     actions or the mouse only, a text on the screen), concrete, about 60 lines, runnable alone: `extension:add` copies them into the user's game
+     (`src/Extensions/<Name>/`), the IDE has a ▶ Play for each, and in the extension's own project a ▶ on the sample's `class` line runs it through
+     `games/<id>-demo` (it autoloads `doc/samples/` itself);
+  4. `games/<id>-demo/tests/SamplesTest.php` (already in the skeleton) starts every sample 90 frames: `bin/jumphp test <id>-demo` must pass;
+  5. `README.md`, and `composer.json` `extra.jumphp` filled (`summary`, `features`, `engine`, screenshots made with `bin/jumphp shot`);
+  6. `bin/jumphp lint` and a look at a `bin/jumphp shot <id>-demo`.
+  Publishing is the user's click: the IDE's Publish (Publish extension) puts the package in its own GitHub repository `<login>/jumphp-<id>`, tagged, and
+  submits it on Packagist (docs/extensions.md "Make and publish your own"): never make repositories or tags yourself, never write a token in a file.
 - Particles (`jumphp/particles`): `ParticleSystem` (one per scene: `add(new Emitter([...]))`, `burst()`, `update($dt)`,
   `render($r, $camX, $camY)`, `reset($seed)`), `Emitter` settings `rate life speed angle spread gravity drag colors size
   shape area duration`, project.yaml `particles: {max, seed}`, `.particles.json` files of named emitters.

@@ -74,6 +74,11 @@ final class CreatorTest extends AppTestCase
         self::assertFileExists("$this->root/extensions/wind-effects/src/WindEffects.php");
         self::assertFileExists("$this->root/games/wind-effects-demo/composer.json");
         self::assertNotNull($creator);
+        $samples = (string)file_get_contents("$this->root/games/wind-effects-demo/tests/SamplesTest.php");
+        self::assertStringContainsString("extensions/wind-effects/doc/samples/", $samples, 'the demo game plays every sample of the new extension');
+        self::assertStringContainsString("App\\\\Extensions\\\\WindEffects\\\\", $samples);
+        self::assertStringContainsString('doc/samples', (string)file_get_contents("$this->root/games/wind-effects-demo/composer.json"));
+        self::assertFileExists("$this->root/extensions/wind-effects/doc/samples/FlashSample.php");
     }
 
     public function testAnApplicationGoesToAppsWhenThisJumphpKnowsThatFolder(): void

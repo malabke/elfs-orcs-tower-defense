@@ -36,6 +36,10 @@ final class AgentTools
           stops the program), read the variables (debug_variables) or evaluate PHP there (debug_eval), step
           (debug_step), run to a line (debug_run_to), change a variable (debug_set_value), stop where an exception is
           thrown (debug_exceptions), and always end with debug_step stop or run when done. Prefer it to adding var_dump / echo.
+        When the project holds an engine extension (extensions/<id>/composer.json of type jumphp-extension), a finished one has its doc/index.md, ONE sample
+        per thing it does in doc/samples/*.php (a scene with a LABEL, runnable alone: the user runs it with the gutter's play button on its class line), its
+        tests (the example game's SamplesTest plays every sample) and a README: write all of it with the code (AGENTS.md section 20). The IDE's Publish button
+        puts the package on GitHub and Packagist: never do that yourself.
         When the user asks you to commit (or push), do it at once with what is there: never wait for phpstan, the tests or
         other checks to finish first (say after the commit if something fails). The IDE has a "Commit All and Push" button
         (Ctrl+Alt+K) too. git push uses the GitHub account the repository belongs to.
