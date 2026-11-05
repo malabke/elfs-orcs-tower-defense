@@ -129,6 +129,9 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 ## JumPHP IDE: the next features
 
 - done (2026-11-05, not released): "Commit All and Push…" (header button, Ctrl+Alt+K, Git menu): every change, one message, pushed, no tool window.
+- to check (Clément, Windows, 2026-11-05): the push failed because two GitHub accounts are signed in on his PC (a work account, "respawnsive", and
+  his own): git used the wrong one. The IDE should push as the account that owns the project's repository (the one signed in on jumphp.net: the
+  remote URL with that user, or its token) and say which account it uses when a push is refused (403 / not found).
 - to check (Clément, Windows, 2026-11-05): the project's GitHub repository still held the initial skeleton: nothing was ever committed / pushed
   (the IDE's Git panel and the publish flow changed a lot lately: check commit + push from the IDE on a new project, and that the user is
   told when a project has uncommitted work); asked to commit, Claude refused to until phpstan and the tests had finished: a commit must not
