@@ -642,7 +642,7 @@ class Conversation {
     else if (item.role === 'assistant') node = el('div.claude-msg.assistant', {}, ...markdown(item.text));
     else if (item.role === 'tool') node = this.toolRow(item);
     else if (item.role === 'done') node = el('div.claude-done', {}, item.text);
-    else node = el(`div.claude-msg.${item.role === 'note' ? 'note' : 'error'}`, {}, item.text);
+    else node = el(`div.claude-msg.${item.role === 'note' ? 'note' : item.role === 'tool-error' ? 'toolfail' : 'error'}`, {}, item.text);
     if (this.thinking?.isConnected) this.log.insertBefore(node, this.thinking);
     else this.log.append(node);
   }

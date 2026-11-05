@@ -137,6 +137,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 - to check (David, on Windows, 2026-11-05): is the message the IDE puts in the clipboard normal? (what it copies, when, whether it should copy at all)
 - bug (David, Windows, 2026-11-05): the IDE sometimes shows "update" and "Restart now"; after the restart it still shows "update" and
   "Restart now" (a loop): check that the new version is really installed / its version compared to update.json (the updater, the installer)
+- done (2026-11-05, not released): a tool that returns a non-zero code is shown in muted yellow, not red (robocopy 1 = copied).
 - bug (David, 2026-11-05): when Claude (in the IDE's Claude window) asks for a permission, a click elsewhere (e.g. to give the focus back to the
   window) closes the request and it cannot be opened again: the request must stay until answered (or be reopenable)
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons

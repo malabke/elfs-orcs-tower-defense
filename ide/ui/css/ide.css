@@ -385,6 +385,7 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .claude-msg.assistant p { margin: 0 0 6px; white-space: pre-wrap; }
 .claude-msg.assistant code { font-family: var(--mono); font-size: 12px; background: var(--hover); padding: 0 3px; border-radius: 3px; }
 .claude-code { font: 12px/1.45 var(--mono); background: var(--bg, #1e1f22); border: 1px solid var(--border-2); border-radius: 6px; padding: 8px; overflow: auto; margin: 4px 0; }
+.claude-msg.toolfail { color: var(--text-dim, inherit); background: color-mix(in srgb, var(--yellow) 8%, transparent); border-left: 3px solid var(--yellow); font-size: 0.9em; opacity: 0.85; } /* a tool that returned a non-zero code: often not an error (robocopy 1 = copied) */
 .claude-msg.error { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
 .claude-msg.note { color: var(--yellow); font-size: 12px; }
 .claude-tool { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-2); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
