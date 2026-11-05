@@ -18,6 +18,7 @@ rm install.ps1
 # JumPHP's own extensions are on Packagist (jumphp/particles, jumphp/physics, jumphp/shorts): `bin/jumphp extension:add <game> <package>`
 rm extensions/collision
 rm extensions/dialogue
+rm extensions/tiles
 rm extensions/effects
 rm extensions/particles
 rm extensions/physics
@@ -26,6 +27,7 @@ rm extensions/shorts
 example games/breakout
 example games/collision-demo
 example games/dialogue-demo
+example games/tiles-demo
 example games/effects-demo
 example games/hello-cli
 example games/hello-desktop

@@ -57,7 +57,7 @@ What an extension brings into a game besides its code (`bin/jumphp extension:add
   the install (Tools > Engine Extensions…) with a **Play** button for each sample, and from the External Libraries (the extension
   has its package name and a **Docs** button there).
 - `extra.jumphp.samples` / `extra.jumphp.doc` name other folders than `samples/` and `doc/`.
-- JumPHP's own six (`particles`, `physics`, `shorts`, `effects`, `collision`, `dialogue`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
+- JumPHP's own seven (`particles`, `physics`, `shorts`, `effects`, `collision`, `dialogue`, `tiles`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
 
 ## A clean project
 
@@ -126,7 +126,7 @@ each new tag is a new version). Games then `bin/jumphp extension:add <game> <you
 https://jumphp.net/extensions lists it (it reads Packagist's `jumphp-extension` packages). Do not require
 `jumphp/engine`: it is not on Packagist, and every JumPHP project already has it (`../../engine`).
 
-**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`, `jumphp/effects`, `jumphp/collision`, `jumphp/dialogue`): developed here in `extensions/<id>`, split to
+**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`, `jumphp/effects`, `jumphp/collision`, `jumphp/dialogue`, `jumphp/tiles`): developed here in `extensions/<id>`, split to
 one read-only repository each, `davidnurdin/jumphp-<id>`, by `.github/workflows/extensions-split.yml` on each release
 tag `v*` (the split gets the same tag) — the same as `tools/extensions-publish.sh --push`. Without `--push` the script is
 a dry run: the splits go to `.build/extensions-split/<id>.git`, to look at or to require through a `vcs` repository.
@@ -204,3 +204,10 @@ public function render(Renderer $r): void
 - Files: `assets/fx/show.particles.json` = `{"torch": {...settings...}, "snow": {...}}`, read with
   `$this->engine->extensions()->load('assets/fx/show.particles.json')` (named `Emitter`s).
 - Inspect: `count()`, `countOf($emitter)`, `particles()` (positions, speeds, ages), `emitters()`.
+
+## The tiles extension
+
+`jumphp/tiles` (`extensions/tiles`, example `games/tiles-demo`): procedural levels on a `Grid` (0 floor, 1 wall). `Caves::generate()` (cellular
+automaton, one open area), `Rooms` (non-overlapping rooms joined by corridors), `AutoTile` (picture of a wall from its neighbours, 16-tile mask),
+`Path::find()` (A*), `Maps::toMap()` (a `TileMap` for TileMapRenderer / CollisionSystem), `Rng` (seeded, float arithmetic: identical in the
+browser's 32-bit PHP). Its doc and the `TilesSample` come with `extension:add`.

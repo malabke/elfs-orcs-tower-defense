@@ -1,0 +1,21 @@
+{
+    "name": "jumphp/tiles",
+    "description": "Procedural tile maps for JumPHP: caves, dungeon rooms, auto-tiling, A* path finding, seeded random.",
+    "type": "jumphp-extension",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "JumPHP\\Tiles\\": "src/"
+        }
+    },
+    "extra": {
+        "jumphp": {
+            "name": "Tiles",
+            "engine": "^0.5",
+            "summary": "Caves, dungeon rooms, auto-tiling, A* path finding and a TileMap converter."
+        }
+    }
+}

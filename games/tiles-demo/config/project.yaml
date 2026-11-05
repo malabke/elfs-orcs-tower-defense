@@ -1,0 +1,14 @@
+# The example game of the extension. Every key is optional (defaults: JumPHP\Kernel\GameConfig::DEFAULTS).
+project:
+  id: tiles-demo
+  title: "Tiles"
+  version: 0.1.0
+  description: "The example game of the Tiles engine extension"
+  width: 320
+  height: 180
+  scale: 3
+  background: [12, 12, 28]
+  start_scene: App\Scene\DemoScene
+  smoke:
+    scene: App\Scene\DemoScene
+    params: { demo: true }

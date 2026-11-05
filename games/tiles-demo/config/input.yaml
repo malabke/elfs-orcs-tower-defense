@@ -1,0 +1,3 @@
+actions:
+  regenerate: [Space, Return, pad0:a, touch:tap, mouse:1]
+  mode: [Tab, pad0:x]
