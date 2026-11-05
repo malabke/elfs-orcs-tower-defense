@@ -128,6 +128,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
+- done (2026-11-05, not released): "Commit All and Push…" (header button, Ctrl+Alt+K, Git menu): every change, one message, pushed, no tool window.
 - to check (Clément, Windows, 2026-11-05): the project's GitHub repository still held the initial skeleton: nothing was ever committed / pushed
   (the IDE's Git panel and the publish flow changed a lot lately: check commit + push from the IDE on a new project, and that the user is
   told when a project has uncommitted work); asked to commit, Claude refused to until phpstan and the tests had finished: a commit must not

@@ -190,6 +190,30 @@ export class Git {
     }
   }
 
+  /** One click: every change (new files included) committed with a message asked here, then pushed. No Claude, no tool window. */
+  async commitAll() {
+    await this.app.editors.saveAll(true);
+    await this.refresh();
+    const files = this.status?.files || [];
+    if (!files.length) return notify('Nothing to commit: no changes.', 'info', { title: 'Git' });
+    const message = (await prompt('Commit all and push', { value: this.lastQuickMessage || 'Update', label: `${files.length} file${files.length > 1 ? 's' : ''} will be committed and pushed.`, ok: 'Commit and Push' }))?.trim();
+    if (!message) return;
+    this.lastQuickMessage = message;
+    const task = this.app.task?.('Committing and pushing (git)…', { open: () => this.app.showTool('commit') });
+    try {
+      const result = await backend.invoke('git.commit', { message, paths: this.caps.gitMode === 'drafts' ? undefined : files.map((f) => f.path), push: true });
+      this.checked = null;
+      notify(`Committed and pushed ${String(result.sha || '').slice(0, 8)}`, 'success', {
+        title: 'Git', actions: result.url ? [{ label: 'Open on GitHub', action: () => this.app.openUrl(result.url) }] : [] });
+      this.app.afterCommit?.(result);
+    } catch (e) {
+      notify(e.message, 'error', { title: 'Commit and push failed' });
+    } finally {
+      task?.();
+      this.refresh();
+    }
+  }
+
   async rollback(paths) {
     if (!paths.length) return;
     if (!(await confirm('Rollback Changes', `Throw away the changes of ${paths.length === 1 ? paths[0] : paths.length + ' files'}? New files are deleted.`, { ok: 'Rollback', danger: true }))) return;

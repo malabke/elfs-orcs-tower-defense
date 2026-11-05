@@ -325,6 +325,7 @@ class App {
     $('pullBtn').addEventListener('click', () => this.git?.pull());
     $('commitBtn').addEventListener('click', () => this.showTool('commit'));
     $('pushBtn').addEventListener('click', () => this.git?.push());
+    $('commitAllBtn').addEventListener('click', () => this.git?.commitAll());
     $('previewBtn').addEventListener('click', () => (this.game ? this.game.play() : this.runner?.preview()));
     $('publishBtn').addEventListener('click', () => this.publish());
     $('searchBtn').addEventListener('click', () => searchEverywhere(this));
@@ -590,6 +591,7 @@ class App {
     if (caps.git) {
       a.add('commit', 'Commit…', () => this.showTool('commit'), { kbd: 'Ctrl+K', icon: 'commit' });
       a.add('commitTool', 'Commit Tool Window', () => this.toggleTool('commit'), { kbd: 'Alt+0', icon: 'commit' });
+      a.add('commitAll', 'Commit All and Push…', () => this.git.commitAll(), { kbd: 'Ctrl+Alt+K', icon: 'upload' });
       a.add('push', 'Push…', () => this.git.push(), { kbd: 'Ctrl+Shift+K', icon: 'push' });
       a.add('diff', 'Show Diff with HEAD', () => this.git.diff(this.editors.activePath()), { kbd: 'Ctrl+D', icon: 'diff', when: () => false });
       a.add('rollbackFile', 'Rollback File…', () => { const p = this.editors.activePath(); if (p) this.git.rollback([p]); }, { kbd: 'Ctrl+Alt+Z', icon: 'rollback' });
