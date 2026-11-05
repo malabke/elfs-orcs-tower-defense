@@ -142,6 +142,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.55): a "News" tab on the welcome screen: the last news (whatsnew.get) and the IDE's update card (version, Check for updates, Download and install, Restart now; live through update.state). Left: a badge on the tab when an update is waiting, the JumPHP of the open project in the same card. Not tried in the GUI.
 - done (2026-11-05, IDE 0.1.54): bugs David met in a project made on the server (JumPHP 0.5.8, no `.jumphp/jumphp.json`): the Play / ▶ of a sample failed ("unknown run configuration
   run:<game>:<Scene>": the gutter's scene run is now an ad hoc run of the game), its "Source" button opened a path without the game folder (games/<id>/src/Extensions/...),
   and the project's JumPHP was never updated (no record: now known by its VERSION file's tag, so only the user's own changes are asked about; "Later" lasts a day, not for

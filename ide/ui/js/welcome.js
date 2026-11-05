@@ -57,7 +57,7 @@ export class Welcome {
     const nav = (id, label, ico) => el(`button${this.section === id ? '.on' : ''}`, { onclick: () => { this.section = id; this.render(); } }, icon(ico), label);
     const side = el('div.w-side', {},
       el('div.w-brand', {}, el('img', { src: 'img/icon.png', alt: '' }), el('div', {}, el('b', {}, 'JumPHP IDE'), el('small', {}, s.version ? 'version ' + s.version : ''))),
-      el('div.w-nav', {}, nav('projects', 'Projects', 'folder'), nav('new', 'New Project', 'plus'), nav('learn', 'Learn', 'star')),
+      el('div.w-nav', {}, nav('projects', 'Projects', 'folder'), nav('new', 'New Project', 'plus'), nav('news', 'News', 'bell'), nav('learn', 'Learn', 'star')),
       el('div.w-user', {}, s.user
         ? [el('img', { src: s.user.avatar || '', alt: '' }), el('div', { style: { flex: 1, minWidth: 0, cursor: 'pointer' }, title: 'GitHub accounts', onclick: (e) => this.accountsMenu(e.currentTarget) }, el('b', {}, s.user.login), el('div', { style: { fontSize: '12px', color: 'var(--text-3)' } }, s.server)),
           el('button.icon-btn', { title: 'Sign out', onclick: () => this.logout() }, icon('logout'))]
@@ -65,6 +65,7 @@ export class Welcome {
     const main = el('div.w-main');
     if (this.section === 'projects') this.renderProjects(main);
     else if (this.section === 'new') this.renderNew(main);
+    else if (this.section === 'news') this.renderNews(main);
     else this.renderLearn(main);
     this.node.append(side, main);
   }
@@ -206,6 +207,40 @@ export class Welcome {
           this.progress?.remove();
         }
       } }, 'Create')));
+  }
+
+  /** The news of JumPHP (jumphp.net/nouveautes) and the IDE's own updates: the version, check, download, restart. */
+  renderNews(main) {
+    const native = backend.kind === 'native';
+    const card = el('div.empty-editor', { style: { height: 'auto', alignItems: 'flex-start', marginBottom: '14px' } });
+    const draw = (st) => {
+      clear(card);
+      if (!native || !st) { card.append(el('div', {}, 'Updates: the web IDE is always the newest version.')); return; }
+      const line = (text, ...actions) => card.append(el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' } }, el('span', {}, text), ...actions));
+      const check = () => el('button.btn', { onclick: async () => { draw({ ...st, state: 'checking' }); draw(await backend.invoke('update.check').catch((e) => ({ ...st, state: 'error', error: e.message }))); } }, 'Check for updates');
+      if (st.state === 'checking' || st.state === 'installing') line(st.state === 'installing' ? `Downloading JumPHP IDE ${st.version || ''}…` : 'Looking for a newer version…');
+      else if (st.state === 'installed') line(`JumPHP IDE ${st.version} is installed.`, el('button.btn.primary', { onclick: () => backend.invoke('update.restart') }, 'Restart now'));
+      else if (st.state === 'available') line(`JumPHP IDE ${st.version} is out (this one: ${st.current}).`, st.installable ? el('button.btn.primary', { onclick: async () => draw(await backend.invoke('update.install')) }, 'Download and install') : el('span.pub-faint', {}, 'Run from its sources: update them with git.'));
+      else if (st.state === 'error') line(st.error || 'Cannot check for updates.', check());
+      else line(`JumPHP IDE ${st.current || ''}${st.state === 'latest' ? ' is the newest version.' : ''}`, check());
+      if (st.notes && st.state === 'available') card.append(el('div.pub-faint', {}, st.notes));
+    };
+    draw(null);
+    if (native) {
+      backend.invoke('update.state').then(draw).catch(() => draw(null));
+      this.offUpdate?.();
+      this.offUpdate = backend.on('update.state', (st) => { if (this.section === 'news') draw(st); });
+    }
+    const list = el('div', {}, el('p.pub-faint', {}, 'Loading the news…'));
+    backend.invoke('whatsnew.get', { lang: (navigator.language || 'en').slice(0, 2).toLowerCase() }).then((entries) => {
+      clear(list);
+      if (!entries?.length) { list.append(el('p.pub-faint', {}, 'jumphp.net cannot be reached right now.')); return; }
+      for (const e of entries.slice(0, 6)) {
+        list.append(el('h3', {}, e.title), el('p.pub-faint', {}, `JumPHP ${e.version} · IDE ${e.ide} · ${e.date}`), el('ul', {}, ...e.items.map((i) => el('li', {}, i))));
+      }
+    }).catch(() => { clear(list); list.append(el('p.pub-faint', {}, 'jumphp.net cannot be reached right now.')); });
+    main.append(el('h1', {}, 'News'), el('p.lead', {}, 'What is new in JumPHP and its IDE.'), card, list,
+      el('p', {}, el('button.btn', { onclick: () => this.app.openUrl('https://jumphp.net/nouveautes') }, icon('globe'), 'All the news on jumphp.net')));
   }
 
   renderLearn(main) {
