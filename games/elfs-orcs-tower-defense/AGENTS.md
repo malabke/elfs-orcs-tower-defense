@@ -72,7 +72,9 @@ There is no title screen (the user found a PLAY / OPTIONS menu too retro): the g
 gear (top right corner of the header, or back / Escape) pushes `OptionsScene` (QUIT there on the desktop). The pause,
 victory and defeat menus go back to the side screen. Phones get no on-screen pad (`game.yaml touch: {pad: none}`, an
 option of the engine's `touch.js` added for this game: the playground's shared engine 0.4.0 ignores it and still shows
-its d-pad until JumPHP has it). `site/images/title.png` is the old title screen, kept as it is.
+its d-pad until JumPHP has it). The settings (`OptionsScene`, over the side screen or the pause menu) are a painted
+panel, not a menu list: a volume bar with minus / plus, two arrows for the language, a switch for the full screen
+(desktop), wooden BACK / QUIT buttons; keys: up / down, left / right, confirm, back (`tests/OptionsTest.php`).
 The interface's look (`App\Ui\Paint`, storybook like the 3D): rounded panels of ink blue edged with gold, wooden buttons
 and header bars, round medallions, an evening-sky backdrop, and icons drawn with shapes (heart, coin, flag, skull, stars,
 lock, pause / play, up, target, sell): sharp at any size in HD. The side and map screens show pictures of the 3D game
@@ -147,8 +149,8 @@ the bot play every side and prints lives / gold per wave and the enemies that go
   480 x 240 under it (30 x 15 tiles of 16 px, `PlayScene::MAP_Y`).
 - **Scenes**: `FactionSelectScene` (the first screen, 5 cards; tap / arrows pick, a second tap / confirm plays; gear: settings) →
   `MapSelectScene` (6 maps, locks, stars, hard mode switch) → `PlayScene` (map, faction, hard) ; overlays `PauseScene` (also `game.yaml pause_scene`),
-  `VictoryScene` (stars), `DefeatScene`, `OptionsScene` (sound, language, fullscreen). All menus extend
-  `App\Ui\GameMenuScene` (MenuScene + mouse / touch rows of 22 px + the language's font).
+  `VictoryScene` (stars), `DefeatScene`, `OptionsScene` (painted panel: sound, language, fullscreen). The other
+  menus extend `App\Ui\GameMenuScene` (MenuScene + mouse / touch rows of 22 px + the language's font).
 - **Logic** (`src/Td/`, pure PHP, no SDL, excluded from the container, unit-tested): `Battle` (economy, lives, waves,
   towers, enemies, projectiles, soldiers, walls, traps, auras, income; `step()` at 60 Hz; what happened goes to
   `$events`), `Enemy` (path distance, slow / stun / burn / fear / shred, blocked, hidden, underground), `Soldier`,

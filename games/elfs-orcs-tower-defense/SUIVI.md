@@ -84,7 +84,8 @@ Dernière mise à jour : 2026-11-05.
    Vérifié aussi avec le moteur partagé avant de publier (`bin/jumphp build:remote <id>` puis `JUMPHP_WEB=remote
    bin/jumphp webshot <id> 9 '[[1,"Enter"]]'`) : police pixel en repli, vignettes 3D affichées, textes en place.
    Idée pour la suite (pas demandée) : des vignettes pour l'écran des cartes. `composer.lock` du jeu est suivi par git.
-6. **Personnages 3D refaits (2026-11-05, 1er PC, pas encore publiés).** L'utilisateur a trouvé les personnages
+6. **Personnages 3D refaits (2026-11-05, 1er PC), publiés le 2026-11-05** (`523b9b9`, poussé sans vérification
+   préalable avec le moteur partagé : à faire). L'utilisateur a trouvé les personnages
    « encore bien dégueu », avec pour repère un jeu de stratégie 3D d'il y a 25 ans « moins crade » : on vise ce niveau
    de finition sans copier ses personnages. Chaque peuple a maintenant sa carrure (orcs voûtés aux gros poings, trolls
    énormes, gobelins à grosse tête, nains trapus, elfes élancés, petits-hommes ronds). Les corps sont sculptés en
@@ -96,11 +97,24 @@ Dernière mise à jour : 2026-11-05.
    les pieds restent au sol), `CreatureShotsTest` (planches `creatures-*.png` et batailles `creatures-battle-*.png` à
    regarder après chaque retouche). Les portraits de l'interface sont refaits par `PortraitShotsTest`.
 7. **Le projet doit être dans `C:\JUMPHP\elfs-orcs-tower-defense`** (l'utilisateur, le 2026-11-05 : « ça n'a rien
-   à foutre dans temp »). Une session a travaillé par erreur dans `%TEMP%\JumPHP-Projects\elfs-orcs-tower-defense`,
-   où les commits `d1a1683` (suivi) et `523b9b9` (personnages) sont restés en local. Pour les récupérer dans
-   `C:\JUMPHP\elfs-orcs-tower-defense` sans publier : `git pull
-   /c/Users/NXTC/AppData/Local/Temp/JumPHP-Projects/elfs-orcs-tower-defense main`. Si une session démarre dans
-   `%TEMP%`, le signaler tout de suite.
+   à foutre dans temp »). Les commits faits par erreur dans `%TEMP%` sont récupérés et poussés. Si une session
+   démarre dans `%TEMP%`, le signaler tout de suite.
+8. **Moins rétro (2026-11-05, 1er PC, publié `3567919`, suite en cours)** : l'utilisateur trouvait l'écran titre
+   (« jouer » / « réglages ») et les boutons tactiles (flèches, A, B, START) trop rétro pour un jeu qui se joue au clic
+   ou au doigt.
+   - **Plus d'écran titre** (`TitleScene` supprimée) : le jeu démarre sur le choix du peuple ; un **engrenage** en haut
+     à droite (ou Échap) ouvre les réglages ; « Quitter » (PC) est dans les réglages ; pause, victoire et défaite
+     ramènent au choix du peuple (« CHOISISSEZ VOTRE CAMP »). `site/images/title.png` supprimé (aucune page ne s'en
+     servait).
+   - **Pas de manette à l'écran sur téléphone** : nouvelle option du moteur `touch: {pad: none}` (`engine/web/touch.js`),
+     activée dans `game.yaml`. **Le playground (moteur 0.4.0) l'ignore** et montre encore la croix et les boutons tant
+     que JumPHP n'a pas cette option : à inclure dans la contribution au moteur (point 9).
+   - **Réglages refaits en panneau peint** (`OptionsScene`, plus une liste « < SON 80% > ») : barre de volume avec − et
+     +, flèches pour la langue, interrupteur plein écran (PC), boutons en bois RETOUR / QUITTER. Test `OptionsTest`.
+     Le menu de pause, la victoire et la défaite gardent encore la liste de `GameMenuScene` : à proposer.
+9. **Suite demandée (« on fera 4 et 5 »)** : proposer au projet JumPHP les ajouts du moteur faits ici (2D en HD,
+   composition par transparence, options de TtfFont, `touch: {pad: none}`) pour que le playground les ait ; puis des
+   vignettes 3D vivantes sur l'écran des cartes.
 
 ## Décisions de l'utilisateur (à respecter)
 
@@ -159,5 +173,7 @@ Dernière mise à jour : 2026-11-05.
   capture (cadrage, île qui flotte, ciel 3D, place des textes, fondu, pause) et terminées sur la branche `vignettes`
   (`4948282`) ; vérifiées avec le moteur partagé, puis publiées (« publie ») : `vignettes` fusionnée dans `main`,
   poussée, branche supprimée.
+- 2026-11-05 (1er PC, fin de journée) : personnages poussés (publiés) ; plus d'écran titre ni de manette à l'écran
+  (`3567919`, publié) ; réglages en panneau peint (voir « En cours » 8).
 - 2026-11-05 (1er PC, suite) : tests du playground relancés (coupés à 120 s, voir « Publication ») ; personnages 3D
   entièrement refaits avec squelette et animations (voir « En cours » 6).

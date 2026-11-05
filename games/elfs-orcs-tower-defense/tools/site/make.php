@@ -37,7 +37,6 @@ function save(GdImage $img, string $file): void
     echo str_replace(dirname(__DIR__, 2) . '/', '', $file), ' ', imagesx($img), 'x', imagesy($img), "\n";
 }
 
-// (site/images/title.png stays as it is: the game has no title screen any more, it starts on the side screen)
 $names = ['sides', 'maps', 'battle-thornvale', 'battle-greystone', 'battle-mistfen', 'battle-emberwood', 'battle-frostpeak', 'battle-lastgate'];
 foreach ($names as $name) {
     save(load("$shots/site-$name.png"), "$images/$name.png");
