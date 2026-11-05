@@ -21,7 +21,8 @@ use JumPHP\Util\Lang;
 
 /**
  * The side screen: five cards (name, towers, what sets the side apart, who attacks it, the stars won).
- * Left / right (or a tap) picks a card, confirm (or a tap on the picked card) plays it, back returns to the title.
+ * The game's first screen. Left / right (or a tap) picks a card, confirm (or a tap on the picked card) plays it; the
+ * gear of the top right corner (or back) opens the settings over it.
  */
 final class FactionSelectScene extends AbstractScene
 {
@@ -70,7 +71,19 @@ final class FactionSelectScene extends AbstractScene
         if (!$this->use3d) {
             $this->world->shutdown($this->engine->gl());
         }
-        // the pictures start at the same height on every card: under the room of the longest name
+        $this->layout();
+    }
+
+    /** Back from the settings: the language, so the font and the length of the texts, may have changed. */
+    public function resume(mixed $result = null): void
+    {
+        $this->fonts->apply($this->engine);
+        $this->layout();
+    }
+
+    /** The cards' pictures start at the same height on every card: under the room of the longest name. */
+    private function layout(): void
+    {
         $inner = $this->card(0)[2] - 8;
         $this->namesH = 0;
         foreach ($this->factions as $id) {
@@ -89,7 +102,7 @@ final class FactionSelectScene extends AbstractScene
             return;
         }
         if ($actions->isPressed('back')) {
-            $this->scenes()->switchTo(TitleScene::class);
+            $this->openSettings();
             return;
         }
         $n = count($this->factions);
@@ -104,9 +117,8 @@ final class FactionSelectScene extends AbstractScene
 
     private function click(float $x, float $y): void
     {
-        [$bx, $by, $bw, $bh] = $this->backButton();
-        if ($x >= $bx && $x < $bx + $bw && $y >= $by && $y < $by + $bh) {
-            $this->scenes()->switchTo(TitleScene::class);
+        if ($this->onGear($x, $y)) {
+            $this->openSettings();
             return;
         }
         foreach ($this->factions as $i => $faction) {
@@ -140,11 +152,23 @@ final class FactionSelectScene extends AbstractScene
         return [8 + $i * ($w + self::GAP), self::CARD_Y - $lift, $w, self::CARD_H];
     }
 
-    /** @return array{0: float, 1: float, 2: float, 3: float} */
-    private function backButton(): array
+    private function openSettings(): void
     {
-        $w = $this->font()->width(Lang::t('BACK')) + 20;
-        return [8, $this->height() - 28, max(48, $w), 24];
+        $this->sound()->playSfx('menu_confirm');
+        $this->scenes()->push(OptionsScene::class);
+    }
+
+    /** The settings' gear, in the top right corner of the header: [centre x, centre y, radius]. @return array{0: float, 1: float, 2: float} */
+    private function gear(): array
+    {
+        return [$this->width() - 15.0, 13.0, 10.0];
+    }
+
+    /** A point on the gear (a little room around it: a finger is wider than the drawing). */
+    private function onGear(float $x, float $y): bool
+    {
+        [$gx, $gy, $radius] = $this->gear();
+        return ($x - $gx) ** 2 + ($y - $gy) ** 2 <= ($radius + 4) ** 2;
     }
 
     public function render(Renderer $r): void
@@ -154,7 +178,7 @@ final class FactionSelectScene extends AbstractScene
         Paint::backdrop($r, $w, $this->height());
         Paint::header($r, $w, 26, $this->data->faction($this->factions[$this->selected])['colors']['main']);
         $title = Lang::t('CHOOSE YOUR SIDE');
-        $scale = Text::fitScale($font, $title, $w - 16, 1.3);
+        $scale = Text::fitScale($font, $title, $w - 64, 1.3);
         $font->draw($r, $title, $w / 2, 13 - $font->height($scale) / 2, $scale, [255, 228, 150], 'center', [40, 22, 10]);
 
         // under another scene (the pause menu pushed when the window loses the focus) the 3D layer, over all
@@ -164,12 +188,15 @@ final class FactionSelectScene extends AbstractScene
             $this->drawCard($r, $i, $id);
         }
 
-        [$bx, $by, $bw, $bh] = $this->backButton();
+        // the settings: a small gear in the corner of the header, lit under the pointer
+        [$gx, $gy, $radius] = $this->gear();
         $mouse = $this->engine->input->getMouse();
-        Paint::button($r, $bx, $by, $bw, $bh, true, $mouse->x >= $bx && $mouse->x < $bx + $bw && $mouse->y >= $by && $mouse->y < $by + $bh);
-        $font->draw($r, Lang::t('BACK'), $bx + $bw / 2, $by + $bh / 2 - $font->height() / 2, 1, [255, 242, 214], 'center', [40, 22, 12]);
+        Paint::medallion($r, $gx, $gy, $radius, $this->onGear($mouse->x, $mouse->y));
+        Paint::icon($r, 'gear', $gx, $gy, 12);
+
         $hint = Lang::t('PRESS AGAIN TO CONFIRM');
-        Text::draw($r, $font, $hint, $bx + $bw + 12, $by + $bh / 2 - $font->height() / 2, $w - $bw - 28, [196, 200, 216], 'left', [16, 20, 36]);
+        $bottom = self::CARD_Y + self::CARD_H;
+        Text::draw($r, $font, $hint, $w / 2, $bottom + ($this->height() - $bottom) / 2 - $font->height() / 2, $w - 32, [196, 200, 216], 'center', [16, 20, 36]);
     }
 
     /**

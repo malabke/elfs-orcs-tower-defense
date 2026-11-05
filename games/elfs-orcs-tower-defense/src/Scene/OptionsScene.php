@@ -16,6 +16,16 @@ final class OptionsScene extends GameMenuScene
     protected string $title = 'OPTIONS';
     protected int $titlePixels = 16;
     protected float $menuTop = 0.38;
+    /** pushed over the side screen (not over the pause menu): it has QUIT on the desktop */
+    private bool $overSides = false;
+
+    public function enter(array $params = []): void
+    {
+        // the scene under this one (already on the stack when enter() runs)
+        $stack = $this->scenes()->stack();
+        $this->overSides = ($stack[count($stack) - 2] ?? null) instanceof FactionSelectScene;
+        parent::enter($params);
+    }
 
     protected function items(): array
     {
@@ -33,6 +43,10 @@ final class OptionsScene extends GameMenuScene
             $items[] = [Lang::t('FULLSCREEN'), fn () => $options->get('fullscreen') ? Lang::t('ON') : Lang::t('OFF'), null, fn () => $this->engine->toggleFullscreen()];
         }
         $items[] = [Lang::t('BACK'), null, fn () => $this->back()];
+        if (Platform::isDesktop() && $this->overSides) {
+            // the game starts on the side screen: leaving it is here
+            $items[] = [Lang::t('QUIT'), null, fn () => $this->engine->quit()];
+        }
         return $items;
     }
 

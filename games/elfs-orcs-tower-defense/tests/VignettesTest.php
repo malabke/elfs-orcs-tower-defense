@@ -5,7 +5,6 @@ namespace Tests;
 use App\Scene\FactionSelectScene;
 use App\Scene\MapSelectScene;
 use App\Scene\PauseScene;
-use App\Scene\TitleScene;
 use App\Td\GameData;
 use App\View3d\Diorama;
 use App\View3d\Mesh;
@@ -51,11 +50,14 @@ final class VignettesTest extends GameTestCase
         self::assertInstanceOf(MapSelectScene::class, $this->game->scene());
         self::assertNull($this->game->peek('layer', $gl), 'no 3D layer left over the maps');
 
-        // back to the title: its own 3D, under the 2D
+        // the settings over the side screen: the vignettes (a 3D layer over all the 2D) go away under them, and come back
         $this->game->start(FactionSelectScene::class, ['faction' => 'elves']);
-        $this->game->press('back', 40);
-        self::assertInstanceOf(TitleScene::class, $this->game->scene());
-        self::assertSame('below', $this->game->peek('layer', $gl)['position']);
+        $sides = $this->game->scene();
+        $this->game->press('back', 4);
+        self::assertSame(0.0, $this->game->peek('shade', $sides));
+        $this->game->shot('vignettes-under-settings');
+        $this->game->press('back', 4);
+        self::assertSame(1.0, $this->game->peek('shade', $sides));
     }
 
     public function testTheVignettesHideUnderThePauseMenu(): void

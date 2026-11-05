@@ -4,8 +4,9 @@ namespace Tests;
 
 use App\Scene\FactionSelectScene;
 use App\Scene\MapSelectScene;
+use App\Scene\OptionsScene;
+use App\Scene\PauseScene;
 use App\Scene\PlayScene;
-use App\Scene\TitleScene;
 use App\Td\Battle;
 use JumPHP\Testing\GameTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,12 +16,46 @@ use PHPUnit\Framework\Attributes\DataProvider;
  */
 final class FactionSelectTest extends GameTestCase
 {
-    public function testPlayOnTheTitleOpensTheSideScreen(): void
+    public function testTheGameStartsOnTheSideScreenAndItsGearOpensTheSettings(): void
     {
-        $this->game->start(TitleScene::class);
-        $this->game->press('confirm', 40);   // PLAY, then the fade
-        self::assertInstanceOf(FactionSelectScene::class, $this->game->scene());
+        self::assertSame(FactionSelectScene::class, $this->game->engine->config->get('start_scene'));
+        $this->game->start(FactionSelectScene::class, ['faction' => 'elves']);
+        $this->game->run(10);
         $this->game->shot('side-screen');
+
+        // a tap on the gear, in the top right corner
+        $mouse = $this->game->engine->input->getMouse();
+        $mouse->move($this->game->engine->sdl->getRenderer()->getWidth() - 15, 13);
+        $mouse->down(1);
+        $this->game->run(1);
+        $mouse->up(1);
+        $this->game->run(2);
+        self::assertInstanceOf(OptionsScene::class, $this->game->scene());
+        $this->game->shot('side-screen-settings');
+
+        // back (Escape) closes them, and back on the side screen opens them again
+        $this->game->press('back', 2);
+        self::assertInstanceOf(FactionSelectScene::class, $this->game->scene());
+        $this->game->press('back', 2);
+        self::assertInstanceOf(OptionsScene::class, $this->game->scene());
+    }
+
+    public function testThePauseMenuLeadsBackToTheSideScreen(): void
+    {
+        $this->game->start(PlayScene::class, ['view' => 'flat', 'faction' => 'elves', 'countdown' => 999]);
+        $this->game->press('pause', 2);
+        self::assertInstanceOf(PauseScene::class, $this->game->scene());
+        /** @var PauseScene $pause */
+        $pause = $this->game->scene();
+        $menu = $this->game->peek('menu', $pause);
+        $labels = array_map(static fn (array $item) => $item[0], $menu->getItems());
+        $row = array_search(\JumPHP\Util\Lang::t('CHOOSE YOUR SIDE'), $labels, true);
+        self::assertIsInt($row);
+        for ($i = 0; $i < $row; $i++) {
+            $this->game->press('down', 2);
+        }
+        $this->game->press('confirm', 40);
+        self::assertInstanceOf(FactionSelectScene::class, $this->game->scene());
     }
 
     public function testChoosingTheOrcsBringsTheAllianceAndOtherSidesTheHorde(): void

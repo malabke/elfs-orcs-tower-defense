@@ -8,7 +8,7 @@ next: in French; keep it up to date after each step, the user works from several
 
 ```bash
 bin/jumphp test elfs-orcs-tower-defense                 # lint + phpstan + phpunit (unit + game tests) + headless smoke test
-bin/jumphp shot elfs-orcs-tower-defense 60              # title screen -> games/elfs-orcs-tower-defense/var/screenshots/shot.png
+bin/jumphp shot elfs-orcs-tower-defense 60              # side screen (the first one) -> games/elfs-orcs-tower-defense/var/screenshots/shot.png
 JUMPHP_INPUT='[[5,"confirm"]]' bin/jumphp shot elfs-orcs-tower-defense 240 var/screenshots/play.png
 JUMPHP_SCENE='App\Scene\PlayScene' JUMPHP_SCENE_PARAMS='{"demo":true}' bin/jumphp shot elfs-orcs-tower-defense 900 var/screenshots/demo.png
 # other languages: tests/LanguagesTest.php photographs fr, de, ru, ja -> var/screenshots/tests/lang-<code>-*.png
@@ -68,8 +68,11 @@ ridge); `bin/jumphp test <game> --filter X` runs only phpunit (with OpenGL on Xv
 Engine fix made for this game (engine/src/Gl/OpenGl.php `textureFromRgba`): desktop GL kept SDL's `GL_UNPACK_ROW_LENGTH`,
 so a texture made after SDL had updated one of its own was read with wrong rows (the second battle of a session had a
 scrambled ground); it is reset to 0 around the upload now.
-The title screen is 3D too (`TitleScene::render3d()`: the first map, elf towers, the horde walking the road, a camera
-drifting with `Rig::orbit()`; flat 2D without WebGL or with `view: flat`).
+There is no title screen (the user found a PLAY / OPTIONS menu too retro): the game starts on the side screen, whose
+gear (top right corner of the header, or back / Escape) pushes `OptionsScene` (QUIT there on the desktop). The pause,
+victory and defeat menus go back to the side screen. Phones get no on-screen pad (`game.yaml touch: {pad: none}`, an
+option of the engine's `touch.js` added for this game: the playground's shared engine 0.4.0 ignores it and still shows
+its d-pad until JumPHP has it). `site/images/title.png` is the old title screen, kept as it is.
 The interface's look (`App\Ui\Paint`, storybook like the 3D): rounded panels of ink blue edged with gold, wooden buttons
 and header bars, round medallions, an evening-sky backdrop, and icons drawn with shapes (heart, coin, flag, skull, stars,
 lock, pause / play, up, target, sell): sharp at any size in HD. The side and map screens show pictures of the 3D game
@@ -142,7 +145,7 @@ the bot play every side and prints lives / gold per wave and the enemies that go
 
 - **Layout** (480 x 270): top bar 30 px (lives, gold, wave, next wave preview, CALL WAVE, speed, pause), the map
   480 x 240 under it (30 x 15 tiles of 16 px, `PlayScene::MAP_Y`).
-- **Scenes**: `TitleScene` → `FactionSelectScene` (5 cards; tap / arrows pick, a second tap / confirm plays) →
+- **Scenes**: `FactionSelectScene` (the first screen, 5 cards; tap / arrows pick, a second tap / confirm plays; gear: settings) →
   `MapSelectScene` (6 maps, locks, stars, hard mode switch) → `PlayScene` (map, faction, hard) ; overlays `PauseScene` (also `game.yaml pause_scene`),
   `VictoryScene` (stars), `DefeatScene`, `OptionsScene` (sound, language, fullscreen). All menus extend
   `App\Ui\GameMenuScene` (MenuScene + mouse / touch rows of 22 px + the language's font).

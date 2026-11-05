@@ -4,7 +4,6 @@ namespace Tests;
 
 use App\Scene\FactionSelectScene;
 use App\Scene\PlayScene;
-use App\Scene\TitleScene;
 use JumPHP\Testing\GameTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -24,11 +23,7 @@ final class LanguagesTest extends GameTestCase
     {
         $engine = $this->game->engine;
         $engine->lang->setLang($lang);
-        $this->game->start(TitleScene::class);
-        $this->game->run(30);
-        $this->game->shot("lang-$lang-title");
-        self::assertNotSame('PLAY', \JumPHP\Util\Lang::t('PLAY'));
-
+        self::assertNotSame('CHOOSE YOUR SIDE', \JumPHP\Util\Lang::t('CHOOSE YOUR SIDE'));
         $this->game->start(FactionSelectScene::class, ['faction' => 'horsefolk']);
         $this->game->run(10);
         $this->game->shot("lang-$lang-sides");

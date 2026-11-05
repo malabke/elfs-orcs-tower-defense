@@ -24,10 +24,11 @@ game:
   scale: 3                      # desktop window = 1440 x 810
   hd: auto                      # the 2D drawn at the window's resolution (sharp text), coordinates unchanged
   background: [10, 10, 16]
-  start_scene: App\Scene\TitleScene
+  start_scene: App\Scene\FactionSelectScene
   pause_scene: App\Scene\PauseScene
   lang: en
   pwa: true
+  touch: { pad: none }          # played by tapping: no on-screen d-pad or A / B / START buttons on phones
   controls: "Mouse / touch: click a stone platform to build. Keys: arrows move between platforms, Enter builds, N calls the wave, F speed, Esc pause."
   net_url: ws://localhost:8090/ws   # relay server (bin/jumphp relay up); the page can override with ?net=
   online: false

@@ -35,7 +35,7 @@ final class PauseScene extends GameMenuScene
             [Lang::t('RESTART'), null, fn () => $this->scenes()->switchTo(PlayScene::class, $this->restart)],
             [Lang::t('OPTIONS'), null, fn () => $this->scenes()->push(OptionsScene::class)],
             [Lang::t('MAPS'), null, fn () => $this->scenes()->switchTo(MapSelectScene::class, $this->restart)],
-            [Lang::t('TITLE SCREEN'), null, fn () => $this->scenes()->switchTo(TitleScene::class)],
+            [Lang::t('CHOOSE YOUR SIDE'), null, fn () => $this->scenes()->switchTo(FactionSelectScene::class)],
         ];
     }
 

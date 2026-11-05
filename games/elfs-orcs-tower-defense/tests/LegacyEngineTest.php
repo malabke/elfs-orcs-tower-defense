@@ -4,7 +4,6 @@ namespace Tests;
 
 use App\Scene\FactionSelectScene;
 use App\Scene\PlayScene;
-use App\Scene\TitleScene;
 use App\Td\Battle;
 use App\Ui\Hd;
 use App\Ui\Paint;
@@ -32,15 +31,11 @@ final class LegacyEngineTest extends GameTestCase
         Hd::$legacy = false;
     }
 
-    public function testOnAnEngineWithoutHdTheTitleAndTheBattleUseTheKeyColour(): void
+    public function testOnAnEngineWithoutHdTheBattleUsesTheKeyColour(): void
     {
-        $this->game->start(TitleScene::class);
-        $this->game->run(20);
-        self::assertTrue(Paint::$keyed, 'the 3D is shown through the key colour');
-        $this->game->shot('legacy-title');
-
         $this->game->start(PlayScene::class, ['faction' => 'elves', 'countdown' => 999, 'gold' => 600]);
         self::assertTrue($this->game->peek('use3d'));
+        self::assertTrue(Paint::$keyed, 'the 3D is shown through the key colour');
         /** @var Battle $battle */
         $battle = $this->game->peek('battle');
         $battle->build(0, 'elf_archer');

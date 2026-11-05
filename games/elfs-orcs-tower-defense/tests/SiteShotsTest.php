@@ -6,7 +6,6 @@ use App\Save\Progress;
 use App\Scene\FactionSelectScene;
 use App\Scene\MapSelectScene;
 use App\Scene\PlayScene;
-use App\Scene\TitleScene;
 use JumPHP\Testing\GameTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -17,13 +16,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
  */
 final class SiteShotsTest extends GameTestCase
 {
-    public function testTheTitleAndTheMenusAreShot(): void
+    public function testTheMenusAreShot(): void
     {
         @unlink($this->game->engine->storage->path(Progress::FILE));
-        $this->game->start(TitleScene::class);
-        $this->game->run(90);
-        $this->game->shot('site-title');
-
         $this->game->start(FactionSelectScene::class, ['faction' => 'horsefolk']);
         $this->game->run(20);
         $this->game->shot('site-sides');

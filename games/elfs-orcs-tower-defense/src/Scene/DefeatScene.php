@@ -34,7 +34,7 @@ final class DefeatScene extends GameMenuScene
         return [
             [Lang::t('RETRY'), null, fn () => $this->scenes()->switchTo(PlayScene::class, $this->restart)],
             [Lang::t('MAPS'), null, fn () => $this->scenes()->switchTo(MapSelectScene::class, $this->restart)],
-            [Lang::t('TITLE SCREEN'), null, fn () => $this->scenes()->switchTo(TitleScene::class)],
+            [Lang::t('CHOOSE YOUR SIDE'), null, fn () => $this->scenes()->switchTo(FactionSelectScene::class)],
         ];
     }
 

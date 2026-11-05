@@ -240,6 +240,21 @@ final class Paint
                 self::icon($r, 'coin', $cx + 0.8 * $s, $cy + 0.8 * $s, $size * 0.8);
                 $r->fillRect($cx - 5.0 * $s, $cy - 4.2 * $s, 4.6 * $s, 1.6 * $s, [160, 240, 140]);
                 break;
+            case 'gear':
+                $metal = [236, 222, 196];
+                for ($t = 0; $t < 8; $t++) {
+                    // a square tooth: two triangles, turned with the wheel
+                    $a = $t * M_PI / 4;
+                    [$c, $n] = [cos($a), sin($a)];
+                    $corner = static fn (float $along, float $side): array => [$cx + ($c * $along - $n * $side) * $s, $cy + ($n * $along + $c * $side) * $s];
+                    [$p, $q, $u, $v] = [$corner(2.8, -1.1), $corner(5.0, -0.9), $corner(5.0, 0.9), $corner(2.8, 1.1)];
+                    self::triangle($r, $p, $q, $u, $metal);
+                    self::triangle($r, $p, $u, $v, $metal);
+                }
+                $r->fillCircle($cx, $cy, 3.9 * $s, $metal);
+                $r->fillCircle($cx - 0.7 * $s, $cy - 0.7 * $s, 2.6 * $s, [252, 244, 226]);
+                $r->fillCircle($cx, $cy, 1.6 * $s, [52, 62, 92]);
+                break;
             case 'lock':
                 $r->fillCircle($cx, $cy - 1.8 * $s, 2.8 * $s, [200, 200, 210]);
                 $r->fillCircle($cx, $cy - 1.8 * $s, 1.6 * $s, [60, 56, 70]);

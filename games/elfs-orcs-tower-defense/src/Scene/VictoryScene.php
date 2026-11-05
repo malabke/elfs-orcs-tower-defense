@@ -47,7 +47,7 @@ final class VictoryScene extends GameMenuScene
         }
         $items[] = [Lang::t('PLAY AGAIN'), null, fn () => $this->scenes()->switchTo(PlayScene::class, $this->restart)];
         $items[] = [Lang::t('MAPS'), null, fn () => $this->scenes()->switchTo(MapSelectScene::class, $this->restart)];
-        $items[] = [Lang::t('TITLE SCREEN'), null, fn () => $this->scenes()->switchTo(TitleScene::class)];
+        $items[] = [Lang::t('CHOOSE YOUR SIDE'), null, fn () => $this->scenes()->switchTo(FactionSelectScene::class)];
         return $items;
     }
 
