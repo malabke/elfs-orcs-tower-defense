@@ -142,6 +142,10 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.52, JumPHP 0.5.13): the samples of the engine extensions moved to `doc/samples/` (still read from `samples/`), three new ones (effects
+  EasingSample, collision WorldSample, dialogue QuestSample), `games/physics-demo`, a SamplesTest in every demo game (each sample 90 frames), the demo games autoload
+  and autowire `extensions/<id>/doc/samples/` (written by `extension:new` too); in the IDE a ▶ on the `class` line of a scene runs that scene only (JUMPHP_SCENE;
+  for an extension project's samples through `<id>-demo`), with Debug. Not tried in the GUI. Left: the same ▶ in the Run window's list of scenes.
 - done (2026-11-05, IDE 0.1.51): the settings (session.json, accounts, options, git credentials, Packagist token, recent projects) are copied into `~/.jumphp/ide-backup/`
   (0600, every 5 minutes) and put back at start when the data folder lacks them (a reinstall by the installer, a cleaned cache); the Logs show where the settings
   live and whether they were found. Cause of David's loss not found (no Windows here): a data folder of another user (an installer run elevated, whose "run the app"

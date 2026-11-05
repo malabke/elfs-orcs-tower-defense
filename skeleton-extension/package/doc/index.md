@@ -20,5 +20,5 @@ Say here the project.yaml keys it reads (`extra.jumphp.config` of its composer.j
 
 ## Samples
 
-`samples/FlashSample.php` is a scene of the game that has the extension (namespace `App\Extensions\SkeletonExtension`): press Enter, Space
+`doc/samples/FlashSample.php` is a scene of the game that has the extension (namespace `App\Extensions\SkeletonExtension`): press Enter, Space
 or click to flash the screen. Write one sample for each thing the extension does: authors read them before they read this page.

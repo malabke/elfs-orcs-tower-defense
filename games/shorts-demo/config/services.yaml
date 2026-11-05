@@ -9,3 +9,7 @@ services:
   App\:
     resource: '../src/*'
     exclude: '../src/Entity'    # entities are created with `new`, not by the container
+
+  # the samples of the extension (extensions/shorts/doc/samples): scenes the IDE runs from their file (a gutter ▶), without adopting them into this game
+  App\Extensions\Shorts\:
+    resource: '../../../extensions/shorts/doc/samples/*'

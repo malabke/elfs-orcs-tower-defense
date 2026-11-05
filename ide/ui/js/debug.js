@@ -159,7 +159,7 @@ export class DebugPanel {
   // running ------------------------------------------------------------------------------------------------------
 
   /** Debugs a run configuration (the selected one by default): JUMPHP_XDEBUG=<port> makes bin/jumphp start PHP with Xdebug. */
-  async debug(config = this.app.runner.config()) {
+  async debug(config = this.app.runner.config(), extraEnv = {}) {
     if (!config) return null;
     let port;
     try { ({ port } = await backend.invoke('debug.listen')); } catch (e) { notify(e.message, 'error', { title: 'The debugger cannot start' }); return null; }
@@ -174,7 +174,7 @@ export class DebugPanel {
     }
     if (!this.breakpoints.size) notify('No breakpoint yet: click in the gutter left of a line of PHP to stop there.', 'info', { title: 'Debug ' + config.label });
     this.app.showTool('debug', true);
-    const id = await this.app.runner.start(config, { JUMPHP_XDEBUG: String(port) });
+    const id = await this.app.runner.start(config, { ...extraEnv, JUMPHP_XDEBUG: String(port) });
     if (id !== null && id !== undefined) this.watchConnection(id, config);
     return id;
   }

@@ -1,0 +1,12 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  App\:
+    resource: '../src/*'
+
+  # the samples of the extension (extensions/physics/doc/samples): scenes the IDE runs from their file (a gutter ▶), without adopting them into this game
+  App\Extensions\Physics\:
+    resource: '../../../extensions/physics/doc/samples/*'

@@ -6,3 +6,7 @@ services:
 
   App\:
     resource: '../src/*'
+
+  # the samples of the extension (extensions/effects/doc/samples): scenes the IDE runs from their file (a gutter ▶), without adopting them into this game
+  App\Extensions\Effects\:
+    resource: '../../../extensions/effects/doc/samples/*'

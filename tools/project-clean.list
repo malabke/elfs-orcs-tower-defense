@@ -28,6 +28,7 @@ example games/breakout
 example games/collision-demo
 example games/dialogue-demo
 example games/tiles-demo
+example games/physics-demo
 example games/effects-demo
 example games/hello-cli
 example games/hello-desktop

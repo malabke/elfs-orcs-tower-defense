@@ -23,7 +23,7 @@ bin/jumphp extension:add <game> <vendor>/<package>      # composer require + che
 - `extra.jumphp.engine`: the JumPHP versions it works with (`"^0.5"`, `">=0.5 <0.7"`): a game on another version stops at
   boot with a clear message instead of failing somewhere inside. Widen it once you tried the newer JumPHP.
 - Do not require `jumphp/engine` in `require` (every JumPHP project has it already); pure PHP only (the browser build packs it).
-- `doc/index.md`: its documentation, and `samples/*.php`: one scene for each thing it does (namespace `App\Extensions\<Name>`, a
+- `doc/index.md`: its documentation, and `doc/samples/*.php`: one scene for each thing it does (namespace `App\Extensions\<Name>`, a
   `public const LABEL`). `bin/jumphp extension:add <game> <package>` copies them into the game (`extensions/<name>/doc/`,
   `src/Extensions/<Name>/`), and the JumPHP IDE opens the documentation with a Play button per sample.
 - Tests: the example game's `tests/` play the extension (`bin/jumphp test <id>-demo`). Write one per feature.

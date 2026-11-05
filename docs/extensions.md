@@ -48,7 +48,7 @@ What an extension brings into a game besides its code (`bin/jumphp extension:add
 | in the package | in the game | what for |
 |---|---|---|
 | `doc/` (`doc/index.md`, else its `README.md`) | `extensions/<name>/doc/` | its documentation, opened by the IDE |
-| `samples/*.php` | `src/Extensions/<Name>/` | scenes of the game that play and build with it, also in the browser |
+| `doc/samples/*.php` | `src/Extensions/<Name>/` | scenes of the game that play and build with it, also in the browser |
 | | `extensions/<name>/extension.json` | what the IDE reads: the documentation and the samples |
 
 - A sample is a scene in the namespace `App\Extensions\<Name>` (`<Name>` = the package name in StudlyCase: `jumphp/particles` -> `Particles`);
@@ -56,7 +56,7 @@ What an extension brings into a game besides its code (`bin/jumphp extension:add
 - Play one: `JUMPHP_SCENE='App\Extensions\Particles\FireSample' bin/jumphp run <game>`; in the IDE the documentation opens after
   the install (Tools > Engine Extensions…) with a **Play** button for each sample, and from the External Libraries (the extension
   has its package name and a **Docs** button there).
-- `extra.jumphp.samples` / `extra.jumphp.doc` name other folders than `samples/` and `doc/`.
+- `extra.jumphp.samples` / `extra.jumphp.doc` name other folders than `doc/samples/` and `doc/` (older packages keep their samples in `samples/`: still read).
 - JumPHP's own seven (`particles`, `physics`, `shorts`, `effects`, `collision`, `dialogue`, `tiles`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
 
 ## A clean project
@@ -213,8 +213,26 @@ browser's 32-bit PHP). Its doc and the `TilesSample` come with `extension:add`.
 
 ## Make and publish your own, from the IDE
 
-New Project > Engine extension makes it on your computer (the package `extensions/<id>` with its `doc/`, `samples/` and the example game
+New Project > Engine extension makes it on your computer (the package `extensions/<id>` with its `doc/` (and `doc/samples/`) and the example game
 `games/<id>-demo`; nothing online). **Publish** (header button / Alt+J area) asks for a version, then puts the package in its own public repository
 `<your login>/jumphp-<id>` (Composer wants `composer.json` at the root: the project's repository is not the package's), the composer name becoming
 `<your login>/<id>`, tagged `v<version>`. Submit that repository on packagist.org once (the IDE opens the page; Packagist then follows the tags by
 itself when you sign in there with GitHub); jumphp.net's directory refreshes within hours, and the studio's "My extensions" page lists what is yours.
+
+## Samples you can run: `doc/samples/`
+
+Each extension keeps its samples in `doc/samples/*.php`: one scene per thing it does, each with a `LABEL` and a comment that says what to press. They are
+scenes of the game that adopts the extension (`extension:add` copies them into `src/Extensions/<Name>/`, the IDE's Engine Extensions window has a **▶ Play**
+for each), and they run **from the extension's own project** too: the example game (`games/<id>-demo`) autoloads `extensions/<id>/doc/samples/` as
+`App\Extensions\<Name>\` (composer.json and config/services.yaml, written by `extension:new`), so in the IDE a ▶ on the `class` line of a sample (or of any scene)
+runs **that scene only** (`JUMPHP_SCENE`), not the whole project. Every demo game has a `SamplesTest` that starts each sample for 90 frames.
+
+| Extension | Samples |
+|---|---|
+| particles | `FireSample`: a fire that follows the cursor, sparks on click |
+| physics | `BouncingBallsSample`: balls on pegs in a box (`games/physics-demo`) |
+| shorts | `MelodySample`: a tune, one note a click, with a caption |
+| effects | `FlashSample`, `TransitionSample`, `EasingSample` (every easing curve, under a vignette) |
+| collision | `CollisionSample` (a circle, a hexagon, a ray), `WorldSample` (sixty circles, the spatial hash) |
+| dialogue | `DialogueSample` (a shopkeeper), `QuestSample` (a quest log) |
+| tiles | `TilesSample`: a cave or a dungeon, start, exit, items, the shortest path |

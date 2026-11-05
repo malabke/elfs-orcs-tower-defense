@@ -28,5 +28,14 @@ foreach (["extensions/$id", "games/$id-demo"] as $root) {
         }
     }
 }
+// the example game finds (and autowires) the samples of the extension where they are, so that the IDE can run one from its file
+$demoComposer = "games/$id-demo/composer.json";
+$json = json_decode((string)file_get_contents($demoComposer), true) ?: [];
+$json['autoload']['psr-4']["App\\Extensions\\$studly\\"] = "../../extensions/$id/doc/samples/";
+file_put_contents($demoComposer, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+$services = "games/$id-demo/config/services.yaml";
+if (is_file($services) && !str_contains((string)file_get_contents($services), 'App\\Extensions')) {
+    file_put_contents($services, rtrim((string)file_get_contents($services)) . "\n\n  # the samples of the extension (extensions/$id/doc/samples): scenes the IDE runs from their file, without adopting them into this game\n  App\\Extensions\\$studly\\:\n    resource: '../../../extensions/$id/doc/samples/*'\n");
+}
 rename("extensions/$id/src/SkeletonExtension.php", "extensions/$id/src/$studly.php");
 echo "extension '$id' ready (JumphpExtensions\\$studly), its example game games/$id-demo\n";

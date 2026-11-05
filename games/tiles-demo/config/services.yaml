@@ -6,3 +6,7 @@ services:
 
   App\:
     resource: '../src/*'
+
+  # the samples of the extension (extensions/tiles/doc/samples): scenes the IDE runs from their file (a gutter ▶), without adopting them into this game
+  App\Extensions\Tiles\:
+    resource: '../../../extensions/tiles/doc/samples/*'

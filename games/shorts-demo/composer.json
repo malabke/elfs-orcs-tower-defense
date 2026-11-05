@@ -11,19 +11,39 @@
         "jumphp/shorts": "@dev"
     },
     "repositories": [
-        { "type": "path", "url": "../../extensions/particles" },
-        { "type": "path", "url": "../../extensions/physics" },
-        { "type": "path", "url": "../../extensions/shorts" },
-        { "type": "path", "url": "../../engine" },
-        { "type": "vcs", "url": "https://github.com/davidnurdin/php-wasm-network" }
+        {
+            "type": "path",
+            "url": "../../extensions/particles"
+        },
+        {
+            "type": "path",
+            "url": "../../extensions/physics"
+        },
+        {
+            "type": "path",
+            "url": "../../extensions/shorts"
+        },
+        {
+            "type": "path",
+            "url": "../../engine"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/davidnurdin/php-wasm-network"
+        }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true,
     "autoload": {
-        "psr-4": { "App\\": "src/" }
+        "psr-4": {
+            "App\\": "src/",
+            "App\\Extensions\\Shorts\\": "../../extensions/shorts/doc/samples/"
+        }
     },
     "autoload-dev": {
-        "psr-4": { "Tests\\": "tests/" }
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
     },
     "config": {
         "sort-packages": true,
