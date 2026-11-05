@@ -500,7 +500,9 @@ $('btn-full').addEventListener('click', () => {
 	fullscreenElement() ? exitFullscreen() : enterFullscreen();
 	canvas.focus();
 });
-canvas.addEventListener('dblclick', () => { if (GAME.view !== 'window') enterFullscreen(); });   // forms use double clicks
+// a double click goes fullscreen, except in windowed forms (they use double clicks) and in games clicked fast
+// (game.yaml `double_click_fullscreen: false`: two quick clicks must not send the page fullscreen)
+canvas.addEventListener('dblclick', () => { if (GAME.view !== 'window' && GAME.double_click_fullscreen !== false) enterFullscreen(); });
 if (GAME.view === 'window') document.documentElement.classList.add('view-window');
 $('btn-sound').addEventListener('click', () => {
 	// SDL_mixer plays through emscripten's Web Audio context
