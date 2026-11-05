@@ -103,6 +103,7 @@ final class World3d
         uniform vec2 u_flow;
         uniform sampler2D u_ground;
         uniform sampler2D u_noise;
+        uniform vec4 u_clip;
         varying vec3 v_color;
         varying vec3 v_normal;
         varying vec3 v_view;
@@ -110,6 +111,10 @@ final class World3d
         varying vec4 v_sky;
         varying vec4 v_misc;
         void main() {
+            // only inside the frame of a vignette (the whole screen otherwise)
+            if (v_sky.z < u_clip.x || v_sky.w < u_clip.y || v_sky.z > u_clip.z || v_sky.w > u_clip.w) {
+                discard;
+            }
             float mat = v_misc.z;
             if (mat > 5.5) {
                 // a soft shadow: its colour (u_tint), fading out towards its edge
@@ -307,6 +312,7 @@ final class World3d
             'u_fog' => $fog,
             'u_fogRange' => [560.0, 1400.0],
             'u_lava' => $this->scene['lava'],
+            'u_clip' => self::NO_CLIP,
             'u_model' => self::matrix(0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
             'u_tint' => [1.0, 1.0, 1.0],
             'u_alpha' => 1.0,
@@ -320,16 +326,19 @@ final class World3d
      * For pictures of single models (PortraitScene: the portraits of the interface).
      * @param int[] $background
      */
-    public function studio(Rig $rig, array $background): void
+    public function studio(Rig $rig, ?array $background, ?array $vp = null, array $clip = self::NO_CLIP): void
     {
         if ($this->gl === null) {
             return;
         }
         $this->inStudio = true;
-        $this->gl->clear([$background[0], $background[1], $background[2], 255]);
+        if ($background !== null) {
+            $this->gl->clear([$background[0], $background[1], $background[2], 255]);
+        }
         // the uniforms shared by the frame's draws go with its first one (begin() sends them with the land)
         $this->pending = [
-            'u_vp' => $rig->viewProj(),
+            'u_clip' => $clip,
+            'u_vp' => $vp ?? $rig->viewProj(),
             'u_eye' => $rig->eye(),
             'u_time' => 0.0,
             'u_rect' => [0.0, 0.0, 1.0, 1.0],
@@ -343,6 +352,54 @@ final class World3d
             'u_fogRange' => [90000.0, 99000.0],
             'u_lava' => 0.0,
         ];
+    }
+
+    /** u_clip that lets everything through */
+    private const NO_CLIP = [-9.0, -9.0, 9.0, 9.0];
+
+    /**
+     * The 3D layer OVER the 2D, transparent where nothing is drawn: small 3D scenes on a 2D screen (the vignettes of
+     * the menus). Works on every engine (no alpha composing needed). False without WebGL / OpenGL.
+     */
+    public function bootOver(WebGl $gl): bool
+    {
+        if (!$gl->isAvailable()) {
+            return false;
+        }
+        $this->gl = $gl;
+        if ($this->prog === 0) {
+            $this->prog = $gl->program(self::VERTEX, self::FRAGMENT);
+            $this->noise = $gl->texture('assets/textures/noise.png', true, true);
+        }
+        if ($this->prog === 0) {
+            return false;
+        }
+        $gl->setLayer('above', 'native');
+        Paint::$keyed = false;
+        $gl->setSupersample(2);
+        return true;
+    }
+
+    /**
+     * Starts a vignette: a small 3D scene seen by $rig (made with the frame's size) drawn into the frame
+     * [$x, $y, $w, $h] of a $viewW x $viewH screen; nothing of it shows outside the frame. Then draw() its models.
+     * @param array{0: float, 1: float, 2: float, 3: float} $frame
+     */
+    public function vignette(Rig $rig, array $frame, float $viewW, float $viewH): void
+    {
+        [$x, $y, $w, $h] = $frame;
+        $sx = $w / $viewW;
+        $sy = $h / $viewH;
+        $cx = ($x + $w / 2) / $viewW * 2 - 1;
+        $cy = 1 - ($y + $h / 2) / $viewH * 2;
+        // the frame's own projection, squeezed into its place on the screen (clip space: x' = sx x + cx w)
+        $vp = $rig->viewProj();
+        for ($c = 0; $c < 4; $c++) {
+            $wc = $vp[$c * 4 + 3];
+            $vp[$c * 4] = $sx * $vp[$c * 4] + $cx * $wc;
+            $vp[$c * 4 + 1] = $sy * $vp[$c * 4 + 1] + $cy * $wc;
+        }
+        $this->studio($rig, null, $vp, [$cx - $sx, $cy - $sy, $cx + $sx, $cy + $sy]);
     }
 
     /** @var array<string, mixed> uniforms for the next draw (studio()) */

@@ -9,6 +9,12 @@ use App\Ui\Paint;
 use App\Ui\Sfx;
 use App\Ui\Sprites;
 use App\Ui\Text;
+use App\Ui\World3d;
+use App\View3d\Diorama;
+use App\View3d\Mesh;
+use App\View3d\Rig;
+use App\View3d\Towers;
+use App\View3d\Units;
 use JumPHP\Renderer\Renderer;
 use JumPHP\Scene\AbstractScene;
 use JumPHP\Util\Lang;
@@ -29,8 +35,19 @@ final class FactionSelectScene extends AbstractScene
     private int $selected = 0;
     private float $time = 0.0;
 
-    public function __construct(private FontProvider $fonts, private Sprites $sprites, private Progress $progress)
+    /** the cards show living 3D vignettes (else the pictures of assets/sprites/cards/) */
+    private bool $use3d = false;
+
+    public function __construct(private FontProvider $fonts, private Sprites $sprites, private Progress $progress, private World3d $world)
     {
+    }
+
+    public function exit(): void
+    {
+        if ($this->use3d) {
+            $this->world->shutdown($this->engine->gl());
+            $this->use3d = false;
+        }
     }
 
     public function enter(array $params = []): void
@@ -44,6 +61,10 @@ final class FactionSelectScene extends AbstractScene
         $last = (string)$this->engine->options->get('faction', 'elves');
         $this->selected = max(0, (int)array_search($params['faction'] ?? $last, $this->factions, true));
         $this->time = 0.0;
+        $this->use3d = ($params['view'] ?? '3d') !== 'flat' && $this->world->bootOver($this->engine->gl());
+        if (!$this->use3d) {
+            $this->world->shutdown($this->engine->gl());
+        }
     }
 
     public function update(float $dt): void
@@ -136,6 +157,46 @@ final class FactionSelectScene extends AbstractScene
         Text::draw($r, $font, $hint, $bx + $bw + 12, $by + $bh / 2 - $font->height() / 2, $w - $bw - 28, [196, 200, 216], 'left', [16, 20, 36]);
     }
 
+    /**
+     * The living vignette of a card: a sky over a meadow (2D), and over it in 3D the side's island, its four towers
+     * at their best level and its foes walking round them, the camera turning slowly (each card its own way).
+     * @param array{0: float, 1: float, 2: float, 3: float} $frame
+     */
+    private function vignette(Renderer $r, int $i, string $id, array $frame): void
+    {
+        [$fx, $fy, $fw, $fh] = $frame;
+        $bands = 12;
+        for ($b = 0; $b < $bands; $b++) {
+            $t = $b / ($bands - 1);
+            $c = $t < 0.62 ? Mesh::mix([0.55, 0.72, 0.92], [0.98, 0.88, 0.70], $t / 0.62) : Mesh::mix([0.62, 0.74, 0.46], [0.36, 0.52, 0.30], ($t - 0.62) / 0.38);
+            $r->fillRect($fx, $fy + $fh * $b / $bands, $fw, $fh / $bands + 0.5, [(int)($c[0] * 255), (int)($c[1] * 255), (int)($c[2] * 255)]);
+        }
+
+        $faction = $this->data->faction($id);
+        $flag = (string)$faction['colors']['main'];
+        $k = Diorama::SCALE;
+        $chosen = $i === $this->selected;
+        $rig = new Rig($fw, $fh);
+        $turn = $this->time * ($chosen ? 0.35 : 0.12) + $i * 1.1;
+        $rig->orbit([0.0, 8.0 * $k, 4.0 * $k], 420.0, 27.0, 0.45 * sin($turn));
+        $w = $this->world;
+        $w->vignette($rig, $frame, (float)$this->width(), (float)$this->height());
+        $w->draw('diorama:island', static fn () => Diorama::island(), 0.0, 0.0, 0.0, 0.0, $k, [1.0, 1.0, 1.0], 1.0, 0.0, 0.0);
+        foreach ($faction['towers'] as $n => $type) {
+            $sprite = (string)$this->data->tower($type)['sprite'];
+            [$tx, $tz] = Diorama::SPOTS[$n] ?? [0.0, 0.0];
+            $w->shadow(($tx + 4.0) * $k, ($tz + 2.0) * $k, 12.0 * $k, 10.0 * $k, -0.4, 0.35, 0.3);
+            $w->draw("t:$sprite:3:n:$flag", static fn () => Towers::build($sprite, 3, null, $flag), $tx * $k, 0.0, $tz * $k, 0.0, 0.95 * $k);
+        }
+        $foes = $faction['enemy'] === 'alliance' ? ['elf', 'dwarf', 'rider'] : ['grunt', 'goblin', 'warg'];
+        foreach ($foes as $n => $sprite) {
+            [$ux, $uz, $yaw] = Diorama::walker($n, count($foes), $this->time + $i * 0.7);
+            $step = (int)(($this->time + $n * 0.3) * 9.0) % Units::FRAMES;
+            $w->shadow($ux * $k, $uz * $k, 5.0 * $k, 4.0 * $k, 0.0, 0.35, 0.3);
+            $w->draw("u:$sprite:$step", static fn () => Units::build($sprite, $step), $ux * $k, 0.3, $uz * $k, $yaw, 1.6 * $k);
+        }
+    }
+
     private function drawCard(Renderer $r, int $i, string $id): void
     {
         $font = $this->font();
@@ -149,11 +210,13 @@ final class FactionSelectScene extends AbstractScene
         $ty = $y + 11;
         $ty += Text::draw($r, $font, Lang::t($faction['name']), $x + $w / 2, $ty, $inner, [255, 226, 130], 'center', [40, 22, 10]) + 4;
 
-        // the four towers at their best level: the picture of their 3D models (or their drawings)
+        // the four towers at their best level: a living 3D vignette, or the picture of their 3D models (or their drawings)
         $pw = $inner;
-        $ph = $pw * 140 / 400;
+        $ph = $pw * ($this->use3d ? 0.6 : 140 / 400);
         Paint::round($r, $x + 3, $ty - 1, $pw + 2, $ph + 2, 2, [10, 12, 20]);
-        if (!$this->sprites->drawPicture($r, "side-$id", $x + 4, $ty, $pw, $ph)) {
+        if ($this->use3d) {
+            $this->vignette($r, $i, $id, [$x + 4, $ty, $pw, $ph]);
+        } elseif (!$this->sprites->drawPicture($r, "side-$id", $x + 4, $ty, $pw, $ph)) {
             $towers = $faction['towers'];
             $tw = $inner / max(1, count($towers));
             foreach ($towers as $k => $tower) {
@@ -177,7 +240,7 @@ final class FactionSelectScene extends AbstractScene
             }
         }
 
-        // the best stars won on the map
+        // the best stars won on the first map
         $stars = $this->progress->stars($id, 'thornvale');
         for ($s = 0; $s < 3; $s++) {
             Paint::icon($r, $s < $stars ? 'star' : 'star_off', $x + $w / 2 - 11 + $s * 11, $y + $h - 10, 10);
