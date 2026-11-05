@@ -316,6 +316,8 @@ final class Creator
             $body = $r->json();
             if ($r->status === 201 && is_array($body) && !empty($body['clone_url'])) {
                 $d->resolve($body);
+            } elseif ($r->status === 401) {
+                $d->reject(new \RuntimeException('GitHub refuses the saved token (“Bad credentials”: revoked or expired). Sign out of jumphp.net in the IDE and sign in with GitHub again, then retry.'));
             } elseif ($r->status === 422 && $try < 9) {
                 $this->createRepository($git, $name, $description, $try + 1)->then(fn ($v) => $d->resolve($v), fn (\Throwable $e) => $d->reject($e));
             } else {

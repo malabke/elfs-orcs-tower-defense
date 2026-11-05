@@ -66,7 +66,7 @@ final class OpenCode
     }
 
     /** @return array{id: int} */
-    public function send(string $prompt, ?string $session, ?string $model, string $conv): array
+    public function send(string $prompt, ?string $session, ?string $model, string $conv, string $mode = 'acceptEdits'): array
     {
         if (trim($prompt) === '') {
             throw new \InvalidArgumentException('Nothing to send.');
@@ -88,7 +88,7 @@ final class OpenCode
         $state = ['started' => microtime(true), 'model' => $model];
         $buffer = '';
         $id = 0;
-        $started = $this->processes->start($command, $this->root, ['JUMPHP_IDE' => '1'], function (string $chunk, string $stream) use (&$id, &$buffer, &$state, $conv): void {
+        $started = $this->processes->start($command, $this->root, ['JUMPHP_IDE' => '1', 'OPENCODE_PERMISSION' => self::permissions($mode)], function (string $chunk, string $stream) use (&$id, &$buffer, &$state, $conv): void {
             if ($stream !== 'stdout') {
                 return;
             }
@@ -114,6 +114,20 @@ final class OpenCode
             ($this->emit)('claude.exit', ['id' => $id, 'conv' => $conv, 'code' => -1, 'error' => $e->getMessage()]);
         });
         return ['id' => $id];
+    }
+
+    /**
+     * What OpenCode may do without asking (`opencode run` cannot ask: it answers "The user rejected permission to use this
+     * specific tool call" to anything that needs a yes, MCP tools and folders outside the project included), from the
+     * window's mode: plan = read only; "ask" = OpenCode's own defaults; the others = everything allowed.
+     */
+    public static function permissions(string $mode): string
+    {
+        return json_encode(match ($mode) {
+            'plan' => ['edit' => 'deny', 'bash' => 'deny'],
+            'default' => new \stdClass(),
+            default => ['edit' => 'allow', 'bash' => 'allow', 'webfetch' => 'allow', 'external_directory' => 'allow', 'doom_loop' => 'allow'],
+        });
     }
 
     public function stop(int $id): bool

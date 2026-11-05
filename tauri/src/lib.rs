@@ -739,6 +739,7 @@ pub extern "C" fn jt_run(config_json: *const c_char, frame: Option<FrameFn>) -> 
     let _ = FRAME.set(frame);
     #[cfg(windows)]
     {
+        webview2::ensure();
         common_controls::pin_module();
         common_controls::activate();
     }
@@ -805,6 +806,57 @@ pub extern "C" fn jt_frame(data: *const u8, len: usize) {
 #[no_mangle]
 pub extern "C" fn jt_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
+}
+
+/// Windows: the WebView every window needs (WebView2, Edge's). Windows 11 and an updated Windows 10 have it, a fresh Windows 10 does
+/// not: Microsoft's Evergreen bootstrapper (packed in this library, ~1.8 MB, redistribution allowed) installs it silently before the
+/// first window, as the apps' installers expect (no page to open, no link to follow). It asks Windows' permission (UAC) itself.
+#[cfg(windows)]
+mod webview2 {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    const SETUP: &[u8] = include_bytes!("../assets/MicrosoftEdgeWebview2Setup.exe");
+    const CLIENT: &str = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+    const NO_WINDOW: u32 = 0x0800_0000;
+
+    /// The runtime registers its version ("pv") under EdgeUpdate's clients; 0.0.0.0 = removed.
+    fn installed() -> bool {
+        let keys = [
+            format!(r"HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{CLIENT}"),
+            format!(r"HKLM\SOFTWARE\Microsoft\EdgeUpdate\Clients\{CLIENT}"),
+            format!(r"HKCU\Software\Microsoft\EdgeUpdate\Clients\{CLIENT}"),
+        ];
+        for key in keys {
+            let Ok(out) = Command::new("reg").args(["query", &key, "/v", "pv"]).creation_flags(NO_WINDOW).output() else { continue };
+            if !out.status.success() {
+                continue;
+            }
+            let text = String::from_utf8_lossy(&out.stdout).to_string();
+            let found = text.lines().any(|l| {
+                let mut words = l.split_whitespace();
+                words.next() == Some("pv") && words.last().map_or(false, |v| v != "0.0.0.0" && !v.is_empty())
+            });
+            if found {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn ensure() {
+        if installed() {
+            return;
+        }
+        let path = std::env::temp_dir().join("MicrosoftEdgeWebview2Setup.exe");
+        if std::fs::write(&path, SETUP).is_err() {
+            return;
+        }
+        eprintln!("[jumphp-tauri] WebView2 is missing: installing it (silent)");
+        // /silent /install: Microsoft's documented switches for the bootstrapper
+        let _ = Command::new(&path).args(["/silent", "/install"]).creation_flags(NO_WINDOW).status();
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 /// Windows: the native dialogs (TaskDialogIndirect) live in version 6 of comctl32, which Windows only gives a

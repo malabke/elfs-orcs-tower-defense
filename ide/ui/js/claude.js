@@ -536,6 +536,11 @@ class Conversation {
     if (/^\/(rc|remote-control)$/.test(prompt)) { this.remoteControl(); return; }
     await this.app.editors?.saveAll(true);
     this.log.querySelector('.claude-empty')?.remove();
+    // once per project: where what the AI does is kept
+    if (!p.remote && backend.kind === 'native' && !prefs.get('iaNote:' + p.app.projectKey, false)) {
+      prefs.set('iaNote:' + p.app.projectKey, true);
+      this.add({ role: 'note', text: 'Each turn of Claude / OpenCode is saved in the project\'s IA/HISTORY folder (IA/HISTORY/<assistant>/<model>/<date>/<request>.md). It is NOT sent to git (IA/ is in .gitignore): it stays on this computer only, so it is lost if you delete the project folder or change computer.' });
+    }
     const during = !!this.run;
     this.add({ role: 'user', text: prompt, during });
     this.input.value = '';
@@ -564,15 +569,16 @@ class Conversation {
   startTurn(id) {
     this.run = { id, started: Date.now(), tools: 0 };
     this.stopBtn.hidden = false;
-    this.input.placeholder = this.panel.remote ? 'Claude is working…' : 'Tell Claude more while it works: it reads it at once (Enter)';
+    const who = this.panel.agent === 'opencode' ? 'OpenCode' : 'Claude';
+    this.input.placeholder = this.panel.remote ? `${who} is working…` : this.panel.agent === 'opencode' ? 'OpenCode is working… (one message at a time)' : 'Tell Claude more while it works: it reads it at once (Enter)';
     this.thinking?.remove();
-    this.thinking = el('div.claude-thinking', {}, el('span.spinner'), 'Claude is working…');
+    this.thinking = el('div.claude-thinking', {}, el('span.spinner'), `${who} is working…`);
     this.log.append(this.thinking);
     this.scroll();
     this.panel.say('working…');
     this.panel.renderTabs();
     this.task?.();
-    this.task = this.app.task?.(`Claude is working… (${this.title()})`, { open: () => { this.app.showTool('claude'); this.panel.show(this); } }) || null;
+    this.task = this.app.task?.(`${who} is working… (${this.title()})`, { open: () => { this.app.showTool('claude'); this.panel.show(this); } }) || null;
   }
 
   /** The turn is over (its result, or the process ended): what it changed comes in. */
@@ -635,7 +641,7 @@ class Conversation {
           panel.planTarget = this;
           panel.watch.use(part);
           panel.planTarget = null;
-          this.task?.update(`Claude: ${toolText(part.name, part.input || {}, this.app.project?.root || '')}`);
+          this.task?.update(`${who}: ${toolText(part.name, part.input || {}, this.app.project?.root || '')}`);
         }
       }
     } else if (event.type === 'user') {
@@ -656,9 +662,28 @@ class Conversation {
         this.add({ role: 'note', text: `Refused (mode “${MODES[panel.mode][0]}”): ${event.permission_denials.map((d) => d.tool_name).join(', ')}. Change what Claude may do (⚙) and ask again.` });
       }
       this.add({ role: 'done', text: `${event.is_error ? 'Stopped' : 'Done'} · ${seconds} s · ${this.run.tools} action(s)${cost}` });
-      if (!panel.remote) { this.endTurn(); return; }
+      if (!panel.remote) { this.endTurn(); this.autoCompact(); return; }
     }
     this.save();
+  }
+
+  /**
+   * Claude Code's own automatic compaction does not always run in this window (claude -p): when the context is 80 % full at the
+   * end of a turn, /compact is sent, as one would type it. The gauge restarts from the summary.
+   */
+  autoCompact() {
+    const p = this.panel;
+    if (this.compacting) {                // the /compact turn just ended: the old size no longer counts
+      this.compacting = false;
+      this.context = { ...this.context, used: 0 };
+      if (p.active === this) p.usage.context(this.context);
+      return;
+    }
+    const c = this.context;
+    if (p.agent !== 'claude' || p.remote || prefs.get('claudeAutoCompact', true) === false || !c?.used || !c?.window || c.used / c.window < 0.8) return;
+    this.compacting = true;
+    this.add({ role: 'note', text: `The context is ${Math.round(100 * c.used / c.window)} % full: compacting it now (/compact) so the conversation goes on.` });
+    setTimeout(() => { this.input.value = '/compact'; this.send(); }, 300);
   }
 
   exit({ id, code, error, changed }) {

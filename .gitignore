@@ -24,3 +24,6 @@ core.[0-9]*
 /ide/composer.lock
 /ide/.phpunit.cache/
 /ide/ui/vendor/
+
+# what the AI assistants did (IDE history): private to this computer
+/IA/

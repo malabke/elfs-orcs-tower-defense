@@ -125,6 +125,13 @@ games/<id>/
 11. **Always verify** before saying you are done (§10): `bin/jumphp test <game>` must pass, and look at a
     screenshot (`bin/jumphp shot <game>`).
 
+12. **Keep a history of what you do** (the JumPHP IDE does it by itself for its Claude / OpenCode window; do it yourself when you
+    are launched any other way, e.g. Claude Code in a terminal): at the end of each piece of work, write
+    `IA/HISTORY/<CLAUDE|OPEN CODE>/<model>/<dd-mm-YYYY HH-MM-SS>/<what it was about>.md` **at the root of the project** (the request,
+    what you did, the files and commands, the result; no `:` in the folder name, Windows refuses it). `IA/` is **never sent to git**:
+    make sure `/IA/` is in the project's `.gitignore`, and tell the user once that this history lives on their computer only and is
+    lost if the folder or the computer is.
+
 ---
 
 ## 3. Commands

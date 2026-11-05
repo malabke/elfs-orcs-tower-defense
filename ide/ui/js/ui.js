@@ -351,7 +351,27 @@ export function confirm(title, text, { ok = 'OK', danger = false } = {}) {
 const history = [];
 
 /** A notification (balloon) in the corner; kept in the notifications list. */
+/** A program the computer lacks, named by an error ("cannot start git (not found...", "Docker was not found"): its Install button. */
+const MISSING = { git: 'Git', docker: 'Docker', claude: 'Claude Code', opencode: 'OpenCode' };
+function installAction(text) {
+  const m = /cannot start (git|docker|claude|opencode)\b|\b(git|docker|claude|opencode)\b[^.\n]{0,30}(?:was not found|not found|is not recognized|n'est pas reconnu)/i.exec(String(text));
+  const tool = m && (m[1] || m[2]).toLowerCase();
+  if (!tool || !window.jumphp?.native) return null;
+  return { label: `Install ${MISSING[tool]}`, action: async () => {
+    notify(`Installing ${MISSING[tool]}… (a system window may ask for your permission)`, 'info', { title: 'Install' });
+    try {
+      const r = await window.jumphp.invoke('ide', { name: 'tool.install', payload: { tool } });
+      if (r.installed) notify(`${MISSING[tool]} is installed. Restart the IDE so it finds it.`, 'success', { title: 'Install', timeout: 0 });
+      else {
+        notify(`${MISSING[tool]} cannot be installed from here: its download page opens.`, 'warning', { title: 'Install' });
+        window.jumphp.invoke('ide', { name: 'native.openUrl', payload: { url: r.page } }).catch(() => window.open(r.page, '_blank'));
+      }
+    } catch (e) { notify(e.message, 'error', { title: 'Install' }); }
+  } };
+}
+
 export function notify(text, kind = 'info', { title, actions = [], timeout } = {}) {
+  if (kind === 'error' && !actions.length) { const a = installAction(text); if (a) actions = [a]; }
   let box = document.querySelector('.notifications');
   if (!box) { box = el('div.notifications'); document.body.append(box); }
   history.unshift({ text, kind, title, time: new Date() });

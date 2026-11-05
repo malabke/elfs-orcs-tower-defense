@@ -48,10 +48,27 @@ final class ClaudeCode
     /** the other assistant of the window (agent: 'opencode'), made when first asked */
     private ?OpenCode $opencode = null;
 
+    private AiHistory $history;
+
     /** @param callable(string $event, array $payload): void $emit */
-    public function __construct(private Processes $processes, private string $root, private $emit, private ?IdeAgent $agent = null)
+    public function __construct(private Processes $processes, private string $root, callable $emit, private ?IdeAgent $agent = null)
     {
+        $this->history = new AiHistory($root);
+        // every event of an assistant also goes to IA/HISTORY (written when its turn ends)
+        $this->emit = function (string $event, array $payload) use ($emit): void {
+            if ($event === 'claude.event' && is_array($payload['event'] ?? null) && is_string($payload['conv'] ?? null)) {
+                try {
+                    $this->history->observe($payload['conv'], $payload['event']);
+                } catch (\Throwable) {
+                    // the history must never stop the conversation
+                }
+            }
+            $emit($event, $payload);
+        };
     }
+
+    /** @var callable(string $event, array $payload): void */
+    private $emit;
 
     /** @return array{available: bool, path: ?string, version: ?string} */
     public function status(): array
@@ -81,9 +98,10 @@ final class ClaudeCode
         if (trim($prompt) === '') {
             throw new \InvalidArgumentException('Nothing to send.');
         }
+        $this->history->sent($conv, $agent, $model, $prompt);
         if ($agent === 'opencode') {
             // OpenCode's own run, its events told in Claude's words (OpenCode::translate): the window shows them the same way
-            return $this->opencode()->send($prompt, $session, $model, $conv);
+            return $this->opencode()->send($prompt, $session, $model, $conv, $mode);
         }
         $settings = json_encode([$mode, $model, $effort]);
         $live = $this->lives[$conv] ?? null;

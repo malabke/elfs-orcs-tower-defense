@@ -147,6 +147,7 @@ final class Ide
                 }
                 ($this->emit)($event, $payload);
             }, $this->agent);
+            $this->register('tool.install', fn (array $p) => (new \JumPHP\Ide\Run\ToolInstaller($this->processes, $root))->install((string)($p['tool'] ?? '')));
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
