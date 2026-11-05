@@ -128,7 +128,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
-- to check (David, 2026-11-05): is the message the IDE puts in the clipboard normal? (what it copies, when, whether it should copy at all)
+- to check (David, on Windows, 2026-11-05): is the message the IDE puts in the clipboard normal? (what it copies, when, whether it should copy at all)
 - bug (David, Windows, 2026-11-05): the IDE sometimes shows "update" and "Restart now"; after the restart it still shows "update" and
   "Restart now" (a loop): check that the new version is really installed / its version compared to update.json (the updater, the installer)
 - bug (David, 2026-11-05): when Claude (in the IDE's Claude window) asks for a permission, a click elsewhere (e.g. to give the focus back to the
