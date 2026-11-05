@@ -136,6 +136,9 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   that owns the repository (the one signed in on jumphp.net), and when a push is refused (403 / not found) say which account git used and offer
   to fix the remote. Also: GitHub's `main` had not moved after his `! git push` (14 local commits not on GitHub): show "N commits not pushed"
   in the IDE so that nobody believes a refused push went through.
+- idea (Clément, 2026-11-05, after the two-accounts push problem): show the account git uses in the IDE; let the user sign in with several GitHub
+  accounts and assign one account to each project (stored per project, used for push / pull / clone: a token in the remote or a credential
+  helper of the IDE, so the Windows credential manager is no longer involved); an integrated Git client with its own authentication would be a plus.
 - to check (Clément, Windows, 2026-11-05): the project's GitHub repository still held the initial skeleton: nothing was ever committed / pushed
   (the IDE's Git panel and the publish flow changed a lot lately: check commit + push from the IDE on a new project, and that the user is
   told when a project has uncommitted work); asked to commit, Claude refused to until phpstan and the tests had finished: a commit must not
