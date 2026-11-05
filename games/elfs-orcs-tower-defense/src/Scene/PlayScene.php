@@ -968,7 +968,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     /** The 3D layer (ground, towers, creatures, shots, glows), then the 2D over it: bars, banner, ring menu, HUD. */
     private function render3d(Renderer $r): void
     {
-        $r->clear($this->world->clearColour());
+        $r->clear($this->world->clearColour(), true);
         if ($this->rig === null) {
             return;
         }

@@ -18,7 +18,7 @@ use JumPHP\Util\Color;
  *   3D layer ─────────┘   'below': the 3D shows through the 2D where the 2D has the key colour (HUD over 3D);
  *                                  a darker shade of the key shows a darker 3D (fades, translucent menus)
  *                         'below' with no key (null), 'view' resolution: the 2D's own alpha says where the 3D
- *                                  shows: clear the 2D with [0, 0, 0, 0], then anything drawn over it (smooth
+ *                                  shows: clear the 2D with clear([0, 0, 0, 0], true), then anything drawn over it (smooth
  *                                  text, translucent colours) is mixed over the 3D as it is (with an HD renderer
  *                                  the view is the window's resolution: Renderer::setHd())
  *                         'above': the 3D is drawn over the 2D (its transparent pixels show the 2D)
@@ -150,7 +150,7 @@ class WebGl extends EventEmitter
      * @param string $resolution 'view' (the view texture: game.yaml size, big retro pixels; the window's
      *        resolution with an HD renderer) or 'native' (window pixels: smooth)
      * @param Color|array|string|null $key 'below' only: the 2D colour that shows the 3D (exact match); null: the
-     *        2D's own alpha (clear it with [0, 0, 0, 0]; 'view' resolution only: the window has no alpha)
+     *        2D's own alpha (clear it with clear([0, 0, 0, 0], true); 'view' resolution only: the window has no alpha)
      */
     public function setLayer(string $position = 'below', string $resolution = 'view', Color|array|string|null $key = [255, 0, 255]): void
     {

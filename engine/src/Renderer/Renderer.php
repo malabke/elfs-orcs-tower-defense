@@ -320,11 +320,14 @@ class Renderer
         \SDL_SetRenderDrawColor($this->renderer, $r, $g, $b, $a);
     }
 
-    /** Fills the target; a colour with alpha < 255 leaves it that transparent (a WebGL layer composed by alpha). */
-    public function clear(Color|array|string $color = [0, 0, 0]): void
+    /**
+     * Fills the target with an opaque colour. $keepAlpha: the colour's alpha is kept, the target left that transparent
+     * (clear([0, 0, 0, 0], true) under a WebGL layer composed by the 2D's alpha: WebGl::setLayer(..., null)).
+     */
+    public function clear(Color|array|string $color = [0, 0, 0], bool $keepAlpha = false): void
     {
         $c = Color::of($color);
-        \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, $c->a);
+        \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, $keepAlpha ? $c->a : 255);
         \SDL_RenderClear($this->renderer);
     }
 

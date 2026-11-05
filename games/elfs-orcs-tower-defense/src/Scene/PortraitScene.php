@@ -69,7 +69,7 @@ final class PortraitScene extends AbstractScene
 
     public function render(Renderer $r): void
     {
-        $r->clear($this->world->clearColour());
+        $r->clear($this->world->clearColour(), true);
         if (!$this->use3d || $this->rig === null) {
             return;
         }

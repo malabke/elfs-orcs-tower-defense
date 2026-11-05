@@ -120,9 +120,29 @@ Dernière mise à jour : 2026-11-05.
      le plein écran). Nouvelle option `double_click_fullscreen` (vraie par défaut, passée à la page par
      `tools/render-web.php` et `tools/remote-manifest.php`), mise à `false` dans `game.yaml`. Le playground (0.4.0) le
      fait encore : à inclure dans la contribution (point 9).
-9. **Suite demandée (« on fera 4 et 5 »)** : proposer au projet JumPHP les ajouts du moteur faits ici (2D en HD,
-   composition par transparence, options de TtfFont, `touch: {pad: none}`, `double_click_fullscreen`) pour que le
-   playground les ait ; puis des
+9. **Contribution au moteur JumPHP (en cours, 2026-11-05)** : le mainteneur « attend nos request ». Exigence de
+   l'utilisateur : **rester rétro-compatible, ne casser aucun jeu existant fait par d'autres** (tout est optionnel,
+   rien ne change par défaut). JumPHP amont : `https://github.com/davidnurdin/jumPhp.git`, en 0.5.14 (le projet est
+   en 0.4.0 : 280 commits de retard), récupéré en `refs/remotes/upstream/main`. Branches préparées sur 0.5.14, en
+   local, dans deux worktrees hors du projet (`C:\JUMPHP\jumphp-contrib`, `C:\JUMPHP\jumphp-contrib2`) :
+   - `contrib/hd-2d` : 2D en HD, `TtfFont` (gras, épaississement, contour), calque WebGL
+     composé par la transparence. Fusionné avec le `translate()` (décalage `ox`/`oy`) apparu en amont. **`clear()`
+     reste opaque** : garder l'alpha se demande par `clear($c, true)` (le jeu passe `true`, ignoré sans erreur par
+     le moteur 0.4.0). Test `engine/tests/Renderer/HdTest.php`. Tests du moteur 0.5.14 : 137 OK + phpstan OK.
+   - `contrib/touch-pad-none` : `touch: {pad: none}` dans `touch.js` **et** dans `TouchControls.php` (applis
+     natives, apparu en amont). Test `TouchControlsTest`.
+   - `contrib/double-click-fullscreen` : combiné avec la règle amont (pas de plein écran au double-clic en
+     `view: window`).
+   - `contrib/gl-row-length` : correctif des textures, bureau seulement (pas WebGL ni OpenGL ES des applis).
+   - `contrib/git-bash-windows` : `bin/jumphp` sous Git Bash. **Sans** la liste de mots interdits de notre jeu
+     (elle ferait échouer le lint de jeux d'autres personnes).
+   Reste : faire passer les tests des jeux d'exemple de JumPHP sur ces branches, puis les **pousser sur un fork et
+   ouvrir les pull requests** : pas d'outil `gh` ici et aucun fork sur `malabke` / `clement-cdy` /
+   `cdy-respawnsive` ; le compte à utiliser n'est pas encore choisi par l'utilisateur. Ensuite : mettre le projet à
+   jour vers la version de JumPHP qui les contient (`bin/jumphp update`), sur une branche, tout retester. Le
+   playground construit peut-être la page du jeu avec son propre code : `double_click_fullscreen` et `touch` doivent
+   y arriver (à vérifier dans `jumphp-playground`).
+   Puis des
    vignettes 3D vivantes sur l'écran des cartes.
 
 ## Décisions de l'utilisateur (à respecter)
