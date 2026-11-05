@@ -595,6 +595,10 @@ class App {
       a.add('commit', 'Commit…', () => this.showTool('commit'), { kbd: 'Ctrl+K', icon: 'commit' });
       a.add('commitTool', 'Commit Tool Window', () => this.toggleTool('commit'), { kbd: 'Alt+0', icon: 'commit' });
       a.add('commitAll', 'Commit All and Push…', () => this.git.commitAll(), { kbd: 'Ctrl+Alt+K', icon: 'upload' });
+      a.add('gitRemotes', 'Git Remotes…', () => this.git.extra.remotes(), { icon: 'globe' });
+      a.add('gitTags', 'Git Tags…', () => this.git.extra.tags(), { icon: 'branch' });
+      a.add('gitStashes', 'Git Stashes…', () => this.git.extra.stashes(), { icon: 'package' });
+      if (backend.kind === 'native') a.add('gitCredentials', 'Git Credentials…', () => this.git.extra.credentials(), { icon: 'user' });
       a.add('push', 'Push…', () => this.git.push(), { kbd: 'Ctrl+Shift+K', icon: 'push' });
       a.add('diff', 'Show Diff with HEAD', () => this.git.diff(this.editors.activePath()), { kbd: 'Ctrl+D', icon: 'diff', when: () => false });
       a.add('rollbackFile', 'Rollback File…', () => { const p = this.editors.activePath(); if (p) this.git.rollback([p]); }, { kbd: 'Ctrl+Alt+Z', icon: 'rollback' });
@@ -731,7 +735,7 @@ class App {
       section('Refactor', ['rename', 'usages']),
       section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'runToCursor', 'toggleBreakpoint', 'exceptionBreakpoints', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
       section('Tools', ['plugins', 'pluginUpdates', 'extensions', 'opencode', 'opencodeAsk', 'videoPreview']),
-      section('Git', ['commit', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile']),
+      section('Git', ['commit', 'commitAll', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile', 'gitStashes', 'gitTags', 'gitRemotes', 'gitCredentials']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },
         { label: 'JumPHP Documentation', action: () => this.openUrl('https://jumphp.net/docs') },

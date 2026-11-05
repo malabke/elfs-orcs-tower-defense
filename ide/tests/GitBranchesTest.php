@@ -40,6 +40,87 @@ final class GitBranchesTest extends TestCase
         self::assertSame("ada\n", $this->wait($this->git->run(['config', '--local', 'credential.https://github.com.username'])));
     }
 
+    public function testTagsAreMadeListedPushedNamesAndDeleted(): void
+    {
+        $this->wait($this->git->createTag('v1'));
+        $this->wait($this->git->createTag('v2', null, 'Second release'));
+        self::assertEqualsCanonicalizing(['v1', 'v2'], array_column($this->wait($this->git->tags()), 'name'));
+        $v2 = array_values(array_filter($this->wait($this->git->tags()), fn ($t) => $t['name'] === 'v2'))[0];
+        self::assertSame('Second release', $v2['subject']);
+        $this->wait($this->git->deleteTag('v1'));
+        self::assertSame(['v2'], array_column($this->wait($this->git->tags()), 'name'));
+        $this->expectException(GitException::class);
+        $this->wait($this->git->createTag('bad name'));
+    }
+
+    public function testCommitsCanBeRevertedCherryPickedAndResetTo(): void
+    {
+        $first = trim($this->wait($this->git->run(['rev-parse', 'HEAD'])));
+        $this->write('a.txt', "one\ntwo\nthree\nfour\n");
+        $second = $this->wait($this->git->commit('Add four', ['a.txt']));
+        $this->wait($this->git->revert($second));
+        self::assertSame("one\ntwo\nthree\n", file_get_contents("$this->dir/a.txt"));
+        self::assertSame('Revert "Add four"', $this->wait($this->git->log(null, 1))[0]['subject']);
+        // back to the first commit, the work kept in the files (mixed), then thrown away (hard)
+        $this->wait($this->git->resetTo($second, 'hard'));
+        self::assertSame("one\ntwo\nthree\nfour\n", file_get_contents("$this->dir/a.txt"));
+        $this->wait($this->git->resetTo($first, 'mixed'));
+        self::assertSame("one\ntwo\nthree\nfour\n", file_get_contents("$this->dir/a.txt"));
+        self::assertCount(1, $this->wait($this->git->status())['files']);
+        $this->wait($this->git->resetTo($first, 'hard'));
+        self::assertSame("one\ntwo\nthree\n", file_get_contents("$this->dir/a.txt"));
+        // cherry-pick the "Add four" commit back
+        $this->wait($this->git->cherryPick($second));
+        self::assertSame("one\ntwo\nthree\nfour\n", file_get_contents("$this->dir/a.txt"));
+        $this->wait($this->git->undoLastCommit());
+        self::assertSame('First', $this->wait($this->git->log(null, 1))[0]['subject']);
+        $this->expectException(GitException::class);
+        $this->wait($this->git->resetTo('not-a-sha', 'hard'));
+    }
+
+    public function testStashesAreListedAppliedAndDropped(): void
+    {
+        $this->write('a.txt', "changed\n");
+        $this->wait($this->git->stash('first stash'));
+        $this->write('a.txt', "other\n");
+        $this->wait($this->git->stash('second stash'));
+        $list = $this->wait($this->git->stashes());
+        self::assertCount(2, $list);
+        self::assertStringContainsString('second stash', $list[0]['message']);
+        $this->wait($this->git->stashApply(1));
+        self::assertSame("changed\n", file_get_contents("$this->dir/a.txt"));
+        $this->wait($this->git->rollback(['a.txt']));
+        $this->wait($this->git->stashDrop(0));
+        self::assertCount(1, $this->wait($this->git->stashes()));
+        $this->wait($this->git->stashPop());
+        self::assertSame([], $this->wait($this->git->stashes()));
+    }
+
+    public function testRemotesAreAddedChangedRemovedAndBranchesRenamed(): void
+    {
+        $this->wait($this->git->addRemote('origin', 'https://example.com/a.git'));
+        $this->wait($this->git->setRemoteUrl('origin', 'https://example.com/b.git'));
+        self::assertSame('https://example.com/b.git', $this->wait($this->git->remotes())[0]['url']);
+        $this->wait($this->git->removeRemote('origin'));
+        self::assertSame([], $this->wait($this->git->remotes()));
+        $this->wait($this->git->renameBranch('main', 'trunk'));
+        self::assertSame('trunk', $this->wait($this->git->status())['branch']);
+    }
+
+    public function testAnAuthenticationFailureSaysWhatToDo(): void
+    {
+        $this->wait($this->git->addRemote('origin', 'https://127.0.0.1:9/nope.git'));
+        try {
+            $this->wait($this->git->run(['fetch', 'origin'], true));
+            self::fail('fetched from nowhere');
+        } catch (GitException $e) {
+            self::assertStringNotContainsString('Git > Credentials', $e->getMessage(), 'a refused connection is not a sign-in problem');
+        }
+        $hint = new \ReflectionMethod(Git::class, 'authHint');
+        self::assertStringContainsString('Git > Credentials', $hint->invoke(null, "fatal: Authentication failed for 'https://github.com/x/y.git/'"));
+        self::assertSame('', $hint->invoke(null, 'fatal: not a git repository'));
+    }
+
     public function testABranchIsCreatedSwitchedToAndMergedBackWithoutConflict(): void
     {
         $this->wait($this->git->checkout('feature', true));

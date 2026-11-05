@@ -232,6 +232,26 @@ final class Main implements AppMain
         $c['update.auto'] = fn (array $p) => $this->updates->setAuto(!empty($p['on']));
         $c['session.login'] = fn (array $p = []) => $this->login(!empty($p['another']));
         // several GitHub accounts (each one a jumphp.net sign-in), one assigned to each project
+        // the user and token of any https host (GitLab, a company's server, a second GitHub...): git here uses them for that host (the tokens stay in this computer's storage)
+        $c['git.credentials'] = fn () => array_map(fn ($host, $c) => ['host' => $host, 'user' => $c[0]], array_keys($this->gitCredentials()), $this->gitCredentials());
+        $c['git.credentialSet'] = function (array $p) {
+            $host = strtolower(trim((string)($p['host'] ?? '')));
+            if (!preg_match('/^[a-z0-9.-]+(:\d+)?$/', $host) || trim((string)($p['token'] ?? '')) === '') {
+                throw new \InvalidArgumentException('A host (e.g. gitlab.com) and a token are needed.');
+            }
+            $all = $this->gitCredentials();
+            $all[$host] = [trim((string)($p['user'] ?? '')) ?: 'oauth2', trim((string)$p['token'])];
+            $this->app->storage->writeJson('git-credentials.json', $all);
+            $this->applyGitCredentials();
+            return true;
+        };
+        $c['git.credentialRemove'] = function (array $p) {
+            $all = $this->gitCredentials();
+            unset($all[strtolower((string)($p['host'] ?? ''))]);
+            $this->app->storage->writeJson('git-credentials.json', $all);
+            $this->applyGitCredentials();
+            return true;
+        };
         $c['session.accounts'] = fn () => $this->accountsState();
         $c['session.switch'] = function (array $p) {
             if (!$this->useAccount((string)($p['login'] ?? ''))) {
@@ -461,9 +481,21 @@ final class Main implements AppMain
         return $this->session['user'] ?? null;
     }
 
+    /** @return array<string, array{0: string, 1: string}> host => [user, token] */
+    private function gitCredentials(): array
+    {
+        return array_filter((array)$this->app->storage->readJson('git-credentials.json', []), fn ($c) => is_array($c) && count($c) === 2);
+    }
+
+    private function applyGitCredentials(): void
+    {
+        $this->ide?->git?->setCredentials($this->gitCredentials());
+    }
+
     /** The user's GitHub token (through jumphp.net) for git push / pull of their repositories. */
     private function authorizeGit(): void
     {
+        $this->applyGitCredentials();
         $git = $this->ide?->git;
         if ($git === null || empty($this->session['token'])) {
             return;

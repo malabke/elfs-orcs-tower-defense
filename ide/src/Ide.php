@@ -645,7 +645,24 @@ final class Ide
         $this->register('git.blame', fn (array $p) => $git->blame((string)$p['path'], isset($p['content']) ? (string)$p['content'] : null));
         $this->register('git.remotes', fn () => $git->remotes());
         $this->register('git.stash', fn (array $p) => $after($git->stash($p['message'] ?? null)));
-        $this->register('git.stashPop', fn () => $after($git->stashPop()));
+        $this->register('git.stashPop', fn (array $p = []) => $after($git->stashPop((int)($p['index'] ?? 0))));
+        $this->register('git.stashes', fn () => $git->stashes());
+        $this->register('git.stashApply', fn (array $p) => $after($git->stashApply((int)$p['index'])));
+        $this->register('git.stashDrop', fn (array $p) => $git->stashDrop((int)$p['index']));
+        $this->register('git.remoteAdd', fn (array $p) => $git->addRemote((string)$p['name'], (string)$p['url']));
+        $this->register('git.remoteRemove', fn (array $p) => $git->removeRemote((string)$p['name']));
+        $this->register('git.remoteSetUrl', fn (array $p) => $git->setRemoteUrl((string)$p['name'], (string)$p['url']));
+        $this->register('git.tags', fn () => $git->tags());
+        $this->register('git.tagCreate', fn (array $p) => $git->createTag((string)$p['name'], isset($p['revision']) ? (string)$p['revision'] : null, isset($p['message']) ? (string)$p['message'] : null));
+        $this->register('git.tagDelete', fn (array $p) => $git->deleteTag((string)$p['name'], !empty($p['remote'])));
+        $this->register('git.tagPush', fn (array $p) => $git->pushTag((string)$p['name']));
+        $this->register('git.reset', fn (array $p) => $after($git->resetTo((string)$p['sha'], (string)($p['mode'] ?? 'mixed'))));
+        $this->register('git.revert', fn (array $p) => $after($git->revert((string)$p['sha'])));
+        $this->register('git.cherryPick', fn (array $p) => $after($git->cherryPick((string)$p['sha'])));
+        $this->register('git.undoCommit', fn () => $after($git->undoLastCommit()));
+        $this->register('git.renameBranch', fn (array $p) => $git->renameBranch((string)$p['old'], (string)$p['new']));
+        $this->register('git.deleteRemoteBranch', fn (array $p) => $git->deleteRemoteBranch((string)$p['branch'], (string)($p['remote'] ?? 'origin'), $output));
+        $this->register('git.pushForce', fn () => $git->pushForce($output));
     }
 
     /** Where the IDE keeps its copy of JumPHP, for the games kept in their own repository (Runner::linkedCommand()). */

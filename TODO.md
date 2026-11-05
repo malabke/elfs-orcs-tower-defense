@@ -137,6 +137,11 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.48): the integrated Git client's missing parts, after an audit of what existed (status, stage / unstage, commit + amend, push, pull +
+  rebase, fetch --prune, branches, merge with conflict resolution, stash / pop, log, file history, blame, clone, per-project GitHub account): the commit
+  menu in the log (new branch, tag, cherry-pick, revert, reset), remotes, tags, stash list / apply / drop, branch rename, delete on the server,
+  force with lease, credentials for any https host (git-credentials.json in the IDE's storage), an explanation when git cannot sign in. Left: a graph of
+  the log, staging by hunk, SSH key management, a conflict editor beyond take ours / theirs / both, submodules. Not tried in the GUI.
 - done (2026-11-05, IDE 0.1.45): .md files open rendered (View / Edit / Edit + View, a small safe renderer: headings, lists, tables, code, quotes, links;
   no images yet); the welcome screen's trash deletes a project's folder (red warning, type the name) and, with an unchecked box, its jumphp.net project
   and GitHub repository (jumphp.net `DELETE /api/ide/projects/<slug>`; GitHub refuses without the delete_repo scope the sign-in does not ask for: the

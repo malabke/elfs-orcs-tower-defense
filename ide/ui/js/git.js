@@ -4,6 +4,7 @@
 import { backend } from './backend.js';
 import { el, clear, icon, basename, dirname, fileIcon, notify, confirm, prompt, chooser, timeAgo, menu, prefs } from './ui.js';
 import { monaco } from './editor.js';
+import { GitExtra } from './git-extra.js';
 
 export class Git {
   constructor(app) {
@@ -15,6 +16,7 @@ export class Git {
     this.checked = null;
     this.commitNode = el('div.commit-box');
     this.logNode = el('div', { style: { height: '100%', display: 'flex' } });
+    this.extra = new GitExtra(this);
     this.message = prefs.get('commitMessage:' + app.projectKey, '');
     this.blame = new Map();       // path -> decorations
     if (this.enabled) backend.on('git.output', (p) => this.app.console?.append('git', p.chunk));
@@ -258,6 +260,11 @@ export class Git {
       { label: 'New Branch…', icon: 'plus', action: () => this.newBranch(), group: 'Actions' },
       { label: 'Stash Changes', icon: 'package', action: () => this.run('git.stash', {}, 'Changes stashed'), group: 'Actions' },
       { label: 'Unstash (pop)', icon: 'package', action: () => this.run('git.stashPop', {}, 'Stash applied'), group: 'Actions' },
+      { label: 'Stashes…', icon: 'package', action: () => this.extra.stashes(), group: 'Actions' },
+      { label: 'Tags…', icon: 'branch', action: () => this.extra.tags(), group: 'Actions' },
+      { label: 'Remotes…', icon: 'globe', action: () => this.extra.remotes(), group: 'Actions' },
+      { label: 'Push, Force with Lease…', icon: 'push', action: () => this.forcePush(), group: 'Actions' },
+      { label: 'Fetch (and prune)', icon: 'pull', action: () => this.run('git.fetch', {}, 'Fetched'), group: 'Actions' },
       ...local.map((b) => ({ label: (b.current ? '★ ' : '') + b.name, hint: b.upstream || b.sha, icon: 'branch', group: 'Local', action: () => this.branchMenu(b, at) })),
       ...remote.map((b) => ({ label: b.name, hint: b.sha, icon: 'branch', group: 'Remote', action: () => this.branchMenu(b, at) })),
     ];
@@ -272,8 +279,26 @@ export class Git {
       { label: `Merge into ${this.status?.branch || 'current'}`, action: () => this.merge(branch.name), disabled: branch.current || merging },
       { label: 'New Branch from here…', action: async () => { if (branch.current || await this.checkout(branch.name)) this.newBranch(); }, disabled: merging },
       branch.current && !branch.upstream ? { label: 'Push (publish this branch)', icon: 'push', action: () => this.push() } : null,
+      !branch.remote ? { label: 'Rename…', action: () => this.renameBranch(branch.name) } : null,
       !branch.remote ? { label: 'Delete…', action: () => this.deleteBranch(branch.name), disabled: branch.current } : null,
+      branch.remote ? { label: 'Delete on the Server…', action: () => this.deleteRemoteBranch(branch.name) } : null,
     ].filter(Boolean), at);
+  }
+
+  async renameBranch(name) {
+    const next = (await prompt('Rename branch', { value: name, ok: 'Rename' }))?.trim();
+    if (next && next !== name) await this.run('git.renameBranch', { old: name, new: next }, `${name} is now ${next}`);
+  }
+
+  async deleteRemoteBranch(name) {
+    const [remote, ...rest] = name.split('/');
+    if (!(await confirm('Delete on the server', `Delete the branch ${rest.join('/')} of ${remote} (on the server)? Local copies stay.`, { ok: 'Delete', danger: true }))) return;
+    await this.run('git.deleteRemoteBranch', { remote, branch: rest.join('/') }, 'Branch deleted on the server');
+  }
+
+  async forcePush() {
+    if (!(await confirm('Push, force with lease', 'Replaces the branch on the server with yours (after a reset or an amend). Refused if someone else pushed meanwhile.', { ok: 'Force push', danger: true }))) return;
+    await this.run('git.pushForce', {}, 'Pushed (force with lease)');
   }
 
   /** Switches branch; local changes are offered a stash first (or the switch is cancelled). @return {Promise<boolean>} */
@@ -376,7 +401,7 @@ export class Git {
     if (path) commits.append(el('div.section-title', {}, icon('history'), 'History of ' + path));
     for (const c of list) {
       const refs = c.refs ? c.refs.split(', ').filter(Boolean).map((r) => el('span.p-tag', { style: { marginRight: '4px', fontSize: '10px' } }, r.replace('HEAD -> ', '★ '))) : [];
-      const row = el('div.row', { style: { paddingLeft: '10px' }, onclick: () => { commits.querySelectorAll('.row').forEach((r) => r.classList.remove('sel')); row.classList.add('sel'); this.commitDetails(c, details, path); } },
+      const row = el('div.row', { style: { paddingLeft: '10px' }, oncontextmenu: (e) => { e.preventDefault(); this.extra.commitMenu(c, e); }, onclick: () => { commits.querySelectorAll('.row').forEach((r) => r.classList.remove('sel')); row.classList.add('sel'); this.commitDetails(c, details, path); } },
         el('span', { style: { color: 'var(--accent-2)', width: '10px' } }, '●'), ...refs, el('span.label', {}, c.subject),
         el('span.right', {}, `${c.author} · ${timeAgo(c.time)}`));
       commits.append(row);

@@ -130,6 +130,27 @@ final class MainTest extends AppTestCase
         }
     }
 
+    public function testGitCredentialsForAnotherHostAreKeptAndListedWithoutTheirToken(): void
+    {
+        try {
+            self::assertSame([], $this->ide('git.credentials'));
+            $this->ide('git.credentialSet', ['host' => 'GitLab.com', 'user' => 'ada', 'token' => 'glpat-secret']);
+            $list = $this->ide('git.credentials');
+            self::assertSame([['host' => 'gitlab.com', 'user' => 'ada']], $list);
+            self::assertStringNotContainsString('glpat-secret', json_encode($list));
+            try {
+                $this->ide('git.credentialSet', ['host' => 'bad host!', 'token' => 'x']);
+                self::fail('a bad host was accepted');
+            } catch (\Throwable $e) {
+                self::assertStringContainsString('host', $e->getMessage());
+            }
+            $this->ide('git.credentialRemove', ['host' => 'gitlab.com']);
+            self::assertSame([], $this->ide('git.credentials'));
+        } finally {
+            $this->app->storage->writeJson('git-credentials.json', []);
+        }
+    }
+
     public function testTheTrashDeletesAProjectOfTheRecentListOnly(): void
     {
         $other = sys_get_temp_dir() . '/jumphp-trash-' . bin2hex(random_bytes(4));

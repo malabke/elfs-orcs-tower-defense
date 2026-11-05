@@ -24,6 +24,15 @@ final class Git
         $this->token = $token;
     }
 
+    /** @var array<string, array{0: string, 1: string}> host => [user, token or password]: GitHub, GitLab, a company's server... over https */
+    private array $credentials = [];
+
+    /** @param array<string, array{0: string, 1: string}> $credentials */
+    public function setCredentials(array $credentials): void
+    {
+        $this->credentials = $credentials;
+    }
+
     public function token(): ?string
     {
         return $this->token;
@@ -44,8 +53,16 @@ final class Git
     {
         $env = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_OPTIONAL_LOCKS' => '0'];
         $config = [['core.quotepath', 'false'], ['color.ui', 'false']];
-        if ($network && $this->token !== null && $this->token !== '') {
+        if ($network && $this->token !== null && $this->token !== '' && !isset($this->credentials['github.com'])) {
             $config[] = ['http.https://github.com/.extraHeader', 'Authorization: Basic ' . base64_encode('x-access-token:' . $this->token)];
+        }
+        if ($network) {
+            // the credentials the user gave for a host win over the jumphp.net sign-in (which is GitHub's only)
+            foreach ($this->credentials as $host => [$user, $secret]) {
+                if (preg_match('/^[a-z0-9.-]+(:\d+)?$/i', (string)$host) && $secret !== '') {
+                    $config[] = ["http.https://$host/.extraHeader", 'Authorization: Basic ' . base64_encode($user . ':' . $secret)];
+                }
+            }
         }
         $env['GIT_CONFIG_COUNT'] = (string)count($config);
         foreach ($config as $i => [$key, $value]) {
@@ -56,10 +73,19 @@ final class Git
         return $started['done']->then(function (array $result) use ($args) {
             if ($result['code'] !== 0) {
                 $message = trim($result['stderr']) ?: trim($result['stdout']) ?: 'git ' . ($args[0] ?? '') . ' failed';
-                throw new GitException($this->clean($message), $result['code']);
+                throw new GitException($this->clean($message) . self::authHint($message), $result['code']);
             }
             return $result['stdout'];
         });
+    }
+
+    /** What to do when git could not sign in: said once, after git's own message. */
+    private static function authHint(string $message): string
+    {
+        return preg_match('/Authentication failed|could not read (Username|Password)|terminal prompts disabled|Permission denied \(publickey\)|returned error: 40[13]|HTTP 40[13]|Invalid username or token/i', $message)
+            ? "\n\nGit could not sign in. Over https: Git > Credentials… gives this host a user and a token (the jumphp.net sign-in covers GitHub only); "
+              . 'with two GitHub accounts, the account menu picks the one of this project. Over ssh: the IDE uses your ssh agent and keys.'
+            : '';
     }
 
     private function clean(string $message): string
@@ -488,9 +514,146 @@ final class Git
         return $this->run(['stash', 'push', '--include-untracked', ...($message ? ['-m', $message] : [])]);
     }
 
-    public function stashPop(): Deferred
+    public function stashPop(int $index = 0): Deferred
     {
-        return $this->run(['stash', 'pop']);
+        return $this->run(['stash', 'pop', "stash@{{$index}}"]);
+    }
+
+    /** @return Deferred resolves with list<array{index: int, message: string, time: int}> */
+    public function stashes(): Deferred
+    {
+        return $this->run(['stash', 'list', '--format=%gd%x09%ct%x09%s'])->then(function (string $out) {
+            $list = [];
+            foreach (array_filter(explode("\n", $out)) as $line) {
+                [$ref, $time, $subject] = array_pad(explode("\t", $line, 3), 3, '');
+                if (preg_match('/\{(\d+)\}/', $ref, $m)) {
+                    $list[] = ['index' => (int)$m[1], 'message' => $subject, 'time' => (int)$time];
+                }
+            }
+            return $list;
+        });
+    }
+
+    public function stashApply(int $index): Deferred
+    {
+        return $this->run(['stash', 'apply', "stash@{{$index}}"]);
+    }
+
+    public function stashDrop(int $index): Deferred
+    {
+        return $this->run(['stash', 'drop', "stash@{{$index}}"]);
+    }
+
+    // remotes ------------------------------------------------------------------------------------------------
+
+    public function addRemote(string $name, string $url): Deferred
+    {
+        return self::validName($name) ? $this->run(['remote', 'add', $name, $url]) : Deferred::rejected(new GitException("bad remote name: $name"));
+    }
+
+    public function removeRemote(string $name): Deferred
+    {
+        return $this->run(['remote', 'remove', $name]);
+    }
+
+    public function setRemoteUrl(string $name, string $url): Deferred
+    {
+        return $this->run(['remote', 'set-url', $name, $url]);
+    }
+
+    // tags ---------------------------------------------------------------------------------------------------
+
+    /** @return Deferred resolves with list<array{name: string, sha: string, subject: string, time: int}> newest first */
+    public function tags(): Deferred
+    {
+        return $this->run(['for-each-ref', '--sort=-creatordate', '--format=%(refname:short)%09%(objectname:short)%09%(creatordate:unix)%09%(contents:subject)', 'refs/tags'])
+            ->then(function (string $out) {
+                $list = [];
+                foreach (array_filter(explode("\n", $out)) as $line) {
+                    [$name, $sha, $time, $subject] = array_pad(explode("\t", $line, 4), 4, '');
+                    $list[] = ['name' => $name, 'sha' => $sha, 'time' => (int)$time, 'subject' => $subject];
+                }
+                return $list;
+            });
+    }
+
+    /** A tag on $revision (default HEAD); with a message it is an annotated tag. */
+    public function createTag(string $name, ?string $revision = null, ?string $message = null): Deferred
+    {
+        if (!self::validName($name)) {
+            return Deferred::rejected(new GitException("bad tag name: $name"));
+        }
+        return $this->authorArgs()->then(fn (array $id) => $this->run([...$id, 'tag', ...($message !== null && $message !== '' ? ['-a', '-m', $message] : []), $name, ...($revision ? [$revision] : [])]));
+    }
+
+    public function deleteTag(string $name, bool $remote = false, string $remoteName = 'origin'): Deferred
+    {
+        return $remote ? $this->run(['push', $remoteName, '--delete', "refs/tags/$name"], true) : $this->run(['tag', '-d', $name]);
+    }
+
+    public function pushTag(string $name, string $remoteName = 'origin'): Deferred
+    {
+        return $this->run(['push', $remoteName, "refs/tags/$name"], true);
+    }
+
+    // commits ------------------------------------------------------------------------------------------------
+
+    /** Moves the current branch to $sha: soft (changes stay staged), mixed (stay in the files), hard (thrown away). */
+    public function resetTo(string $sha, string $mode = 'mixed'): Deferred
+    {
+        return in_array($mode, ['soft', 'mixed', 'hard'], true) && preg_match('/^[0-9a-f]{4,40}$/i', $sha)
+            ? $this->run(['reset', "--$mode", $sha])
+            : Deferred::rejected(new GitException('bad reset'));
+    }
+
+    /** A new commit that undoes $sha. */
+    public function revert(string $sha): Deferred
+    {
+        return $this->authorArgs()->then(fn (array $id) => $this->run([...$id, 'revert', '--no-edit', $sha]))
+            ->then(null, fn (\Throwable $e) => $this->run(['revert', '--abort'])->then(fn () => throw $e, fn () => throw $e));
+    }
+
+    /** $sha's changes as a new commit on the current branch. */
+    public function cherryPick(string $sha): Deferred
+    {
+        return $this->authorArgs()->then(fn (array $id) => $this->run([...$id, 'cherry-pick', $sha]))
+            ->then(null, fn (\Throwable $e) => $this->run(['cherry-pick', '--abort'])->then(fn () => throw $e, fn () => throw $e));
+    }
+
+    /** The last commit is taken back (its changes stay staged), to commit again. */
+    public function undoLastCommit(): Deferred
+    {
+        return $this->run(['reset', '--soft', 'HEAD~1']);
+    }
+
+    // branches -----------------------------------------------------------------------------------------------
+
+    public function renameBranch(string $old, string $new): Deferred
+    {
+        return self::validName($new) ? $this->run(['branch', '-m', $old, $new]) : Deferred::rejected(new GitException("bad branch name: $new"));
+    }
+
+    /** git push <remote> --delete <branch> */
+    public function deleteRemoteBranch(string $branch, string $remoteName = 'origin', ?callable $onOutput = null): Deferred
+    {
+        return $this->run(['push', $remoteName, '--delete', $branch], true, $onOutput);
+    }
+
+    /** Push over a rewritten history (after a reset or an amend), refused if someone else pushed meanwhile. */
+    public function pushForce(?callable $onOutput = null): Deferred
+    {
+        return $this->status()->then(fn (array $st) => $this->run(['push', '--force-with-lease', '--porcelain', '--progress', ...($st['upstream'] === null && $st['branch'] !== null ? ['-u', 'origin', $st['branch']] : [])], true, $onOutput));
+    }
+
+    /** -c user.name / user.email arguments when git has no author configured. @return Deferred resolves with list<string> */
+    private function authorArgs(): Deferred
+    {
+        return $this->author()->then(fn (array $a) => self::identity($a));
+    }
+
+    private static function validName(string $name): bool
+    {
+        return (bool)preg_match('#^[A-Za-z0-9][A-Za-z0-9._/-]*$#', $name) && !str_contains($name, '..') && !str_ends_with($name, '.lock') && !str_ends_with($name, '/');
     }
 
     /** Clones a repository into a new folder (its parent must exist). */
