@@ -53,7 +53,7 @@ final class CollisionSample extends AbstractScene
             if ($shape instanceof Circle) {
                 $r->fillCircle((int)$shape->x, (int)$shape->y, (int)$shape->radius, '#5fd0ff');
             } else {
-                $points = $shape instanceof Box ? $shape->toPolygon()->points : $shape->points;
+                $points = $shape instanceof Box ? $shape->toPolygon()->points : ($shape instanceof Polygon ? $shape->points : []);
                 foreach ($points as $i => $p) {
                     $q = $points[($i + 1) % count($points)];
                     $r->drawLine((int)$p[0], (int)$p[1], (int)$q[0], (int)$q[1], '#c8a0ff');
