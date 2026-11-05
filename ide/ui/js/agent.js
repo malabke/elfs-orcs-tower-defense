@@ -531,35 +531,69 @@ export class AgentTools {
     const input = args.input && typeof args.input === 'object' ? args.input : {};
     const command = name === 'Bash' ? String(input.command || '') : '';
     const what = command || input.url || input.file_path || input.path || input.pattern || JSON.stringify(input).slice(0, 400);
-    // "always": the first word of a command (curl, docker, npm...), else the whole tool
+    // what a "yes" covers: the first word of a command (curl, docker, npm...), else the whole tool
     const key = command ? `Bash:${command.trim().split(/\s+/)[0]}` : name;
-    this.allowed ??= new Set();
     const allow = () => JSON.stringify({ behavior: 'allow', updatedInput: input });
-    if (this.allowed.has(key)) return Promise.resolve(allow());
+    if (this.permissionGranted(key)) return Promise.resolve(allow());
     return new Promise((resolve) => {
       let answered = false;
-      const answer = (yes, always) => {
+      const answer = (yes) => {
         answered = true;
-        if (yes && always) this.allowed.add(key);
+        if (yes) this.grantPermission(key, duration.value, scope.value === 'all');
         resolve(yes ? allow() : JSON.stringify({ behavior: 'deny', message: 'The user said no in the IDE. Do something else, or ask them (ask_user) why.' }));
       };
+      // how long the yes lasts: once, some minutes, this session (until the IDE closes), always (kept for the next sessions)
+      const duration = el('select.input.small', {}, ...[['once', 'Only this time'], ['5', 'For 5 minutes'], ['15', 'For 15 minutes'], ['60', 'For 1 hour'],
+        ['session', 'For this session'], ['always', 'Always']].map(([v, t]) => el('option', { value: v }, t)));
+      const scope = el('select.input.small', {}, el('option', { value: 'key' }, command ? `Same kind of command (“${key.slice(5)}”)` : `Every ${name}`),
+        el('option', { value: 'all' }, 'Everything Claude asks'));
       const body = el('div.claude-ask', {},
         el('p', {}, command ? 'Claude wants to run this command:' : `Claude wants to use ${name}:`),
         el('pre.claude-permission', { style: { whiteSpace: 'pre-wrap', maxHeight: '240px', overflow: 'auto' } }, String(what)),
-        input.description ? el('p.pub-faint', {}, String(input.description)) : null);
+        input.description ? el('p.pub-faint', {}, String(input.description)) : null,
+        el('div.claude-ask-allow', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' } }, duration, scope));
       dialog({
         title: 'Claude asks for permission', body, sticky: true,
-        onClose: () => { if (!answered) answer(false, false); },
-        buttons: [
-          { label: 'No', action: () => answer(false, false) },
-          { label: command ? `Always “${key.slice(5)}” (this session)` : `Always ${name} (this session)`, action: () => answer(true, true) },
-          { label: 'Yes, once', primary: true, action: () => answer(true, false) },
-        ],
+        onClose: () => { if (!answered) answer(false); },
+        buttons: [{ label: 'No', action: () => answer(false) }, { label: 'Allow', primary: true, action: () => answer(true) }],
       });
       this.app.showTool('claude', true);
       notify(String(what).slice(0, 140), 'info', { title: 'Claude asks for permission' });
     });
   }
+
+  /** Is this kind of tool (key) allowed now: for the session, for a time not over yet, or always (prefs)? '*' = everything. */
+  permissionGranted(key) {
+    const now = Date.now();
+    const rules = (this.grants ??= new Map());
+    for (const k of [key, '*']) {
+      const until = rules.get(k);
+      if (until === undefined) continue;
+      if (until === Infinity || until > now) return true;
+      rules.delete(k);
+    }
+    const always = prefs.get('claudeAlwaysAllow', []);
+    return Array.isArray(always) && (always.includes(key) || always.includes('*'));
+  }
+
+  /** @param how 'once' | minutes | 'session' | 'always' */
+  grantPermission(key, how, everything = false) {
+    if (how === 'once') {
+      if (!everything) return;
+      key = '*';
+      how = '1';       // "everything, only this time" makes no sense: a minute
+    }
+    if (everything) key = '*';
+    if (how === 'always') {
+      const list = prefs.get('claudeAlwaysAllow', []);
+      if (!list.includes(key)) prefs.set('claudeAlwaysAllow', [...list, key]);
+      return;
+    }
+    (this.grants ??= new Map()).set(key, how === 'session' ? Infinity : Date.now() + Number(how) * 60000);
+  }
+
+  /** Forget every permission given (the session's, the timed ones, the always ones). */
+  revokePermissions() { this.grants = new Map(); prefs.set('claudeAlwaysAllow', []); }
 
   tool_notify(args) {
     notify(String(args.message || ''), ['info', 'success', 'error'].includes(args.kind) ? args.kind : 'info', { title: 'Claude' });

@@ -25,7 +25,7 @@ use JumPHP\Ide\Async\Processes;
 final class ClaudeCode
 {
     /** what claude may do without asking (claude -p cannot ask): --permission-mode */
-    public const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'];
+    public const MODES = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 
     /** how hard it thinks: --effort */
     public const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];

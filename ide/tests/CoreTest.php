@@ -265,6 +265,43 @@ final class CoreTest extends TestCase
         $ide->handle('claude.history.read', ['id' => '../../etc/passwd']);
     }
 
+    public function testChangingModeKeepsTheConversationsContext(): void
+    {
+        $saved = (string)getenv('PATH');
+        mkdir("$this->dir/fake");
+        // a stand-in claude: logs its arguments, answers each message with a result carrying the session
+        file_put_contents("$this->dir/fake/claude", "#!/bin/sh\n[ \"\$1\" = --version ] && { echo '9.9'; exit 0; }\n"
+            . "echo \"\$@\" >> args.txt\n"
+            . "while read -r line; do printf '%s\\n' '{\"type\":\"result\",\"subtype\":\"success\",\"session_id\":\"sess-12345678\"}'; done\n");
+        chmod("$this->dir/fake/claude", 0755);
+        putenv("PATH=$this->dir/fake:$saved");
+        try {
+            $events = [];
+            $processes = new Processes();
+            $ide = new Ide(new LocalWorkspace($this->dir), null, function (string $event, array $payload) use (&$events) {
+                $events[] = [$event, $payload];
+            }, $processes);
+            $turn = function (string $mode, ?string $session, int $results) use ($ide, $processes, &$events): array {
+                $run = $ide->handle('claude.send', ['prompt' => 'Go on', 'session' => $session, 'mode' => $mode, 'conversation' => true]);
+                for ($i = 0; $i < 500 && count(array_filter($events, fn ($e) => ($e[1]['event']['type'] ?? '') === 'result')) < $results; $i++) {
+                    $processes->poll();
+                    usleep(5000);
+                }
+                return $run;
+            };
+            $first = $turn('plan', null, 1);
+            $second = $turn('auto', 'sess-12345678', 2);       // another mode: another process, the same session
+            self::assertNotSame($first['id'], $second['id']);
+            $args = (string)file_get_contents("$this->dir/args.txt");       // the system prompt has line breaks: both runs in one text
+            self::assertSame(1, preg_match_all('/--permission-mode plan(?! --resume)/', $args));
+            self::assertSame(1, preg_match_all('/--permission-mode auto --resume sess-12345678/', $args));
+            $ide->handle('claude.stop', ['id' => $second['id']]);
+            $ide->agent?->close();
+        } finally {
+            putenv("PATH=$saved");
+        }
+    }
+
     public function testClaudeCodeAnswersAsItGoesAndTheConversationGoesOn(): void
     {
         $saved = (string)getenv('PATH');
