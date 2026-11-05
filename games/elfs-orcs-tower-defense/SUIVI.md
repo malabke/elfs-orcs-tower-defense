@@ -95,8 +95,12 @@ Dernière mise à jour : 2026-11-05.
    pieds restent à plat. Détails dans `AGENTS.md` (« Creatures »). Tests : `ViewTest` (tout se construit et se pose,
    les pieds restent au sol), `CreatureShotsTest` (planches `creatures-*.png` et batailles `creatures-battle-*.png` à
    regarder après chaque retouche). Les portraits de l'interface sont refaits par `PortraitShotsTest`.
-7. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (1er PC, voir les pièges : 4e fois le
-   2026-11-05).
+7. **Le projet doit être dans `C:\JUMPHP\elfs-orcs-tower-defense`** (l'utilisateur, le 2026-11-05 : « ça n'a rien
+   à foutre dans temp »). Une session a travaillé par erreur dans `%TEMP%\JumPHP-Projects\elfs-orcs-tower-defense`,
+   où les commits `d1a1683` (suivi) et `523b9b9` (personnages) sont restés en local. Pour les récupérer dans
+   `C:\JUMPHP\elfs-orcs-tower-defense` sans publier : `git pull
+   /c/Users/NXTC/AppData/Local/Temp/JumPHP-Projects/elfs-orcs-tower-defense main`. Si une session démarre dans
+   `%TEMP%`, le signaler tout de suite.
 
 ## Décisions de l'utilisateur (à respecter)
 
