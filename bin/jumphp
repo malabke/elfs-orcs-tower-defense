@@ -6,6 +6,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CALLER_DIR="$PWD"     # where the command was typed (run inside games/<id> or apps/<id>: that one)
 cd "$ROOT"
+
+# Git Bash (MSYS) on Windows: the container's paths (/workspace...) must not be turned into Windows paths, and the
+# host's folders mounted with -v must be given to Docker as Windows paths (/c/Users/x:/workspace -> C:/Users/x:/workspace;
+# also /tmp/..., Git Bash's name for the Windows temporary folder)
+if [ -n "${MSYSTEM:-}" ] && command -v cygpath >/dev/null 2>&1; then
+  export MSYS_NO_PATHCONV=1
+  docker() {
+    local args=() a
+    for a in "$@"; do
+      case "$a" in
+        /[!/]*:/*) args+=("$(cygpath -m "${a%%:/*}"):/${a#*:/}") ;;
+        *) args+=("$a") ;;
+      esac
+    done
+    # the folders mounted from Windows are not writable by the headless Chrome image's own user: root there
+    # (its scripts already start Chrome with --no-sandbox)
+    if [ "${args[0]:-}" = run ] && [[ " ${args[*]} " == *" ${PUPPETEER_IMAGE:-none} "* ]]; then
+      args=(run --user 0:0 -e PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer "${args[@]:1}")
+    fi
+    command docker "${args[@]}"
+  }
+  # curl is a Windows program there: the files it writes (mktemp's /tmp/...) as Windows paths
+  curl() {
+    local args=() a
+    for a in "$@"; do
+      if [[ "$a" == /* && -d "$(dirname "$a")" ]]; then args+=("$(cygpath -m "$a")"); else args+=("$a"); fi
+    done
+    command curl "${args[@]}"
+  }
+fi
 [ -f .env ] && set -a && . ./.env && set +a
 # JUMPHP_APP is the new name of JUMPHP_GAME (both read; the project a command means when none is named)
 JUMPHP_GAME="${JUMPHP_APP:-${JUMPHP_GAME:-}}"
