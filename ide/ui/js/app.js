@@ -363,7 +363,8 @@ class App {
 
   onGitStatus(status) {
     $('branchName').textContent = status.branch || 'detached';
-    $('sbBranch').textContent = this.project.capabilities.gitMode === 'drafts' ? `${status.files.length} draft(s)` : (status.branch ? '⎇ ' + status.branch + (status.merging != null ? ' · merging' : '') : '');
+    $('sbBranch').textContent = this.project.capabilities.gitMode === 'drafts' ? `${status.files.length} draft(s)` : (status.branch ? '⎇ ' + status.branch + (status.merging != null ? ' · merging' : '') + (status.ahead ? ` · ${status.ahead}↑` : '') + (status.behind ? ` · ${status.behind}↓` : '') : '');
+    $('sbBranch').title = status.ahead ? `${status.ahead} commit${status.ahead > 1 ? 's' : ''} not pushed yet` : 'Git branch';
     this.badge('commit', status.files.length ? 'on' : null);
     for (const g of this.editors.groups) this.editors.renderTabs(g);
     this.tree.render();
@@ -773,7 +774,7 @@ class App {
       notify(`JumPHP IDE ${st.version} is out (this one: ${st.current}).${st.installable ? '' : ' Run from its sources: update them with git.'}`, 'info', { title: 'Update', actions, timeout: 0 });
     } else if (st.manual && st.state === 'latest') {
       notify(`JumPHP IDE ${st.current} is the newest version.`, 'info', { title: 'Update' });
-    } else if (st.manual && st.state === 'error') {
+    } else if (st.state === 'error' && (st.manual || /was installed, but/.test(st.error || ''))) {
       notify(st.error || 'Cannot check for updates.', 'error', { title: 'Update' });
     }
     if (st.state === 'installing' && !this.updateTask) this.updateTask = this.task(`Downloading JumPHP IDE ${st.version || ''}…`);

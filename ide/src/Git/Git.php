@@ -466,6 +466,23 @@ final class Git
         });
     }
 
+    /**
+     * Pins the GitHub account of this repository (git config credential.https://github.com.username, in the repository only, no secret):
+     * with two accounts signed in on one computer, the programs that run plain git here (the terminal, Claude, the credential manager of
+     * Windows) then ask for THIS account instead of the one they remembered. Done when origin is on GitHub and belongs to $login.
+     */
+    public function pinAccount(string $login): Deferred
+    {
+        return $this->remotes()->then(function (array $remotes) use ($login) {
+            foreach ($remotes as $r) {
+                if ($r['name'] === 'origin' && preg_match('#github\.com[:/]([^/]+)/#i', $r['url'], $m) && strcasecmp($m[1], $login) === 0) {
+                    return $this->run(['config', '--local', 'credential.https://github.com.username', $login])->then(fn () => true);
+                }
+            }
+            return false;
+        });
+    }
+
     public function stash(?string $message = null): Deferred
     {
         return $this->run(['stash', 'push', '--include-untracked', ...($message ? ['-m', $message] : [])]);

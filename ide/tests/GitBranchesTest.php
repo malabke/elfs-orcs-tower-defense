@@ -30,6 +30,16 @@ final class GitBranchesTest extends TestCase
         exec('rm -rf ' . escapeshellarg($this->dir));
     }
 
+    public function testTheGitHubAccountOfTheRepositoryIsPinnedForTheOtherPrograms(): void
+    {
+        self::assertFalse($this->wait($this->git->pinAccount('ada')), 'no origin: nothing pinned');
+        $this->wait($this->git->run(['remote', 'add', 'origin', 'https://github.com/other/game.git']));
+        self::assertFalse($this->wait($this->git->pinAccount('ada')), 'the repository is another account\'s');
+        $this->wait($this->git->run(['remote', 'set-url', 'origin', 'https://github.com/Ada/game.git']));
+        self::assertTrue($this->wait($this->git->pinAccount('ada')));
+        self::assertSame("ada\n", $this->wait($this->git->run(['config', '--local', 'credential.https://github.com.username'])));
+    }
+
     public function testABranchIsCreatedSwitchedToAndMergedBackWithoutConflict(): void
     {
         $this->wait($this->git->checkout('feature', true));

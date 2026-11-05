@@ -246,12 +246,28 @@ export class Welcome {
     if (path) this.open(path);
   }
 
+  /** Asks where the project goes (it was never on this computer, or it was moved: then "Locate" opens its folder) before cloning it. */
   async clone(project) {
+    const folder = el('input.input', { value: this.state?.projectsDir || '' });
+    const where = await new Promise((resolve) => {
+      let chosen = null;
+      dialog({
+        title: 'Clone ' + (project.title || project.slug),
+        onClose: () => resolve(chosen),
+        body: el('div', {},
+          el('p', {}, 'This project is not on this computer yet. It goes in a new folder inside:'),
+          el('div', { style: { display: 'flex', gap: '6px' } }, folder,
+            el('button.btn', { onclick: async () => { const f = await backend.invoke('native.open', { folder: true }).catch(() => null); if (f) folder.value = f; } }, 'Choose…')),
+          el('p.pub-faint', {}, 'Moved it? Cancel, then “Open Folder…” on its new place: the IDE remembers it.')),
+        buttons: [{ label: 'Cancel' }, { label: 'Clone', primary: true, action: () => { if (!folder.value.trim()) return false; chosen = folder.value.trim(); } }],
+      });
+    });
+    if (!where) return;
     const progress = el('div.welcome-progress', {}, el('span.spinner'), el('span', {}, 'git clone…'), progressBar(null));
     this.progress = progress;
     const d = dialog({ title: 'Cloning ' + (project.title || project.slug), body: el('div', {}, el('p', {}, project.cloneUrl || ''), progress), buttons: [] });
     try {
-      const result = await backend.invoke('projects.clone', { slug: project.slug, cloneUrl: project.cloneUrl });
+      const result = await backend.invoke('projects.clone', { slug: project.slug, cloneUrl: project.cloneUrl, folder: where });
       d.close();
       await this.app.projectOpened(result);
     } catch (e) {

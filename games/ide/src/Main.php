@@ -269,7 +269,7 @@ final class Main implements AppMain
             return $p;
         }, $list));
         $c['projects.categories'] = fn () => self::deferred($this->playground->categories());
-        $c['projects.clone'] = fn (array $p) => $this->cloneProject((string)($p['cloneUrl'] ?? ''), isset($p['slug']) ? (string)$p['slug'] : null)
+        $c['projects.clone'] = fn (array $p) => $this->cloneProject((string)($p['cloneUrl'] ?? ''), isset($p['slug']) ? (string)$p['slug'] : null, isset($p['folder']) && $p['folder'] !== '' ? (string)$p['folder'] : null)
             ->then(fn (string $path) => $this->openProject($path));
         $c['projects.open'] = fn (array $p) => $this->openProject((string)($p['path'] ?? ''));
         $c['projects.close'] = function () {
@@ -398,14 +398,16 @@ final class Main implements AppMain
         // only used when git has no author configured on this computer
         $git->setFallbackAuthor(['name' => $login, 'email' => $login . '@users.noreply.github.com']);
         self::deferred($this->playground->githubToken())->then(fn (array $r) => $git->setToken($r['token'] ?? null), fn () => null);
+        $git->pinAccount($login)->then(null, fn () => null);
     }
 
     // projects ---------------------------------------------------------------------------------------------
 
     public function projectsDir(): string
     {
-        $dir = getenv('JUMPHP_IDE_PROJECTS') ?: ((getenv('HOME') ?: sys_get_temp_dir()) . '/JumPHP-Projects');
-        return rtrim((string)$this->app->options->get('projectsDir', $dir), '/');
+        // the home folder (Windows: USERPROFILE, HOME is not set there: the temporary folder, which Windows empties, must not be the default)
+        $dir = getenv('JUMPHP_IDE_PROJECTS') ?: ((getenv('HOME') ?: getenv('USERPROFILE') ?: sys_get_temp_dir()) . '/JumPHP-Projects');
+        return rtrim((string)$this->app->options->get('projectsDir', $dir), '/\\');
     }
 
     public function processes(): Processes

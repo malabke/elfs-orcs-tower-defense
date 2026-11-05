@@ -36,6 +36,9 @@ final class AgentTools
           stops the program), read the variables (debug_variables) or evaluate PHP there (debug_eval), step
           (debug_step), run to a line (debug_run_to), change a variable (debug_set_value), stop where an exception is
           thrown (debug_exceptions), and always end with debug_step stop or run when done. Prefer it to adding var_dump / echo.
+        When the user asks you to commit (or push), do it at once with what is there: never wait for phpstan, the tests or
+        other checks to finish first (say after the commit if something fails). The IDE has a "Commit All and Push" button
+        (Ctrl+Alt+K) too. git push uses the GitHub account the repository belongs to.
         Tools named plugin_<plugin>_<name> come from the IDE plugins the user installed: their descriptions say what they do.
         TXT;
 

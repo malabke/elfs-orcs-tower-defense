@@ -49,6 +49,19 @@ final class SelfUpdateTest extends AppTestCase
         self::assertStringEndsWith('/games/ide/installer/update.json', (string)$this->app->updater()->url());
     }
 
+    public function testAVersionInstalledThatStillShowsAsNewerIsNotOfferedAgain(): void
+    {
+        $updates = new SelfUpdate($this->app);
+        $update = $this->app->updater()->parse($this->updateJson('99.0.0'), $this->publicKey, 'linux-x86_64');
+        self::assertNotNull($update);
+        $this->app->options->set('updateInstalled', ['version' => '99.0.0', 'exe' => '/somewhere/ide.exe']);
+        $updates->found($update);                       // the program restarted after the install and still is older
+        $state = $updates->state();
+        self::assertSame('error', $state['state']);
+        self::assertStringContainsString('/somewhere/ide.exe', $state['error']);
+        self::assertNull($this->app->options->get('updateInstalled'), 'one explanation, then the next check may try again');
+    }
+
     public function testANewerVersionIsFoundAndOffered(): void
     {
         $updates = new SelfUpdate($this->app);

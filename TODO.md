@@ -128,33 +128,16 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
-- done (2026-11-05, not released): "Commit All and Push…" (header button, Ctrl+Alt+K, Git menu): every change, one message, pushed, no tool window.
-- to check (Clément, Windows, 2026-11-05): the push failed because two GitHub accounts are signed in on his PC: Windows' credential manager
-  remembered the other one, the repository belongs to the account of jumphp.net. What Claude did (a good fix, to automate): put the owner in
-  the remote URL (`https://<owner>@github.com/<owner>/<repo>.git`) so git asks for that account at the next push, which opens the browser
-  sign-in; alternatives it gave: add the other account as a collaborator, or `gh auth login`. The IDE should do it itself: push as the account
-  that owns the repository (the one signed in on jumphp.net), and when a push is refused (403 / not found) say which account git used and offer
-  to fix the remote. Also: GitHub's `main` had not moved after his `! git push` (14 local commits not on GitHub): show "N commits not pushed"
-  in the IDE so that nobody believes a refused push went through.
-- idea (Clément, 2026-11-05, after the two-accounts push problem): show the account git uses in the IDE; let the user sign in with several GitHub
-  accounts and assign one account to each project (stored per project, used for push / pull / clone: a token in the remote or a credential
-  helper of the IDE, so the Windows credential manager is no longer involved); an integrated Git client with its own authentication would be a plus.
-- to check (Clément, Windows, 2026-11-05): the project's GitHub repository still held the initial skeleton: nothing was ever committed / pushed
-  (the IDE's Git panel and the publish flow changed a lot lately: check commit + push from the IDE on a new project, and that the user is
-  told when a project has uncommitted work); asked to commit, Claude refused to until phpstan and the tests had finished: a commit must not
-  wait for them (say so in the Claude window's instructions, or offer a "Commit and push" button that does it without Claude)
-- to check (a colleague of David, Windows, 2026-11-05), projects moved / cloned by the IDE: (1) after moving a project folder, the IDE asks to
-  sign in to jumphp.net again and wants to clone the project again unless the folder is reopened by hand (atypical case, but remember
-  the folder's new place); (2) on a second PC, resuming a project clones it without asking where: let the user choose the folder;
-  it went into %LOCALAPPDATA%\Temp\JumPHP-Projects\<id> (Temp: Windows may clean it, so the default place must be a durable one, e.g.
-  Documents\JumPHP, and asked); (3) the red message was robocopy's exit code 1 (= files copied, not an error) shown as a failure in the Claude
-  window: only when Claude itself moved the project; the IDE could offer a "Move project" action (and keep its new place) instead
-- to check (David, on Windows, 2026-11-05): is the message the IDE puts in the clipboard normal? (what it copies, when, whether it should copy at all)
-- bug (David, Windows, 2026-11-05): the IDE sometimes shows "update" and "Restart now"; after the restart it still shows "update" and
-  "Restart now" (a loop): check that the new version is really installed / its version compared to update.json (the updater, the installer)
-- done (2026-11-05, not released): a tool that returns a non-zero code is shown in muted yellow, not red (robocopy 1 = copied).
-- bug (David, 2026-11-05): when Claude (in the IDE's Claude window) asks for a permission, a click elsewhere (e.g. to give the focus back to the
-  window) closes the request and it cannot be opened again: the request must stay until answered (or be reopenable)
+- done (2026-11-05, IDE 0.1.43), problems reported by David and a colleague on Windows: "Commit All and Push…" (header button, Ctrl+Alt+K); the
+  Claude window's instructions say to commit at once; a tool returning a non-zero code is muted yellow (robocopy 1 = copied, not an error);
+  a project's clone is asked where to go (the default is the user's home, no longer the Temp folder, which Windows empties); the GitHub
+  account of a repository is pinned in its config (`credential.https://github.com.username`) so the terminal, Claude and the credential
+  manager of Windows use it when two accounts are signed in; "N↑" not pushed in the status bar; an update installed whose restart still
+  shows the older version is explained once (installed X, runs Y from <path>) instead of looping "update / Restart now". Permission requests
+  no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
+  true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
+- idea (2026-11-05): several GitHub accounts signed in the IDE, one assigned to each project (a token or a credential helper of the IDE,
+  no Windows credential manager), the account shown; an integrated Git client with its own authentication. (Pinning is done, see above.)
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
   on the line (the two items below); its scratch app is apps/zz-tui (delete it when done)
 - done (2026-11-05, not released): the Logs window (View > Logs, Alt+F11): the IDE's own events, the programs it runs (bin/jumphp, Docker, git,

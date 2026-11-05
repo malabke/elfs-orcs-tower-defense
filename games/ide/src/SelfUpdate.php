@@ -71,7 +71,20 @@ final class SelfUpdate
     public function found(?Update $update): void
     {
         $this->update = $update;
+        // the version was installed, the program restarted, and it still is older than update.json: do not offer the same restart again
+        // (a loop of "update / Restart now"): say what runs from where, so that the real cause (another copy, a shortcut) can be found
+        $mark = $this->app->options->get('updateInstalled');
+        if ($update !== null && is_array($mark) && ($mark['version'] ?? null) === $update->version) {
+            $this->app->options->set('updateInstalled', null);
+            $exe = (string)$this->app->updater()->executable();
+            $this->update = null;
+            $this->set(['state' => 'error', 'checked' => microtime(true), 'error' => "JumPHP IDE {$update->version} was installed, but the program that started reports "
+                . $this->state['current'] . ($exe !== '' ? " (it runs from $exe)" : '') . '. Another copy of the IDE may be the one you start (a shortcut, the Downloads folder): '
+                . 'start the one from ' . ($mark['exe'] ?? 'the install folder') . ' or install the IDE again.']);
+            return;
+        }
         if ($update === null) {
+            $this->app->options->set('updateInstalled', null);
             $this->set(['state' => 'latest', 'checked' => microtime(true)]);
             return;
         }
@@ -89,7 +102,10 @@ final class SelfUpdate
         }
         $this->set(['state' => 'installing']);
         $this->update->install()->then(
-            fn () => $this->set(['state' => 'installed']),
+            function (): void {
+                $this->app->options->set('updateInstalled', ['version' => $this->update?->version, 'exe' => $this->app->updater()->executable()]);
+                $this->set(['state' => 'installed']);
+            },
             fn (\Throwable $e) => $this->set(['state' => 'error', 'error' => 'the update failed: ' . $e->getMessage()]),
         );
         return $this->state;
