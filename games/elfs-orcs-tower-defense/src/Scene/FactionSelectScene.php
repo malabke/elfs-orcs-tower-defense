@@ -37,6 +37,11 @@ final class FactionSelectScene extends AbstractScene
 
     /** the cards show living 3D vignettes (else the pictures of assets/sprites/cards/) */
     private bool $use3d = false;
+    /** how much of the vignettes' colours the scene fade leaves (1: all), this frame */
+    private float $shade = 1.0;
+    /** the height of the cards' pictures (pictureHeight()), and of the longest name (in lines of text) */
+    private float $pictureH = 28.0;
+    private int $namesH = 0;
 
     public function __construct(private FontProvider $fonts, private Sprites $sprites, private Progress $progress, private World3d $world)
     {
@@ -65,6 +70,13 @@ final class FactionSelectScene extends AbstractScene
         if (!$this->use3d) {
             $this->world->shutdown($this->engine->gl());
         }
+        // the pictures start at the same height on every card: under the room of the longest name
+        $inner = $this->card(0)[2] - 8;
+        $this->namesH = 0;
+        foreach ($this->factions as $id) {
+            $this->namesH = max($this->namesH, Text::height($this->font(), Lang::t($this->data->faction($id)['name']), $inner));
+        }
+        $this->pictureH = $this->pictureHeight();
     }
 
     public function update(float $dt): void
@@ -145,6 +157,9 @@ final class FactionSelectScene extends AbstractScene
         $scale = Text::fitScale($font, $title, $w - 16, 1.3);
         $font->draw($r, $title, $w / 2, 13 - $font->height($scale) / 2, $scale, [255, 228, 150], 'center', [40, 22, 10]);
 
+        // under another scene (the pause menu pushed when the window loses the focus) the 3D layer, over all
+        // the 2D, would cover it: no vignettes then
+        $this->shade = $this->scenes()->current() === $this ? 1.0 - $this->fadeLevel() : 0.0;
         foreach ($this->factions as $i => $id) {
             $this->drawCard($r, $i, $id);
         }
@@ -158,42 +173,88 @@ final class FactionSelectScene extends AbstractScene
     }
 
     /**
-     * The living vignette of a card: a sky over a meadow (2D), and over it in 3D the side's island, its four towers
-     * at their best level and its foes walking round them, the camera turning slowly (each card its own way).
+     * How far the screen has faded to black (0..1). The vignettes are in a 3D layer over the 2D, which the fade
+     * (drawn in 2D by the SceneManager) does not darken: they darken by it themselves. The SceneManager keeps it
+     * private (no getter, in the released engine either): read it, 0 when it cannot be.
+     */
+    private function fadeLevel(): float
+    {
+        $scenes = $this->scenes();
+        try {
+            return (float)(new \ReflectionProperty($scenes, 'fade'))->getValue($scenes);
+        } catch (\ReflectionException) {
+            return 0.0;
+        }
+    }
+
+    /** The foes of a side (the battle's models, the portraits' names). @return list<string> */
+    private function foes(array $faction): array
+    {
+        return $faction['enemy'] === 'alliance' ? ['elf', 'dwarf', 'rider'] : ['grunt', 'goblin', 'warg'];
+    }
+
+    /**
+     * The height of the cards' pictures. In 3D the vignette takes the room the texts leave on the most crowded card
+     * (the same on every card; the foes walk in it, no row of portraits under the texts), within limits.
+     */
+    private function pictureHeight(): float
+    {
+        $inner = $this->card(0)[2] - 8;
+        if (!$this->use3d) {
+            return $inner * 140 / 400;
+        }
+        $font = $this->font();
+        $texts = 0;
+        foreach ($this->factions as $id) {
+            $faction = $this->data->faction($id);
+            $enemy = $faction['enemy'] === 'alliance' ? Lang::t('AGAINST THE ALLIANCE') : Lang::t('AGAINST THE HORDE');
+            $texts = max($texts, Text::height($font, Lang::t($faction['motto']), $inner) + Text::height($font, $enemy, $inner));
+        }
+        // 11 above the name, 4 under it, 6 under the picture and under the motto, 17 at the bottom for the stars
+        return max($inner * 0.35, min($inner * 0.8, (float)(self::CARD_H - 44 - $this->namesH - $texts)));
+    }
+
+    /**
+     * The living vignette of a card, in 3D: a sky, the side's island floating in it, its four towers at their best
+     * level and its foes walking round them, the camera swaying slowly (each card its own way, the picked one more).
      * @param array{0: float, 1: float, 2: float, 3: float} $frame
      */
     private function vignette(Renderer $r, int $i, string $id, array $frame): void
     {
         [$fx, $fy, $fw, $fh] = $frame;
-        $bands = 12;
-        for ($b = 0; $b < $bands; $b++) {
-            $t = $b / ($bands - 1);
-            $c = $t < 0.62 ? Mesh::mix([0.55, 0.72, 0.92], [0.98, 0.88, 0.70], $t / 0.62) : Mesh::mix([0.62, 0.74, 0.46], [0.36, 0.52, 0.30], ($t - 0.62) / 0.38);
-            $r->fillRect($fx, $fy + $fh * $b / $bands, $fw, $fh / $bands + 0.5, [(int)($c[0] * 255), (int)($c[1] * 255), (int)($c[2] * 255)]);
+        if ($this->shade <= 0.0) {
+            // no 3D now (under the pause menu): the sky alone, in 2D
+            $bands = 24;
+            for ($b = 0; $b < $bands; $b++) {
+                $t = $b / ($bands - 1);
+                $c = $t < 0.6 ? Mesh::mix([0.47, 0.64, 0.86], [0.96, 0.88, 0.74], $t / 0.6) : Mesh::mix([0.96, 0.88, 0.74], [0.70, 0.76, 0.89], ($t - 0.6) / 0.4);
+                $r->fillRect($fx, $fy + $fh * $b / $bands, $fw, $fh / $bands + 0.5, [(int)($c[0] * 255), (int)($c[1] * 255), (int)($c[2] * 255)]);
+            }
+            return;
         }
 
         $faction = $this->data->faction($id);
         $flag = (string)$faction['colors']['main'];
         $k = Diorama::SCALE;
-        $chosen = $i === $this->selected;
         $rig = new Rig($fw, $fh);
-        $turn = $this->time * ($chosen ? 0.35 : 0.12) + $i * 1.1;
-        $rig->orbit([0.0, 8.0 * $k, 4.0 * $k], 420.0, 27.0, 0.45 * sin($turn));
+        [$target, $distance] = Diorama::camera($fw / $fh);
+        $turn = $this->time * ($i === $this->selected ? 0.35 : 0.12) + $i * 1.1;
+        $rig->orbit($target, $distance, Diorama::PITCH, Diorama::SWAY * sin($turn));
         $w = $this->world;
-        $w->vignette($rig, $frame, (float)$this->width(), (float)$this->height());
+        $w->vignette($rig, $frame, (float)$this->width(), (float)$this->height(), $this->shade, $this->time + $i * 37.0);
         $w->draw('diorama:island', static fn () => Diorama::island(), 0.0, 0.0, 0.0, 0.0, $k, [1.0, 1.0, 1.0], 1.0, 0.0, 0.0);
         foreach ($faction['towers'] as $n => $type) {
             $sprite = (string)$this->data->tower($type)['sprite'];
             [$tx, $tz] = Diorama::SPOTS[$n] ?? [0.0, 0.0];
-            $w->shadow(($tx + 4.0) * $k, ($tz + 2.0) * $k, 12.0 * $k, 10.0 * $k, -0.4, 0.35, 0.3);
-            $w->draw("t:$sprite:3:n:$flag", static fn () => Towers::build($sprite, 3, null, $flag), $tx * $k, 0.0, $tz * $k, 0.0, 0.95 * $k);
+            $w->shadow(($tx + 3.0) * $k, ($tz + 1.5) * $k, 12.0 * $k, 10.0 * $k, -0.4, Diorama::SHADOW, 0.3);
+            $w->draw("t:$sprite:3:n:$flag", static fn () => Towers::build($sprite, 3, null, $flag), $tx * $k, 0.0, $tz * $k, 0.0, Diorama::TOWER * $k);
         }
-        $foes = $faction['enemy'] === 'alliance' ? ['elf', 'dwarf', 'rider'] : ['grunt', 'goblin', 'warg'];
+        $foes = $this->foes($faction);
         foreach ($foes as $n => $sprite) {
             [$ux, $uz, $yaw] = Diorama::walker($n, count($foes), $this->time + $i * 0.7);
             $step = (int)(($this->time + $n * 0.3) * 9.0) % Units::FRAMES;
-            $w->shadow($ux * $k, $uz * $k, 5.0 * $k, 4.0 * $k, 0.0, 0.35, 0.3);
-            $w->draw("u:$sprite:$step", static fn () => Units::build($sprite, $step), $ux * $k, 0.3, $uz * $k, $yaw, 1.6 * $k);
+            $w->shadow($ux * $k, $uz * $k, 5.0 * $k, 4.0 * $k, 0.0, Diorama::SHADOW, 0.3);
+            $w->draw("u:$sprite:$step", static fn () => Units::build($sprite, $step), $ux * $k, 0.3, $uz * $k, $yaw, Diorama::UNIT * $k);
         }
     }
 
@@ -208,31 +269,36 @@ final class FactionSelectScene extends AbstractScene
         Paint::round($r, $x + 3, $y + 3, $w - 6, 4, 2, $colors['main']);
         $inner = $w - 8;
         $ty = $y + 11;
-        $ty += Text::draw($r, $font, Lang::t($faction['name']), $x + $w / 2, $ty, $inner, [255, 226, 130], 'center', [40, 22, 10]) + 4;
+        $nameH = Text::draw($r, $font, Lang::t($faction['name']), $x + $w / 2, $ty, $inner, [255, 226, 130], 'center', [40, 22, 10]);
+        // the vignettes in a row, under the longest name
+        $ty += ($this->use3d ? $this->namesH : $nameH) + 4;
 
-        // the four towers at their best level: a living 3D vignette, or the picture of their 3D models (or their drawings)
+        // the four towers at their best level: a living 3D vignette (dark under it: see World3d::vignette()), or
+        // the picture of their 3D models (or their drawings)
         $pw = $inner;
-        $ph = $pw * ($this->use3d ? 0.6 : 140 / 400);
+        $ph = $this->pictureH;
         Paint::round($r, $x + 3, $ty - 1, $pw + 2, $ph + 2, 2, [10, 12, 20]);
         if ($this->use3d) {
             $this->vignette($r, $i, $id, [$x + 4, $ty, $pw, $ph]);
-        } elseif (!$this->sprites->drawPicture($r, "side-$id", $x + 4, $ty, $pw, $ph)) {
-            $towers = $faction['towers'];
-            $tw = $inner / max(1, count($towers));
-            foreach ($towers as $k => $tower) {
-                $scale = min(0.75, $tw / 28);
-                $this->sprites->drawTower($r, (string)$this->data->tower($tower)['sprite'], 3, null, $x + 4 + $tw * ($k + 0.5), $ty + 40 * $scale, $scale);
+            $ty += $ph + 6;
+        } else {
+            if (!$this->sprites->drawPicture($r, "side-$id", $x + 4, $ty, $pw, $ph)) {
+                $towers = $faction['towers'];
+                $tw = $inner / max(1, count($towers));
+                foreach ($towers as $k => $tower) {
+                    $scale = min(0.75, $tw / 28);
+                    $this->sprites->drawTower($r, (string)$this->data->tower($tower)['sprite'], 3, null, $x + 4 + $tw * ($k + 0.5), $ty + 40 * $scale, $scale);
+                }
             }
+            $ty += max(34, $ph + 6);
         }
-        $ty += max(34, $ph + 6);
 
         $ty += Text::draw($r, $font, Lang::t($faction['motto']), $x + $w / 2, $ty, $inner, [234, 238, 246], 'center', [16, 20, 36]) + 6;
 
-        // who comes
+        // who comes (in 3D they walk round the island: no portraits)
         $enemy = $faction['enemy'] === 'alliance' ? Lang::t('AGAINST THE ALLIANCE') : Lang::t('AGAINST THE HORDE');
         $ty += Text::draw($r, $font, $enemy, $x + $w / 2, $ty, $inner, [250, 160, 140], 'center', [40, 14, 10]) + 4;
-        $sprites = $faction['enemy'] === 'alliance' ? ['elf', 'dwarf', 'rider'] : ['grunt', 'goblin', 'warg'];
-        foreach ($sprites as $k => $sprite) {
+        foreach ($this->use3d ? [] : $this->foes($faction) as $k => $sprite) {
             // a little bob, each in its own time
             $bob = abs(sin($this->time * 3.0 + $k * 1.3)) * 1.5;
             if (!$this->sprites->drawPortrait($r, "unit-$sprite", $x + $w / 2 + ($k - 1) * 23, $ty + 13 - $bob, 30, true)) {

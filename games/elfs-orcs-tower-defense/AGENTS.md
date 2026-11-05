@@ -73,7 +73,8 @@ and header bars, round medallions, an evening-sky backdrop, and icons drawn with
 lock, pause / play, up, target, sell): sharp at any size in HD. The side and map screens show pictures of the 3D game
 (`assets/sprites/cards/side-<side>.png`, `map-<map>.png`, drawn smoothed by `Sprites::drawPicture()`), cut by
 `tools/site/make.php` from the test frames (ModelShotsTest writes where the towers stand: `towers-<side>.json`).
-**Portraits** (the ring menu's towers, the hero's button, the next wave's preview, the creatures under the side cards):
+**Portraits** (the ring menu's towers, the hero's button, the next wave's preview, the creatures under the side cards
+without WebGL):
 pictures of the 3D models, `assets/sprites/portraits/unit-<sprite>.png` / `tower-<sprite>.png` (128 px, transparent),
 drawn smoothed by `Sprites::drawPortrait()` (false when missing: the old pixel drawing is used). They are made by
 `tests/PortraitShotsTest.php`: `PortraitScene` (a photo studio, not a screen of the game) draws one model alone
@@ -86,6 +87,20 @@ power's shower, red flares of leaks, embers over burning enemies and trails behi
 from the battle's events (`particlesOf()`) and each frame (`ambientParticles()`), steps them at the battle's speed and
 draws each as a `World3d::ball()` (fading in / out: `Particles::look()`). **Blows**: fighting soldiers, the hero and
 held enemies step towards their foe and back about twice a second (`PlayScene::lunge()`). Tests: `tests/ParticlesTest.php`.
+**Vignettes** (the side cards, 3D only): each card shows its side's floating island (`App\View3d\Diorama`: grass, an
+underside of earth and rock narrowing to a point, roots; the four towers at level 3; the foes walking round them) in a
+3D layer OVER the 2D (`World3d::bootOver()`: `setLayer('above', 'native')`, in the released engine too).
+`World3d::vignette()` squeezes a small camera's projection into the card's frame and `u_clip` drops what falls outside
+(the division by w is done in the fragment shader: exact where a triangle crosses the frame's edge). Each vignette draws
+its own opaque sky first (`Mesh::SKY`: a gradient, clouds from the noise texture): no 2D shows through, and no dark
+fringe round the silhouettes (the supersampled layer would average them with transparent texels). The soft shadows'
+blending still leaves the layer's alpha at a² + (1 - a) there: the 2D under the frame is dark and `Diorama::SHADOW` is
+lighter for it. The layer is over the 2D, so the scene fade does not darken it: `FactionSelectScene` reads the
+SceneManager's fade (private: reflection) and gives it as `u_fade`; under another scene (the pause menu pushed when the
+window loses the focus) it draws no vignettes. The frame's height is the room the texts leave on the most crowded card
+(`pictureHeight()`: longer languages get a lower frame), and `Diorama::camera()` fits the frame (the tallest tower,
+`Diorama::TALLEST`, at the back, and the island's tip; `tests/VignettesTest.php` checks both). In 3D the foes walk in
+the vignette: no portraits under the cards' texts. Without WebGL (or `view: flat`): the cards' pictures and portraits.
 
 Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
 `bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the

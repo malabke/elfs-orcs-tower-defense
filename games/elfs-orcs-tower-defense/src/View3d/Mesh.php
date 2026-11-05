@@ -11,8 +11,8 @@ namespace App\View3d;
  * then pitch x, then yaw y) and moved: $pos is the centre of a box or a ball, the centre of the base of a cylinder.
  *
  * The material ($mat, set before adding) tells the shader how to paint a vertex: SOLID, a number in (0, 1] for
- * leaves, grass and cloth that move in the wind (how much), GROUND for the painted ground, MOTE + a seed (0..1) for
- * the specks of light that float over the map, SOFT for the soft shadows.
+ * leaves, grass and cloth that move in the wind (how much), GROUND for the painted ground, SKY for the sky of the
+ * menus' vignettes, MOTE + a seed (0..1) for the specks of light that float over the map, SOFT for the soft shadows.
  */
 final class Mesh
 {
@@ -22,6 +22,8 @@ final class Mesh
     public const LEAVES = 0.35;
     public const GRASS = 1.0;
     public const GROUND = 2.0;
+    /** the sky behind a vignette (World3d::vignette()): its colours as they are, clouds from the noise */
+    public const SKY = 3.0;
     public const MOTE = 4.0;
     public const SOFT = 6.0;
 

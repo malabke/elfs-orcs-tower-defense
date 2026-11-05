@@ -52,21 +52,35 @@ Dernière mise à jour : 2026-11-05.
    lui) ; le remote est `https://malabke@github.com/malabke/elfs-orcs-tower-defense.git`. Si le refus revient :
    `git credential-manager github login --username malabke`, puis `git push origin main`, lancés par l'utilisateur
    dans son propre terminal.
-5. **En cours (2026-11-05) : vignettes 3D vivantes** sur les cartes de l'écran de choix du peuple (demandé : « go pour
-   les vignettes »). **Commité (`415837f`) sur la branche GitHub `vignettes`, PAS sur `main`** : l'utilisateur a dit
-   « pousse sur github mais ne sync pas avec jumphp », et pousser sur `main` publierait. **Pour reprendre sur un autre
-   PC** : `git fetch origin` puis `git checkout -B main origin/vignettes` (le `main` local part de la branche ; la
-   branche contient tout `main` + les vignettes). Tester (`bin/jumphp test`, capture de l'écran de choix du peuple
-   `JUMPHP_SCENE='App\Scene\FactionSelectScene' bin/jumphp shot <id> 60`, vérification avec le moteur partagé), puis
-   publier **seulement sur demande** avec `git push origin main` ; ensuite supprimer la branche
-   (`git push origin --delete vignettes`). Écrit par deux sessions Claude Code sur le 2e PC : `src/View3d/Diorama.php` (île flottante, emplacements des 4 tours, ennemis qui tournent
-   autour), `FactionSelectScene::vignette()` (ciel peint en 2D, la 3D par-dessus). Base écrite par cette session-ci
-   dans `src/Ui/World3d.php` : `bootOver()` (calque 3D « above », existe aussi dans le moteur 0.4.0 du playground),
-   `vignette()` (la projection d'une petite caméra resserrée dans le cadre de la carte), `u_clip` dans le shader (rien
-   ne déborde du cadre), `studio()` avec un fond facultatif. **Jamais testé ni vu en capture** (la machine saturait).
-   À surveiller : cadrage de la caméra (`Diorama::SCALE`, distance 420 dans `vignette()`, `Rig::NEAR` = 180), que rien
-   ne déborde de la carte, `World3d::shutdown()` en quittant l'écran, le repli sans WebGL (image des cartes). Ensuite,
-   peut-être la même chose pour l'écran des cartes. `composer.lock` du jeu est maintenant suivi par git.
+5. **Vignettes 3D vivantes : terminées le 2026-11-05 (1er PC), sur la branche `vignettes`, PAS publiées.** (demandé :
+   « go pour les vignettes », puis « récupère tout… et termine »). Chaque carte de l'écran de choix du peuple montre
+   l'île flottante du peuple (`src/View3d/Diorama.php` : dessous de terre et de roche jusqu'à une pointe, racines,
+   pierres), ses 4 tours au niveau 3 et ses ennemis qui en font le tour, sous un ciel 3D avec des nuages ; la caméra
+   oscille (plus vite sur la carte choisie). Après les premières captures, et les remarques d'une autre session :
+   - cadrage calculé (`Diorama::camera()`, tangage 19°, la plus haute tour `Diorama::TALLEST` et la pointe toujours
+     dans le cadre) ;
+   - hauteur de l'image selon la place que laissent les textes (`pictureHeight()`). En 3D, la rangée de portraits des
+     ennemis est retirée : les ennemis marchent dans la vignette. Les vignettes sont alignées sous le nom le plus long ;
+   - ciel opaque dessiné en 3D (`Mesh::SKY`) : plus de bandes, plus de liseré sombre autour des silhouettes, ombres
+     réglées (`Diorama::SHADOW`) ;
+   - découpe exacte au bord du cadre (division par w dans le fragment shader) et coins assombris relatifs au cadre
+     (`u_vig`) ;
+   - le fondu au noir assombrit les vignettes (`u_fade`, niveau lu dans le SceneManager) ; pas de vignettes sous le
+     menu de pause (poussé quand la fenêtre perd le focus).
+
+   Tests : `tests/VignettesTest.php` (5 tests) et `LegacyEngineTest` (écran des peuples avec la police pixel du moteur
+   partagé). Aucun `u_*` dans les deux shaders à la fois : le partage casse le lien WebGL (le ciel passe le nuage par
+   des varyings).
+   **Vérifié le 2026-11-05** : suite complète (175 tests, smoke, phpstan) + lint ; textes en de, ru, ja ; navigateur
+   (`bin/jumphp build` + `bin/jumphp webshot`, WebGL de Chrome : le shader compile, les îles s'affichent). Les
+   portraits sont régénérés par `PortraitShotsTest` : l'assombrissement des coins est calculé par pixel, d'où un ou
+   deux niveaux d'écart. Les vignettes n'emploient que des fonctions du moteur 0.4.0 :
+   calque `above`, `setSupersample`, et le champ `$fade` du SceneManager, inchangé depuis 0.3.0.
+   **Reste** : la capture avec le moteur partagé, `JUMPHP_WEB=remote bin/jumphp webshot <id> 9 '[[1,"Enter"]]'`
+   (après `bin/jumphp build:remote <id>`, déjà fait). Elle n'a pas pu tourner : la demande d'autorisation a expiré. À
+   lancer avant de publier. Publier seulement sur demande, avec `git checkout main && git merge --ff-only vignettes &&
+   git push origin main`, puis `git push origin --delete vignettes`. Ensuite, peut-être des vignettes pour l'écran des
+   cartes. `composer.lock` du jeu est suivi par git.
 6. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (1er PC, voir les pièges).
 
 ## Décisions de l'utilisateur (à respecter)
@@ -81,9 +95,16 @@ Dernière mise à jour : 2026-11-05.
   de `vendor/` disparaissent (3 fois). Remède : `rm -rf` du `vendor` touché puis `bin/jumphp test engine` (moteur)
   ou `bin/jumphp install elfs-orcs-tower-defense` (jeu).
 - Git Bash (pas PowerShell). `bin/jumphp` a des correctifs MSYS (chemins Docker) ; fichiers en LF dans l'arbre de
-  travail (`core.autocrlf=true` : ne pas committer les fichiers modifiés seulement par les fins de ligne).
-- Les tests 3D tournent sur Mesa (lent) : lancer `bin/jumphp test ...` en tâche de fond. Les demandes d'autorisation
-  (git, curl) expirent si l'utilisateur n'est pas là.
+  travail, `git config core.autocrlf false` sur les deux PC (depuis le 2026-11-05 sur le 1er) : ne pas committer de
+  fichiers modifiés seulement par les fins de ligne.
+- **Deux sessions Claude Code sur le même dossier** (vu le 2026-11-05) : une seule travaille, l'autre s'arrête ; elles
+  se parlent par messages entre sessions. Ne pas lancer Docker ou les tests depuis les deux à la fois.
+- Les tests 3D tournent sur Mesa (lent) : lancer `bin/jumphp test ...` en tâche de fond.
+- **Les demandes d'autorisation n'arrivent pas à l'utilisateur** sur le 1er PC (2026-11-05 : elles expirent même quand
+  il est là, comme les questions de l'IDE). Concernées : les commandes git qui écrivent (fetch, commit, push), celles
+  qui commencent par une variable (`JUMPHP_WEB=remote ...`), `curl`. Les `bin/jumphp` simples et les git en lecture
+  passent. Préparer le reste et donner à l'utilisateur les commandes à lancer dans son terminal. Les configurations
+  « Run » de l'IDE ne marchent pas non plus ici (`dirname: command not found`).
 - **2e PC (`C:\JUMPHP\elfs-orcs-tower-defense`)** : lancer Docker Desktop avant tout ; `git config core.autocrlf false`
   (sinon le patch OpenGL ne s'applique pas) ; les dépendances du moteur manquaient : `bin/jumphp test` ne faisait rien
   et sortait sans erreur tant que `bin/jumphp test engine` n'avait pas tourné une fois. Le terminal de l'agent coupe
@@ -114,3 +135,5 @@ Dernière mise à jour : 2026-11-05.
   passent, vérifiés avec le moteur partagé ; poussés et publiés après connexion au compte `malabke` ; vignettes 3D commencées
   (`World3d` ici, `Diorama` + `FactionSelectScene` par l'autre session), commitées sans test sur la branche `vignettes`
   (pas publiées) avant de changer de PC.
+- 2026-11-05 (1er PC) : `git fetch`, branches `main` et `vignettes` récupérées ; vignettes testées, revues après
+  capture (cadrage, île qui flotte, ciel 3D, place des textes, fondu, pause) et terminées sur la branche `vignettes`.

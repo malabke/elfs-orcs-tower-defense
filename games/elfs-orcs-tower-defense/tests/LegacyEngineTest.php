@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Scene\FactionSelectScene;
 use App\Scene\PlayScene;
 use App\Scene\TitleScene;
 use App\Td\Battle;
@@ -48,5 +49,15 @@ final class LegacyEngineTest extends GameTestCase
         $this->game->shot('legacy-battle');
         self::assertTrue(Paint::$keyed);
         self::assertSame([0, 0, 0, 90], \App\Ui\World3d::veil([20, 26, 46, 90]), 'only black is translucent over the 3D');
+    }
+
+    public function testOnAnEngineWithoutHdTheSideCardsStillShowTheirVignettes(): void
+    {
+        // their 3D layer is over the 2D ('above'): no alpha composing needed; the pixel font's texts leave their room
+        $this->game->start(FactionSelectScene::class, ['faction' => 'dwarves']);
+        $this->game->run(20);
+        self::assertTrue($this->game->peek('use3d'));
+        self::assertFalse(Paint::$keyed);
+        $this->game->shot('legacy-sides');
     }
 }

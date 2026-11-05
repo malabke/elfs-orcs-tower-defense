@@ -71,8 +71,14 @@ final class World3d
             v_color = a_color;
             v_view = u_eye - w.xyz;
             v_uv = vec4((w.xz - u_rect.xy) * u_rect.zw, w.xz * 0.01);
-            v_sky = vec4(w.xz * (1.0 / 700.0) + u_cloud, gl_Position.xy / gl_Position.w);
+            // the clip position as it is: the fragment shader divides it by w (exact where a triangle crosses an edge)
+            v_sky = vec4(w.xz * (1.0 / 700.0) + u_cloud, gl_Position.xy);
             v_misc = vec4(a_pos.y, extra, a_mat, gl_Position.w);
+            if (a_mat > 2.5 && a_mat < 3.5) {
+                // the sky of a vignette: two sizes of clouds drifting by, and how low in its frame (-1 top, 1 bottom)
+                v_uv = vec4(w.xz * 0.021 - u_cloud * 1.7, w.xz * 0.01 + u_cloud);
+                v_misc.y = a_pos.z / 36.0;
+            }
         }
         GLSL;
 
@@ -104,6 +110,8 @@ final class World3d
         uniform sampler2D u_ground;
         uniform sampler2D u_noise;
         uniform vec4 u_clip;
+        uniform vec4 u_vig;
+        uniform float u_fade;
         varying vec3 v_color;
         varying vec3 v_normal;
         varying vec3 v_view;
@@ -111,14 +119,26 @@ final class World3d
         varying vec4 v_sky;
         varying vec4 v_misc;
         void main() {
+            // where it lands on the screen (-1..1)
+            vec2 ndc = v_sky.zw / v_misc.w;
             // only inside the frame of a vignette (the whole screen otherwise)
-            if (v_sky.z < u_clip.x || v_sky.w < u_clip.y || v_sky.z > u_clip.z || v_sky.w > u_clip.w) {
+            if (ndc.x < u_clip.x || ndc.y < u_clip.y || ndc.x > u_clip.z || ndc.y > u_clip.w) {
                 discard;
             }
+            // the corners of the picture (the screen's, or a vignette's frame) a little darker
+            vec2 corner = (ndc - u_vig.xy) * u_vig.zw;
+            float edge = 1.0 - 0.12 * dot(corner, corner);
             float mat = v_misc.z;
             if (mat > 5.5) {
                 // a soft shadow: its colour (u_tint), fading out towards its edge
-                gl_FragColor = vec4(u_tint, u_alpha * (1.0 - smoothstep(0.2, 1.0, v_misc.y)));
+                gl_FragColor = vec4(u_tint * u_fade, u_alpha * (1.0 - smoothstep(0.2, 1.0, v_misc.y)));
+                return;
+            }
+            if (mat > 2.5 && mat < 3.5) {
+                // the sky of a vignette: its colours as they are, soft clouds drifting by, thicker low down
+                float c = texture2D(u_noise, v_uv.zw).a * 0.65 + texture2D(u_noise, v_uv.xy).a * 0.35;
+                float puff = smoothstep(0.5, 0.72, c) * mix(0.3, 0.9, smoothstep(-0.55, 0.85, v_misc.y));
+                gl_FragColor = vec4(mix(v_color, vec3(1.0, 0.97, 0.93), puff) * edge * u_fade, 1.0);
                 return;
             }
             vec3 n = normalize(v_normal);
@@ -182,8 +202,8 @@ final class World3d
             col *= mix(vec3(0.93, 0.97, 1.07), vec3(1.04, 1.0, 0.93), smoothstep(0.15, 0.85, lum));
             float f = clamp((v_misc.w - u_fogRange.x) / (u_fogRange.y - u_fogRange.x), 0.0, 1.0);
             col = mix(col, u_fog, f * 0.7);
-            col *= 1.0 - 0.12 * dot(v_sky.zw, v_sky.zw);
-            gl_FragColor = vec4(col, u_alpha);
+            // a layer over the 2D darkens with the scene fades itself (u_fade: how much colour is left)
+            gl_FragColor = vec4(col * edge * u_fade, u_alpha);
         }
         GLSL;
 
@@ -313,6 +333,8 @@ final class World3d
             'u_fogRange' => [560.0, 1400.0],
             'u_lava' => $this->scene['lava'],
             'u_clip' => self::NO_CLIP,
+            'u_vig' => self::WHOLE_SCREEN,
+            'u_fade' => 1.0,
             'u_model' => self::matrix(0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
             'u_tint' => [1.0, 1.0, 1.0],
             'u_alpha' => 1.0,
@@ -323,10 +345,11 @@ final class World3d
 
     /**
      * Starts a frame without any land: the layer cleared with $background, the same light (no fog, no clouds).
-     * For pictures of single models (PortraitScene: the portraits of the interface).
+     * For pictures of single models (PortraitScene: the portraits of the interface). $fade: how much of the colours
+     * is left (1: all; a layer over the 2D darkens with the scene fades by it).
      * @param int[] $background
      */
-    public function studio(Rig $rig, ?array $background, ?array $vp = null, array $clip = self::NO_CLIP): void
+    public function studio(Rig $rig, ?array $background, ?array $vp = null, array $clip = self::NO_CLIP, float $fade = 1.0): void
     {
         if ($this->gl === null) {
             return;
@@ -338,6 +361,8 @@ final class World3d
         // the uniforms shared by the frame's draws go with its first one (begin() sends them with the land)
         $this->pending = [
             'u_clip' => $clip,
+            'u_vig' => self::WHOLE_SCREEN,
+            'u_fade' => max(0.0, min(1.0, $fade)),
             'u_vp' => $vp ?? $rig->viewProj(),
             'u_eye' => $rig->eye(),
             'u_time' => 0.0,
@@ -356,6 +381,8 @@ final class World3d
 
     /** u_clip that lets everything through */
     private const NO_CLIP = [-9.0, -9.0, 9.0, 9.0];
+    /** u_vig: the corners darkened are the screen's (centre, 1 / half size) */
+    private const WHOLE_SCREEN = [0.0, 0.0, 1.0, 1.0];
 
     /**
      * The 3D layer OVER the 2D, transparent where nothing is drawn: small 3D scenes on a 2D screen (the vignettes of
@@ -382,10 +409,14 @@ final class World3d
 
     /**
      * Starts a vignette: a small 3D scene seen by $rig (made with the frame's size) drawn into the frame
-     * [$x, $y, $w, $h] of a $viewW x $viewH screen; nothing of it shows outside the frame. Then draw() its models.
+     * [$x, $y, $w, $h] of a $viewW x $viewH screen; nothing of it shows outside the frame. Its sky comes first,
+     * opaque: no 2D shows through the frame (no dark fringe round the models; the soft shadows' blending lets a
+     * little of what is under the frame through: keep it dark there). Then draw() its models. The layer is over
+     * the 2D, so the scene fades do not darken it: give their level as $fade (see studio()). $time: the wind, the
+     * clouds.
      * @param array{0: float, 1: float, 2: float, 3: float} $frame
      */
-    public function vignette(Rig $rig, array $frame, float $viewW, float $viewH): void
+    public function vignette(Rig $rig, array $frame, float $viewW, float $viewH, float $fade = 1.0, float $time = 0.0): void
     {
         [$x, $y, $w, $h] = $frame;
         $sx = $w / $viewW;
@@ -399,7 +430,45 @@ final class World3d
             $vp[$c * 4] = $sx * $vp[$c * 4] + $cx * $wc;
             $vp[$c * 4 + 1] = $sy * $vp[$c * 4 + 1] + $cy * $wc;
         }
-        $this->studio($rig, null, $vp, [$cx - $sx, $cy - $sy, $cx + $sx, $cy + $sy]);
+        $this->studio($rig, null, $vp, [$cx - $sx, $cy - $sy, $cx + $sx, $cy + $sy], $fade);
+        if ($this->gl === null) {
+            return;
+        }
+        $this->pending['u_vig'] = [$cx, $cy, 1 / $sx, 1 / $sy];
+        $this->pending['u_time'] = fmod($time, 3600.0);
+        $this->pending['u_cloud'] = [fmod($time * 0.012, 1.0), fmod($time * 0.004, 1.0)];
+        [$buffer, $count] = $this->model('vignette:sky', static fn () => self::sky());
+        $this->gl->draw($this->prog, $this->options($buffer, $count, [
+            // the sky's quad laid on the frame, at the very back
+            'u_vp' => [$sx / self::SKY_W, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -$sy / self::SKY_H, 0.0, 0.0, $cx, $cy, 0.9999, 1.0],
+            'u_model' => self::matrix(0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+            'u_tint' => [1.0, 1.0, 1.0],
+            'u_alpha' => 1.0,
+            'u_emit' => 0.0,
+            'u_ao' => 0.0,
+        ] + $this->pending, false, ['u_ground' => $this->noise, 'u_noise' => $this->noise]));
+        // the models that follow: the camera's projection again
+        $this->pending = ['u_vp' => $vp];
+    }
+
+    /** half the size of the sky's quad: x -SKY_W..SKY_W, z -SKY_H..SKY_H (the noise's clouds: a few per frame) */
+    private const SKY_W = 60.0;
+    private const SKY_H = 36.0;
+
+    /** The sky of the vignettes: blue above, a warm light at the horizon, a misty blue below (the island floats). */
+    private static function sky(): Mesh
+    {
+        $m = (new Mesh())->material(Mesh::SKY);
+        $rows = [[-1.05, [0.47, 0.64, 0.86]], [0.18, [0.96, 0.88, 0.74]], [1.05, [0.70, 0.76, 0.89]]];
+        [$w, $h] = [self::SKY_W * 1.05, self::SKY_H];
+        $up = [0.0, 1.0, 0.0];
+        for ($i = 0; $i < 2; $i++) {
+            [$z0, $c0] = [$rows[$i][0] * $h, $rows[$i][1]];
+            [$z1, $c1] = [$rows[$i + 1][0] * $h, $rows[$i + 1][1]];
+            $m->tri([-$w, 0.0, $z0], [$w, 0.0, $z0], [$w, 0.0, $z1], $up, $c0, $c0, $c1);
+            $m->tri([-$w, 0.0, $z0], [$w, 0.0, $z1], [-$w, 0.0, $z1], $up, $c0, $c1, $c1);
+        }
+        return $m;
     }
 
     /** @var array<string, mixed> uniforms for the next draw (studio()) */

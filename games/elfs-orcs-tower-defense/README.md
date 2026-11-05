@@ -1,7 +1,8 @@
 # Elfs & Orcs Tower Defense
 
-Tower defense rétro en pixel art (JumPHP) : bâtissez des tours elfiques sur les plateformes de pierre et tenez le
-col de Val-Épine face à la horde orque. Depuis la racine du dépôt :
+Tower defense en 3D peinte, façon livre d'images (JumPHP) : choisissez votre peuple parmi cinq (Elfes, Nains,
+Peuple des chevaux, Petits-hommes, Orcs), bâtissez vos tours sur les plateformes de pierre et tenez face à la horde
+orque, ou, côté orc, face à l'Alliance des peuples libres. Depuis la racine du dépôt :
 
 ```bash
 bin/jumphp install elfs-orcs-tower-defense   # dépendances
