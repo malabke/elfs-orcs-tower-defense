@@ -137,6 +137,11 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.51): the settings (session.json, accounts, options, git credentials, Packagist token, recent projects) are copied into `~/.jumphp/ide-backup/`
+  (0600, every 5 minutes) and put back at start when the data folder lacks them (a reinstall by the installer, a cleaned cache); the Logs show where the settings
+  live and whether they were found. Cause of David's loss not found (no Windows here): a data folder of another user (an installer run elevated, whose "run the app"
+  step starts it with another profile's APPDATA) is the best guess: if the copy is in another profile's home it does not help: check "Settings folder:" in Logs
+  after a reinstall. The Logs window has its own icon (`logfile`), distinct from the Git log's.
 - done (2026-11-05, IDE 0.1.50): Publish extension submits / updates the package on Packagist itself (the user's Packagist user name + API token, kept in the IDE's
   storage; Authorization header) and asks jumphp.net to refresh its directory (`POST /api/ide/extensions/refresh`, at most once a minute); jumphp.net: an extension has its
   own page content (table extension_page: summary, features, demo, screenshots written by its author in the studio, "Modifier la page") and a views counter, shown with the

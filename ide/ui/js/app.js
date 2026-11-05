@@ -191,7 +191,7 @@ class App {
     T('find', 'bottom', 'Find', 'find', this.find, 'Alt+3');
     T('problems', 'bottom', 'Problems', 'problems', this.problems, 'Alt+6');
     if (this.terminal) T('terminal', 'bottom', 'Terminal', 'terminal', this.terminal, 'Alt+F12');
-    if (this.logsPanel) T('logs', 'bottom', 'Logs', 'log', this.logsPanel, 'Alt+F11');
+    if (this.logsPanel) T('logs', 'bottom', 'Logs', 'logfile', this.logsPanel, 'Alt+F11');
     if (this.game) T('game', prefs.get('gameSide', 'right'), 'Game', 'game', this.game, 'Alt+5');
     if (this.claude) T('claude', 'right', 'Claude', 'claude', this.claude, 'Alt+8');
     if (this.publishPanel) T('publish', 'right', 'jumphp.net', 'globe', this.publishPanel, 'Alt+J');
@@ -587,7 +587,7 @@ class App {
     a.add('project', 'Project Tool Window', () => this.toggleTool('project'), { kbd: 'Alt+1', icon: 'folder' });
     a.add('structure', 'Structure Tool Window', () => this.toggleTool('structure'), { kbd: 'Alt+7', icon: 'structure' });
     a.add('problemsTool', 'Problems Tool Window', () => this.toggleTool('problems'), { kbd: 'Alt+6', icon: 'problems' });
-    if (this.logsPanel) a.add('logsTool', 'Logs Tool Window', () => this.toggleTool('logs'), { kbd: 'Alt+F11', icon: 'log' });
+    if (this.logsPanel) a.add('logsTool', 'Logs Tool Window', () => this.toggleTool('logs'), { kbd: 'Alt+F11', icon: 'logfile' });
     a.add('findTool', 'Find Tool Window', () => this.toggleTool('find'), { kbd: 'Alt+3' });
     a.add('hideTools', 'Hide All Tool Windows', () => { this.closeSide('left'); this.closeSide('bottom'); }, { kbd: 'Ctrl+Shift+F12' });
     a.add('selectInProject', 'Select Opened File in Project', () => this.tree.reveal(this.editors.activePath(), true), { kbd: 'Alt+F1' });
@@ -741,7 +741,7 @@ class App {
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },
         { label: 'JumPHP Documentation', action: () => this.openUrl('https://jumphp.net/docs') },
-        ...(this.logsPanel ? [{ label: 'Show Logs', icon: 'log', action: () => this.showTool('logs', true) }] : []),
+        ...(this.logsPanel ? [{ label: 'Show Logs', icon: 'logfile', action: () => this.showTool('logs', true) }] : []),
         ...(backend.kind === 'native' ? [{ label: 'What\'s New…', icon: 'star', action: () => this.whatsNew.show() }] : []),
         ...(backend.kind === 'native' && this.updates && this.updates.state !== 'off' ? ['-',
           { label: 'Check for Updates…', icon: 'download', action: () => this.checkForUpdates() },

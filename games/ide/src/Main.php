@@ -52,6 +52,8 @@ final class Main implements AppMain
         $this->processes = new Processes();
         // started from the desktop's menu, the IDE has a minimal PATH: get the user's (Docker, git, composer...)
         Environment::loadShellPath($this->processes);
+        // settings lost with the data folder (a reinstall, a cleaned cache, another way of starting the IDE) come back from the copy in the home folder
+        $restored = SettingsBackup::restore($app->storage);
         $this->session = (array)$app->storage->readJson('session.json', []);
         $server = (string)(getenv('JUMPHP_IDE_SERVER') ?: ($this->session['server'] ?? Playground::DEFAULT_SERVER));
         $this->playground = new Playground($app->http(), $server, $this->session['token'] ?? null);
@@ -65,6 +67,11 @@ final class Main implements AppMain
             $this->log->add($level, $source, $message);
         };
         $this->log->add('info', 'ide', 'JumPHP IDE ' . $app->config->get('version') . ' started (PHP ' . PHP_VERSION . ', ' . PHP_OS_FAMILY . ')');
+        // where the settings live, and whether they were found: the first thing to read when someone says they lost them after a reinstall
+        $this->log->add('info', 'ide', 'Settings folder: ' . dirname($app->storage->path('session.json')) . '; signed in: ' . (isset($this->session['user']['login']) ? 'yes' : 'no')
+            . ($restored ? '; restored from the copy in the home folder: ' . implode(', ', $restored) : '') . '; copy: ' . (SettingsBackup::folder() ?? 'off'));
+        SettingsBackup::backup($app->storage);
+        $app->gameLoop->addPeriodicTimer(300.0, fn () => SettingsBackup::backup($app->storage));
         // a crash is saved for JumPHP's developers and sent at the next start (CrashReports)
         $crashes = new CrashReports($app->storage, (string)$app->config->get('version'));
         $app->on('crash', function (\Throwable $e) use ($crashes): void {

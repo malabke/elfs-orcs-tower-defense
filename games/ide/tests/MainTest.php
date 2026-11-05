@@ -14,6 +14,7 @@ final class MainTest extends AppTestCase
     {
         // a folder of its own for the IDE's storage (accounts, sessions, recent projects): the tests never read or change a real one
         $this->varDir = sys_get_temp_dir() . '/jumphp-ide-var-' . bin2hex(random_bytes(4));
+        putenv('JUMPHP_IDE_BACKUP=');   // the tests never write a copy of settings in the real home folder
         putenv('JUMPHP_VAR=' . $this->varDir);
         $this->project = sys_get_temp_dir() . '/jumphp-ide-test-' . bin2hex(random_bytes(4));
         mkdir($this->project . '/games/demo/config', 0777, true);

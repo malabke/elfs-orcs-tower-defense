@@ -12,6 +12,7 @@ final class CreatorTest extends AppTestCase
 
     protected function setUp(): void
     {
+        putenv('JUMPHP_IDE_BACKUP=');   // the tests never write a copy of settings in the real home folder
         putenv('JUMPHP_VAR=' . sys_get_temp_dir() . '/jumphp-ide-var-' . bin2hex(random_bytes(4)));
         putenv('JUMPHP_IDE_UPDATES=0');
         parent::setUp();

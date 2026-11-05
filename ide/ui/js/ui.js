@@ -27,6 +27,7 @@ const ICONS = {
   library: '<path d="M2.5 2.5h3v11h-3zM6.5 2.5h3v11h-3zM10.3 3l2.9-.8 2.3 10.6-2.9.8z"/>',
   problems: '<circle cx="8" cy="8" r="6"/><path d="M8 4.8v4M8 11.2v.1"/>',
   terminal: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4 6l2.5 2L4 10M8 10.5h4"/>',
+  logfile: '<path d="M3.5 1.8h9v12.4h-9z M5.7 5h4.6M5.7 8h4.6M5.7 11h2.6"/>',
   log: '<circle cx="5" cy="3.5" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="5" cy="12.5" r="1.4"/><path d="M5 4.9v1.7M5 9.4v1.7M8.5 3.5H14M8.5 8H14M8.5 12.5H14"/>',
   find: '<circle cx="6.5" cy="6.5" r="4"/><path d="M9.5 9.5L13.5 13.5"/><path d="M4.5 6.5h4"/>',
   refresh: '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/>',
