@@ -1,0 +1,46 @@
+{
+    "name": "jumphp/collision",
+    "description": "Collisions for JumPHP games: circles, boxes and convex polygons, overlap tests with the way out, rays, a broad phase (spatial hash)",
+    "type": "jumphp-extension",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "JumPHP\\Collision\\": "src/"
+        }
+    },
+    "extra": {
+        "jumphp": {
+            "name": "Collision",
+            "engine": "^0.5",
+            "services": [
+                "JumPHP\\Collision\\CollisionWorld"
+            ],
+            "summary": "Shapes (circle, box, convex polygon), the separating axis test with the minimum translation, rays and a spatial hash broad phase.",
+            "features": [
+                "Circle, Box, convex Polygon (regular(), rotated())",
+                "Collision::test() gives the normal and the depth: how to push apart",
+                "Collision::raycast(): the first shape a ray meets, with its normal",
+                "SpatialHash broad phase and a CollisionWorld service: collisions(), at(), overlapping(), raycast()",
+                "Pure PHP on floats: the same in the browser"
+            ],
+            "example": "$hit = Collision::test($player, $wall);\nif ($hit) { [$dx, $dy] = $hit->pushOutOfFirst(); $player->translate($dx, $dy); }",
+            "docs": "https://github.com/davidnurdin/jumPhp/blob/main/extensions/collision/doc/index.md"
+        }
+    },
+    "keywords": [
+        "jumphp",
+        "jumphp-extension",
+        "game",
+        "collision",
+        "physics",
+        "raycast"
+    ],
+    "homepage": "https://jumphp.net/extensions/collision",
+    "support": {
+        "source": "https://github.com/davidnurdin/jumPhp/tree/main/extensions/collision",
+        "issues": "https://github.com/davidnurdin/jumPhp/issues"
+    }
+}

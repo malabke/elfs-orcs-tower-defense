@@ -1,0 +1,28 @@
+{
+    "name": "jumphp-games/collision-demo",
+    "description": "The example game of the collision engine extension",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "jumphp/engine": "@dev",
+        "jumphp/collision": "@dev"
+    },
+    "repositories": [
+        { "type": "path", "url": "../../extensions/collision" },
+        { "type": "path", "url": "../../engine" },
+        { "type": "vcs", "url": "https://github.com/davidnurdin/php-wasm-network" }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": { "App\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Tests\\": "tests/" }
+    },
+    "config": {
+        "sort-packages": true,
+        "platform-check": false
+    }
+}
