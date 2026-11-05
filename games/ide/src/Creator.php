@@ -133,9 +133,14 @@ final class Creator
                 }
                 // a fresh history: the project is the user's (the IDE, or bin/jumphp update, brings new versions of JumPHP)
                 exec('rm -rf ' . escapeshellarg("$root/.git"));
-                // one project, one plugin: not JumPHP's examples (the playground's projects start the same way)
-                foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/extensions/*", GLOB_ONLYDIR) ?: [])] as $example) {
-                    exec('rm -rf ' . escapeshellarg($example));
+                // a project of its own: JumPHP's examples, extensions and development files are not in it (tools/project-clean.sh, the same for every
+                // New Project); an older JumPHP without that script: its examples at least
+                if (is_file("$root/tools/project-clean.sh")) {
+                    exec('cd ' . escapeshellarg($root) . ' && bash tools/project-clean.sh --new >/dev/null 2>&1');
+                } else {
+                    foreach ([...(glob("$root/games/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/apps/*", GLOB_ONLYDIR) ?: []), ...(glob("$root/extensions/*", GLOB_ONLYDIR) ?: [])] as $example) {
+                        exec('rm -rf ' . escapeshellarg($example));
+                    }
                 }
                 return $this->run(['git', 'init', '-q', '-b', 'main'], $root)
                     ->then(fn () => $this->run(['git', 'remote', 'add', 'jumphp', self::TEMPLATE], $root))
