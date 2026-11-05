@@ -105,6 +105,31 @@ final class MainTest extends AppTestCase
         self::assertDirectoryDoesNotExist($this->project . '/new/todo');
     }
 
+    public function testSeveralGitHubAccountsAndOneAssignedToTheProject(): void
+    {
+        self::assertSame([], $this->ide('session.accounts')['accounts']);
+        $this->addToAssertionCount(0);
+        $this->app->storage->writeJson('accounts.json', [
+            ['token' => 'jpi_aaaaaaaa', 'user' => ['login' => 'ada', 'name' => 'Ada'], 'server' => 'https://jumphp.net'],
+            ['token' => 'jpi_bbbbbbbb', 'user' => ['login' => 'bob', 'name' => 'Bob'], 'server' => 'https://jumphp.net'],
+        ]);
+        self::assertSame(['ada', 'bob'], array_column($this->ide('session.accounts')['accounts'], 'login'));
+        self::assertSame('bob', $this->ide('session.switch', ['login' => 'bob'])['active']);
+        self::assertSame('bob', $this->ide('session.user')['login']);
+        $state = $this->ide('project.setAccount', ['login' => 'ada']);
+        self::assertSame('ada', $state['active']);
+        self::assertSame('ada', $state['projectAccount']);
+        try {
+            $this->ide('session.switch', ['login' => 'nobody']);
+            self::fail('an account that is not signed in was used');
+        } catch (\Throwable $e) {
+            self::assertStringContainsString('not signed in', $e->getMessage());
+        } finally {
+            $this->app->storage->writeJson('accounts.json', []);   // the storage outlives the test: leave it signed out
+            $this->app->storage->writeJson('session.json', []);
+        }
+    }
+
     public function testTheTrashDeletesAProjectOfTheRecentListOnly(): void
     {
         $other = sys_get_temp_dir() . '/jumphp-trash-' . bin2hex(random_bytes(4));

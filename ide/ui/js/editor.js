@@ -377,9 +377,19 @@ export class Editors {
       return;
     }
     const view = el('div.view.md-view');
+    // pictures of the project only (relative to the .md file): nothing is fetched from the internet by reading a README
+    const folder = dirname(tab.path);
+    const image = (src, alt) => {
+      if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(src)) return el('span.pub-faint', {}, `[${alt || 'image'}: external pictures are not loaded]`);
+      const parts = (src.startsWith('/') ? src.slice(1) : (folder ? folder + '/' : '') + src).split('?')[0].split('/');
+      const path = parts.reduce((acc, p) => { if (p === '..') acc.pop(); else if (p !== '.' && p !== '') acc.push(p); return acc; }, []).join('/');
+      const img = el('img', { alt: alt || '', style: { maxWidth: '100%' } });
+      backend.invoke('file.read', { path }).then((f) => { if (f.image) img.src = f.image; else img.replaceWith(`[${alt || path}]`); }).catch(() => img.replaceWith(`[${alt || path}: not found]`));
+      return img;
+    };
     const draw = () => {
       const top = view.scrollTop;
-      clear(view).append(el('div.md-body', {}, ...renderMarkdown(file.model.getValue(), (url) => this.app.openUrl(url))));
+      clear(view).append(el('div.md-body', {}, ...renderMarkdown(file.model.getValue(), (url) => this.app.openUrl(url), image)));
       view.scrollTop = top;
     };
     if (mode === 'split') {

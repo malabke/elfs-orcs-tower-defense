@@ -1,7 +1,7 @@
 // The desktop app's welcome screen (no project open): sign in with jumphp.net, your playground projects (clone and
 // open), recent projects, open a folder, and New Project (game, desktop app, hybrid, Amstrad CPC remake, port).
 import { backend } from './backend.js';
-import { el, clear, icon, notify, dialog, timeAgo, confirm, basename, progressBar } from './ui.js';
+import { el, clear, icon, notify, dialog, timeAgo, confirm, basename, progressBar, menu } from './ui.js';
 
 const KINDS = [
   { id: 'original', game: true, icon: 'game', title: 'Game', text: 'An original retro game in PHP: desktop, browser, phones. Published on jumphp.net.', playground: true },
@@ -59,7 +59,7 @@ export class Welcome {
       el('div.w-brand', {}, el('img', { src: 'img/icon.png', alt: '' }), el('div', {}, el('b', {}, 'JumPHP IDE'), el('small', {}, s.version ? 'version ' + s.version : ''))),
       el('div.w-nav', {}, nav('projects', 'Projects', 'folder'), nav('new', 'New Project', 'plus'), nav('learn', 'Learn', 'star')),
       el('div.w-user', {}, s.user
-        ? [el('img', { src: s.user.avatar || '', alt: '' }), el('div', { style: { flex: 1, minWidth: 0 } }, el('b', {}, s.user.login), el('div', { style: { fontSize: '12px', color: 'var(--text-3)' } }, s.server)),
+        ? [el('img', { src: s.user.avatar || '', alt: '' }), el('div', { style: { flex: 1, minWidth: 0, cursor: 'pointer' }, title: 'GitHub accounts', onclick: (e) => this.accountsMenu(e.currentTarget) }, el('b', {}, s.user.login), el('div', { style: { fontSize: '12px', color: 'var(--text-3)' } }, s.server)),
           el('button.icon-btn', { title: 'Sign out', onclick: () => this.logout() }, icon('logout'))]
         : el('button.btn.primary', { style: { width: '100%' }, onclick: () => this.login() }, icon('user'), 'Sign in with jumphp.net')));
     const main = el('div.w-main');
@@ -219,10 +219,21 @@ export class Welcome {
           ['Rename', 'Shift+F6'], ['Commit', 'Ctrl+K'], ['Run', 'Shift+F10']].flatMap(([a, b]) => [el('span', {}, a), el('kbd', {}, b)]))));
   }
 
-  async login() {
-    const waiting = dialog({ title: 'Sign in with jumphp.net', body: el('p', {}, 'Your browser opens jumphp.net: sign in with GitHub and authorize the IDE. Then come back here.'), buttons: [{ label: 'Cancel', action: () => backend.invoke('session.cancelLogin') }] });
+  /** Several GitHub accounts on this computer: the one that pushes and publishes (each project remembers its own). */
+  async accountsMenu(at) {
+    const { accounts, active } = await backend.invoke('session.accounts');
+    menu([{ head: 'GitHub accounts' },
+      ...accounts.map((a) => ({ label: a.login + (a.name ? ` (${a.name})` : ''), icon: 'user', checked: a.login === active,
+        action: async () => { await backend.invoke('session.switch', { login: a.login }); this.show(); } })),
+      '-', { label: 'Add another GitHub account…', icon: 'plus', action: () => this.login(true) },
+      { label: 'Sign out of ' + active, icon: 'logout', action: () => this.logout() }], at);
+  }
+
+  async login(another = false) {
+    const waiting = dialog({ title: 'Sign in with jumphp.net', body: el('p', {}, another ? 'Your browser opens jumphp.net: GitHub asks which account to use. Choose the other one, authorize the IDE, then come back here.'
+      : 'Your browser opens jumphp.net: sign in with GitHub and authorize the IDE. Then come back here.'), buttons: [{ label: 'Cancel', action: () => backend.invoke('session.cancelLogin') }] });
     try {
-      await backend.invoke('session.login');
+      await backend.invoke('session.login', { another });
       waiting.close();
       notify('Signed in', 'success');
       this.show();
@@ -255,6 +266,12 @@ export class Welcome {
         if (confirmation.value.trim() !== project.name) { notify('Type the name of the project to confirm.', 'warning'); return false; }
         try {
           const r = await backend.invoke('projects.delete', { path: project.path, repository: repo.checked });
+          if (r.needsAccess) {
+            // nothing was deleted: GitHub's delete right is given in the browser first, then the user tries again
+            this.app.openUrl(r.url);
+            notify('jumphp.net needs your permission to delete repositories on GitHub. Your browser opened GitHub: allow it, then delete the project again. Nothing has been deleted.', 'info', { title: 'Delete project', timeout: 0 });
+            return;
+          }
           notify(r.message || (repo.checked && r.repository ? 'Deleted, with its GitHub repository and its jumphp.net project.' : 'Deleted from this computer.'), r.message ? 'warning' : 'success',
             { title: 'Delete project', timeout: r.message ? 0 : undefined, actions: r.message && r.repositoryUrl ? [{ label: 'Open the repository settings', action: () => this.app.openUrl(r.repositoryUrl + '/settings') }] : [] });
         } catch (e) { notify(e.message, 'error', { title: 'Delete project' }); return false; }

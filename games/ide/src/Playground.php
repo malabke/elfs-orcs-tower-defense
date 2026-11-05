@@ -29,10 +29,10 @@ final class Playground
         $this->token = $token;
     }
 
-    public function connectUrl(string $redirect, string $state): string
+    public function connectUrl(string $redirect, string $state, bool $another = false): string
     {
         // a generic device name: nothing that identifies the person or the computer
-        return $this->server . '/ide/connect?' . http_build_query(['redirect' => $redirect, 'state' => $state, 'device' => 'JumPHP IDE (' . PHP_OS_FAMILY . ')']);
+        return $this->server . '/ide/connect?' . http_build_query(['redirect' => $redirect, 'state' => $state, 'device' => 'JumPHP IDE (' . PHP_OS_FAMILY . ')'] + ($another ? ['switch' => 1] : []));
     }
 
     public function me(): Task

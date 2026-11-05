@@ -141,8 +141,11 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   and GitHub repository (jumphp.net `DELETE /api/ide/projects/<slug>`; GitHub refuses without the delete_repo scope the sign-in does not ask for: the
   repository's settings page is then offered; asking for that scope, with a second confirmation, is still to do). Not tried in the GUI.
 - done (2026-11-05, not released): a slug already taken on jumphp.net at import: the IDE retries with `<id>-<login>`, then `<id>-2` (the publisher finds the game folder itself).
-- idea (2026-11-05): several GitHub accounts signed in the IDE, one assigned to each project (a token or a credential helper of the IDE,
-  no Windows credential manager), the account shown; an integrated Git client with its own authentication. (Pinning is done, see above.)
+- done (2026-11-05, IDE 0.1.46): several GitHub accounts: sign in again from the account menu ("Add another GitHub account…": jumphp.net `/ide/connect?switch=1`
+  leaves the browser's session and GitHub asks which account), accounts kept in the IDE's storage (accounts.json), one assigned to each project
+  (`account` in .jumphp/ide.json, "Use <login> for this project"), switching changes the token git and jumphp.net use; the trash's repository
+  box asks GitHub's delete_repo right first (`/connect/github?extra=delete_repo`, `me.canDeleteRepo`), nothing is deleted before; pictures in .md
+  (relative to the file, none from the internet). Not tried in the GUI nor with two real accounts. Left: an integrated Git client.
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
   on the line (the two items below); its scratch app is apps/zz-tui (delete it when done)
 - done (2026-11-05, not released): the Logs window (View > Logs, Alt+F11): the IDE's own events, the programs it runs (bin/jumphp, Docker, git,

@@ -230,17 +230,41 @@ final class Main implements AppMain
             return true;
         };
         $c['update.auto'] = fn (array $p) => $this->updates->setAuto(!empty($p['on']));
-        $c['session.login'] = fn () => $this->login();
+        $c['session.login'] = fn (array $p = []) => $this->login(!empty($p['another']));
+        // several GitHub accounts (each one a jumphp.net sign-in), one assigned to each project
+        $c['session.accounts'] = fn () => $this->accountsState();
+        $c['session.switch'] = function (array $p) {
+            if (!$this->useAccount((string)($p['login'] ?? ''))) {
+                throw new \RuntimeException('That account is not signed in on this computer.');
+            }
+            return $this->accountsState();
+        };
+        $c['project.setAccount'] = function (array $p) {
+            $root = $this->ide !== null ? (string)$this->ide->workspace->localPath() : '';
+            $login = (string)($p['login'] ?? '');
+            if ($root === '' || !$this->useAccount($login)) {
+                throw new \RuntimeException('That account is not signed in on this computer.');
+            }
+            $this->saveProjectSettings($root, ['account' => $login]);
+            return $this->accountsState();
+        };
         $c['session.cancelLogin'] = function () {
             $this->loopback?->fail('sign-in cancelled');
             return true;
         };
         $c['session.logout'] = function () {
             $this->bridge->enable(false);
+            // this account leaves; another one signed in takes its place
+            $login = $this->session['user']['login'] ?? null;
+            $others = array_values(array_filter($this->accounts(), fn ($a) => ($a['user']['login'] ?? null) !== $login));
+            $this->app->storage->writeJson('accounts.json', $others);
             $this->session = ['server' => $this->playground->server()];
             $this->app->storage->writeJson('session.json', $this->session);
             $this->playground->setToken(null);
             $this->ide?->git?->setToken(null);
+            if ($others !== []) {
+                $this->useAccount((string)$others[0]['user']['login']);
+            }
             return true;
         };
         $c['session.user'] = fn () => $this->session['user'] ?? null;
@@ -366,16 +390,65 @@ final class Main implements AppMain
 
     // session ----------------------------------------------------------------------------------------------
 
-    private function login(): Deferred
+    /** @return list<array{token: string, user: array<string, mixed>, server: string}> every account signed in on this computer */
+    private function accounts(): array
+    {
+        $list = array_values(array_filter((array)$this->app->storage->readJson('accounts.json', []), fn ($a) => is_array($a) && !empty($a['token']) && isset($a['user']['login'])));
+        // the account of an older IDE (session.json only) is the first one
+        if (!empty($this->session['token']) && isset($this->session['user']['login'])
+            && !array_filter($list, fn ($a) => $a['user']['login'] === $this->session['user']['login'])) {
+            array_unshift($list, $this->session);
+        }
+        return $list;
+    }
+
+    private function rememberAccount(): void
+    {
+        $list = array_values(array_filter($this->accounts(), fn ($a) => $a['user']['login'] !== ($this->session['user']['login'] ?? null)));
+        $list[] = $this->session;
+        $this->app->storage->writeJson('accounts.json', $list);
+    }
+
+    /** Makes an account signed in on this computer the one that pushes / publishes now (the token itself never leaves this computer's storage). */
+    private function useAccount(string $login): bool
+    {
+        foreach ($this->accounts() as $account) {
+            if (strcasecmp((string)$account['user']['login'], $login) === 0) {
+                if (($this->session['user']['login'] ?? null) !== $account['user']['login']) {
+                    $this->session = $account;
+                    $this->app->storage->writeJson('session.json', $this->session);
+                    $this->playground->setToken((string)$account['token']);
+                    $this->ide?->git?->setToken(null);
+                    $this->authorizeGit();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @return array<string, mixed> */
+    private function accountsState(): array
+    {
+        $root = $this->ide !== null ? (string)$this->ide->workspace->localPath() : '';
+        return [
+            'accounts' => array_map(fn ($a) => ['login' => $a['user']['login'], 'name' => $a['user']['name'] ?? null, 'avatar' => $a['user']['avatar'] ?? null], $this->accounts()),
+            'active' => $this->session['user']['login'] ?? null,
+            'projectAccount' => $root !== '' ? ($this->projectSettings($root)['account'] ?? null) : null,
+        ];
+    }
+
+    private function login(bool $another = false): Deferred
     {
         $this->loopback?->fail('sign-in started again');
         $loopback = $this->loopback = new Loopback();
-        Shell::openUrl($this->playground->connectUrl($loopback->redirectUri(), $loopback->state));
+        Shell::openUrl($this->playground->connectUrl($loopback->redirectUri(), $loopback->state, $another));
         return self::deferred($loopback->done)->then(function (string $token) {
             $this->playground->setToken($token);
             return self::deferred($this->playground->me())->then(function (array $user) use ($token) {
                 $this->session = ['token' => $token, 'user' => $user, 'server' => $this->playground->server()];
                 $this->app->storage->writeJson('session.json', $this->session);
+                $this->rememberAccount();
                 $this->loopback = null;
                 $this->authorizeGit();
                 return $user;
@@ -433,6 +506,9 @@ final class Main implements AppMain
         $this->ide->enablePlugins($this->app->storage->path('plugins'));
         $this->ide->enableTerminal();
         $this->filesSignature = '';
+        // the project's own GitHub account, when it has one and it is signed in here (else the active account)
+        $assigned = (string)($this->projectSettings($root)['account'] ?? '');
+        $assigned !== '' && $this->useAccount($assigned);
         $this->authorizeGit();
         $this->app->options->set('reopen', true);
         $settings = $this->projectSettings($root);
@@ -521,7 +597,7 @@ final class Main implements AppMain
                 $login = preg_replace('/[^a-z0-9]+/', '-', strtolower((string)($this->user()['login'] ?? 'me'))) ?: 'me';
                 return $this->importAs((string)$repo['full_name'], [(string)$module['id'], $module['id'] . '-' . $login, $module['id'] . '-2'], $kind)
                     ->then(function (array $project) use ($root, $repo) {
-                        $this->saveProjectSettings($root, ['slug' => (string)$project['slug']]);
+                        $this->saveProjectSettings($root, ['slug' => (string)$project['slug'], 'account' => (string)($this->session['user']['login'] ?? '')]);
                         return ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => $project['slug'], 'message' => null];
                     }, fn (\Throwable $e) => ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => null,
                         'message' => 'The repository is made and pushed, but jumphp.net did not take the project: ' . $e->getMessage()]);
@@ -544,9 +620,24 @@ final class Main implements AppMain
             return Deferred::rejected(new \RuntimeException('Only a project of the recent list can be deleted, and never a folder that is not a project.'));
         }
         $slug = $this->projectSettings($real)['slug'] ?? null;
+        if ($repository && $slug !== null) {
+            // GitHub's delete right is asked only now, by the user, in the browser: nothing is deleted until jumphp.net has it
+            return self::deferred($this->playground->me())->then(function (array $me) use ($real, $slug) {
+                if (empty($me['canDeleteRepo'])) {
+                    return ['needsAccess' => true, 'url' => (string)($me['deleteAccessUrl'] ?? ''), 'deleted' => false];
+                }
+                return $this->removeProject($real, (string)$slug, true);
+            });
+        }
+        return $this->removeProject($real, $slug !== null ? (string)$slug : null, false);
+    }
+
+    /** @return Deferred the folder gone, and with $repository its jumphp.net project and GitHub repository */
+    private function removeProject(string $real, ?string $slug, bool $repository): Deferred
+    {
         $remote = $repository && $slug !== null
             ? self::deferred($this->playground->request('DELETE', '/api/ide/projects/' . rawurlencode((string)$slug), ['repository' => true], 60.0))
-            : Deferred::resolved(['project' => false, 'repository' => false, 'repositoryUrl' => null, 'message' => $repository ? 'This project was never put on jumphp.net: no repository to delete.' : null]);
+            : Deferred::resolved(['project' => false, 'repository' => false, 'repositoryUrl' => null, 'message' => null]);
         return $remote->then(function (array $r) use ($real) {
             $kept = array_values(array_filter($this->recent(), fn ($x) => realpath((string)$x['path']) !== $real));   // before the folder is gone
             Creator::removeTree($real);
@@ -617,7 +708,7 @@ final class Main implements AppMain
         $target = $parent . '/' . self::repoName($url);
         $done = function () use ($target, $slug) {
             if ($slug !== null) {
-                $this->saveProjectSettings($target, ['slug' => $slug]);
+                $this->saveProjectSettings($target, ['slug' => $slug, 'account' => (string)($this->session['user']['login'] ?? '')]);
             }
             return $target;
         };

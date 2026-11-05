@@ -811,9 +811,16 @@ class App {
     const user = this.session?.user || backend.config.user;
     // the desktop: this computer's Claude can answer the web IDE (jumphp.net/ide), ClaudeBridge
     const bridge = backend.kind === 'native' && user ? await backend.invoke('bridge.status').catch(() => null) : null;
+    const accounts = backend.kind === 'native' && user ? await backend.invoke('session.accounts').catch(() => null) : null;
     menu(user ? [{ head: user.login }, { label: 'My page on jumphp.net', icon: 'globe', action: () => this.openUrl(user.url || 'https://jumphp.net') },
       bridge ? { label: 'Claude for jumphp.net (the web IDE uses this computer\'s Claude)', icon: 'claude', checked: bridge.on,
         action: () => backend.invoke('bridge.enable', { on: !bridge.on }).then((s) => notify(s.on ? 'jumphp.net/ide now uses the Claude of this computer, while the JumPHP IDE is open.' : 'Claude for jumphp.net is off.', 'info', { title: 'Claude' })) } : null,
+      ...(accounts ? [{ head: 'GitHub accounts' },
+        ...accounts.accounts.map((a) => ({ label: a.login, icon: 'user', checked: a.login === accounts.active,
+          action: () => backend.invoke('session.switch', { login: a.login }).then(() => { notify(`Now using ${a.login}.`, 'success', { title: 'GitHub' }); this.git?.refresh(); }).catch((e) => notify(e.message, 'error')) })),
+        { label: 'Add another GitHub account…', icon: 'plus', action: () => backend.invoke('session.login', { another: true }).then(() => notify('Account added.', 'success', { title: 'GitHub' })).catch((e) => !/cancel/i.test(e.message) && notify(e.message, 'error')) },
+        ...(this.project?.root ? [{ label: `Use ${accounts.active} for this project`, checked: accounts.projectAccount === accounts.active,
+          action: () => backend.invoke('project.setAccount', { login: accounts.active }).then(() => notify(`This project pushes and publishes as ${accounts.active}.`, 'success', { title: 'GitHub' })).catch((e) => notify(e.message, 'error')) }] : []), '-'] : []),
       backend.kind === 'native' ? { label: 'Sign out', icon: 'logout', action: () => backend.invoke('session.logout').then(() => location.reload()) } : null].filter(Boolean)
       : [{ label: 'Sign in with jumphp.net', icon: 'user', action: () => backend.invoke('projects.close').then(() => location.reload()) }], at);
   }
