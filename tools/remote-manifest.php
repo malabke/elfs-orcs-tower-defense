@@ -53,6 +53,7 @@ $info = [
     'lang' => $config['lang'],
     'net_url' => $config['net_url'],
     'touch' => $config['touch'] ?? null,
+    'double_click_fullscreen' => (bool)($config['double_click_fullscreen'] ?? true),
     'controls' => $config['controls'] ?? null,
 ];
 $manifest = ['format' => 1, 'engine' => $runtimeInfo['version'] ?? null] + $info

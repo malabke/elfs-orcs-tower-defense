@@ -115,8 +115,14 @@ Dernière mise à jour : 2026-11-05.
      entre deux filets, textes, une place pour les étoiles de la victoire via `extraHeight()` / `renderExtra()`, un
      bouton en bois par choix). Pause, victoire et défaite en profitent. Test `MenusTest` (captures `menu-*.png`).
    - Le seul rétro qui reste vient du playground : sa police pixel et sa croix tactile (moteur 0.4.0), voir point 9.
+   - **Double-clic = plein écran (corrigé, pas publié)** : cliquer vite sur une tour (sa fiche) puis pour la construire
+     faisait passer Chrome en plein écran. C'était le moteur (`engine/web/jumphp.js` : un `dblclick` sur le jeu ouvre
+     le plein écran). Nouvelle option `double_click_fullscreen` (vraie par défaut, passée à la page par
+     `tools/render-web.php` et `tools/remote-manifest.php`), mise à `false` dans `game.yaml`. Le playground (0.4.0) le
+     fait encore : à inclure dans la contribution (point 9).
 9. **Suite demandée (« on fera 4 et 5 »)** : proposer au projet JumPHP les ajouts du moteur faits ici (2D en HD,
-   composition par transparence, options de TtfFont, `touch: {pad: none}`) pour que le playground les ait ; puis des
+   composition par transparence, options de TtfFont, `touch: {pad: none}`, `double_click_fullscreen`) pour que le
+   playground les ait ; puis des
    vignettes 3D vivantes sur l'écran des cartes.
 
 ## Décisions de l'utilisateur (à respecter)

@@ -493,7 +493,8 @@ $('btn-full').addEventListener('click', () => {
 	fullscreenElement() ? exitFullscreen() : enterFullscreen();
 	canvas.focus();
 });
-canvas.addEventListener('dblclick', () => enterFullscreen());
+// a double click goes fullscreen, unless the game is played by clicking fast (game.yaml `double_click_fullscreen: false`)
+canvas.addEventListener('dblclick', () => { if (GAME.double_click_fullscreen !== false) enterFullscreen(); });
 $('btn-sound').addEventListener('click', () => {
 	// SDL_mixer plays through emscripten's Web Audio context
 	const ctx = window.SDL2?.audioContext || window.Module?.SDL2?.audioContext;

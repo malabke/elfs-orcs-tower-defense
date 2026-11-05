@@ -72,7 +72,9 @@ There is no title screen (the user found a PLAY / OPTIONS menu too retro): the g
 gear (top right corner of the header, or back / Escape) pushes `OptionsScene` (QUIT there on the desktop). The pause,
 victory and defeat menus go back to the side screen. Phones get no on-screen pad (`game.yaml touch: {pad: none}`, an
 option of the engine's `touch.js` added for this game: the playground's shared engine 0.4.0 ignores it and still shows
-its d-pad until JumPHP has it). The settings (`OptionsScene`, over the side screen or the pause menu) are a painted
+its d-pad until JumPHP has it). In the browser a double click no longer sends the page fullscreen
+(`game.yaml double_click_fullscreen: false`, also an engine option added here: a tower's card then build, clicked
+fast, made Chrome go fullscreen; the playground's engine 0.4.0 still does it). The settings (`OptionsScene`, over the side screen or the pause menu) are a painted
 panel, not a menu list: a volume bar with minus / plus, two arrows for the language, a switch for the full screen
 (desktop), wooden BACK / QUIT buttons; keys: up / down, left / right, confirm, back (`tests/OptionsTest.php`).
 The interface's look (`App\Ui\Paint`, storybook like the 3D): rounded panels of ink blue edged with gold, wooden buttons

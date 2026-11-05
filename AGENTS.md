@@ -228,6 +228,7 @@ Replace its scenes and entities with your game:
    | `pause_on_blur`, `mute_when_hidden` | true, true | |
    | `pwa` | false | `true` or `{name, short_name, display, orientation, theme_color, background_color}`: installable, plays offline (§9) |
    | `debug_key`, `fullscreen_key` | F3, F11 | |
+   | `double_click_fullscreen` | true | browser: a double click on the game goes fullscreen; `false` for games clicked fast (two clicks in a row) |
 2. **`config/input.yaml`**: your actions (`jump`, `fire`, `p1_up`...). The engine already defines
    `up down left right confirm back pause`.
 3. **Scenes** in `src/Scene/` (§5): a `TitleScene extends MenuScene`, a `PlayScene extends AbstractScene`,

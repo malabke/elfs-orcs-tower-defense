@@ -28,6 +28,7 @@ final class GameConfig
         'net_url' => 'ws://localhost:8090/ws',
         'debug_key' => 'F3',
         'fullscreen_key' => 'F11',
+        'double_click_fullscreen' => true,  // browser: a double click on the game goes fullscreen (false: games clicked fast)
         'smoke' => [],           // {scene: ..., params: {...}}: what `jumphp test` runs headless
         'online' => false,       // shown by the future games portal (game.json)
         'runtime' => 'default',  // 'async': PHP 8.6 ZTS + TrueAsync on the desktop (real threads, JumPHP\Async)
