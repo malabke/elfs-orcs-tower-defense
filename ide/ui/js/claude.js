@@ -399,6 +399,11 @@ class Conversation {
     this.run = null;                   // the turn in progress: {id, started, tools}
     this.live = null;                  // the open conversation's process (its id), between turns too
     this.log = el('div.claude-log');
+    // the conversation stays at its end: when the window is shown again (it was hidden, its size 0), re-laid out, rebuilt (reopening the IDE,
+    // a permission asked) it went back to the top; a reader who scrolled up is left where they are
+    this.stick = true;
+    this.log.addEventListener('scroll', () => { if (this.log.clientHeight > 0) this.stick = this.log.scrollHeight - this.log.scrollTop - this.log.clientHeight < 80; });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { if (this.stick && this.log.clientHeight > 0) this.log.scrollTop = this.log.scrollHeight; }).observe(this.log);
     this.plan = el('div.claude-plan', { hidden: true });
     this.input = el('textarea.input.claude-input', { rows: 3, placeholder: 'Ask Claude… (Enter to send, Shift+Enter: new line, @path: a file)',
       onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); } } });
@@ -420,10 +425,13 @@ class Conversation {
   }
 
   rerender() {
+    const top = this.log.scrollTop;
+    const stick = this.stick;
     clear(this.log);
     for (const item of this.items) this.renderItem(item);
     if (!this.items.length) this.placeholder();
     if (this.run && this.thinking) this.log.append(this.thinking);
+    this.log.scrollTop = stick ? this.log.scrollHeight : top;
   }
 
   placeholder() {
@@ -684,7 +692,11 @@ class Conversation {
       icon(what[0]), el('b', {}, what[1]), el('span', {}, String(what[2] || '').slice(0, 300)));
   }
 
-  scroll() { this.log.scrollTop = this.log.scrollHeight; }
+  scroll() {
+    this.stick = true;
+    this.log.scrollTop = this.log.scrollHeight;
+    requestAnimationFrame(() => { if (this.stick) this.log.scrollTop = this.log.scrollHeight; });
+  }
 }
 
 function toText(content) {

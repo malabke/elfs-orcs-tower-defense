@@ -136,6 +136,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   shows the older version is explained once (installed X, runs Y from <path>) instead of looping "update / Restart now". Permission requests
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
+- done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
 - done (2026-11-05, IDE 0.1.45): .md files open rendered (View / Edit / Edit + View, a small safe renderer: headings, lists, tables, code, quotes, links;
   no images yet); the welcome screen's trash deletes a project's folder (red warning, type the name) and, with an unchecked box, its jumphp.net project
   and GitHub repository (jumphp.net `DELETE /api/ide/projects/<slug>`; GitHub refuses without the delete_repo scope the sign-in does not ask for: the
