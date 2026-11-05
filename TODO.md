@@ -128,6 +128,10 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
+- to check (Clément, Windows, 2026-11-05): the project's GitHub repository still held the initial skeleton: nothing was ever committed / pushed
+  (the IDE's Git panel and the publish flow changed a lot lately: check commit + push from the IDE on a new project, and that the user is
+  told when a project has uncommitted work); asked to commit, Claude refused to until phpstan and the tests had finished: a commit must not
+  wait for them (say so in the Claude window's instructions, or offer a "Commit and push" button that does it without Claude)
 - to check (a colleague of David, Windows, 2026-11-05), projects moved / cloned by the IDE: (1) after moving a project folder, the IDE asks to
   sign in to jumphp.net again and wants to clone the project again unless the folder is reopened by hand (atypical case, but remember
   the folder's new place); (2) on a second PC, resuming a project clones it without asking where: let the user choose the folder;
