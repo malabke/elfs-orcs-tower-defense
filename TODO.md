@@ -129,9 +129,13 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 ## JumPHP IDE: the next features
 
 - done (2026-11-05, not released): "Commit All and Push…" (header button, Ctrl+Alt+K, Git menu): every change, one message, pushed, no tool window.
-- to check (Clément, Windows, 2026-11-05): the push failed because two GitHub accounts are signed in on his PC (a work account, "respawnsive", and
-  his own): git used the wrong one. The IDE should push as the account that owns the project's repository (the one signed in on jumphp.net: the
-  remote URL with that user, or its token) and say which account it uses when a push is refused (403 / not found).
+- to check (Clément, Windows, 2026-11-05): the push failed because two GitHub accounts are signed in on his PC: Windows' credential manager
+  remembered the other one, the repository belongs to the account of jumphp.net. What Claude did (a good fix, to automate): put the owner in
+  the remote URL (`https://<owner>@github.com/<owner>/<repo>.git`) so git asks for that account at the next push, which opens the browser
+  sign-in; alternatives it gave: add the other account as a collaborator, or `gh auth login`. The IDE should do it itself: push as the account
+  that owns the repository (the one signed in on jumphp.net), and when a push is refused (403 / not found) say which account git used and offer
+  to fix the remote. Also: GitHub's `main` had not moved after his `! git push` (14 local commits not on GitHub): show "N commits not pushed"
+  in the IDE so that nobody believes a refused push went through.
 - to check (Clément, Windows, 2026-11-05): the project's GitHub repository still held the initial skeleton: nothing was ever committed / pushed
   (the IDE's Git panel and the publish flow changed a lot lately: check commit + push from the IDE on a new project, and that the user is
   told when a project has uncommitted work); asked to commit, Claude refused to until phpstan and the tests had finished: a commit must not
