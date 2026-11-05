@@ -518,7 +518,8 @@ final class Main implements AppMain
                 if ($kind === null || $module === null) {
                     return ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => null, 'message' => null];
                 }
-                return self::deferred($this->playground->import(['repository' => (string)$repo['full_name'], 'slug' => (string)$module['id'], 'kind' => $kind]))
+                $login = preg_replace('/[^a-z0-9]+/', '-', strtolower((string)($this->user()['login'] ?? 'me'))) ?: 'me';
+                return $this->importAs((string)$repo['full_name'], [(string)$module['id'], $module['id'] . '-' . $login, $module['id'] . '-2'], $kind)
                     ->then(function (array $project) use ($root, $repo) {
                         $this->saveProjectSettings($root, ['slug' => (string)$project['slug']]);
                         return ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => $project['slug'], 'message' => null];
@@ -553,6 +554,14 @@ final class Main implements AppMain
             return ['deleted' => !file_exists($real), 'repository' => (bool)($r['repository'] ?? false), 'repositoryUrl' => $r['repositoryUrl'] ?? null, 'message' => $r['message'] ?? null]
                 + ($r['project'] ?? false ? ['jumphp' => true] : []);
         });
+    }
+
+    /** jumphp.net's slug is taken (names are shared by everyone): the next candidate, a few times. Resolves with the project. */
+    private function importAs(string $repository, array $slugs, string $kind): Deferred
+    {
+        $slug = array_shift($slugs);
+        return self::deferred($this->playground->import(['repository' => $repository, 'slug' => $slug, 'kind' => $kind]))
+            ->then(null, fn (\Throwable $e) => $slugs === [] ? throw $e : $this->importAs($repository, $slugs, $kind));
     }
 
     /** @return list<array{path: string, name: string, opened: int, slug: ?string}> */

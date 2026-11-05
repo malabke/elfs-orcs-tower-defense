@@ -140,6 +140,7 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no images yet); the welcome screen's trash deletes a project's folder (red warning, type the name) and, with an unchecked box, its jumphp.net project
   and GitHub repository (jumphp.net `DELETE /api/ide/projects/<slug>`; GitHub refuses without the delete_repo scope the sign-in does not ask for: the
   repository's settings page is then offered; asking for that scope, with a second confirmation, is still to do). Not tried in the GUI.
+- done (2026-11-05, not released): a slug already taken on jumphp.net at import: the IDE retries with `<id>-<login>`, then `<id>-2` (the publisher finds the game folder itself).
 - idea (2026-11-05): several GitHub accounts signed in the IDE, one assigned to each project (a token or a credential helper of the IDE,
   no Windows credential manager), the account shown; an integrated Git client with its own authentication. (Pinning is done, see above.)
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
