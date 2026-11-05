@@ -208,5 +208,5 @@ public function render(Renderer $r): void
 
 `jumphp/tiles` (`extensions/tiles`, example `games/tiles-demo`): procedural levels on a `Grid` (0 floor, 1 wall). `Caves::generate()` (cellular
 automaton, one open area), `Rooms` (non-overlapping rooms joined by corridors), `AutoTile` (picture of a wall from its neighbours, 16-tile mask),
-`Path::find()` (A*), `Maps::toMap()` (a `TileMap` for TileMapRenderer / CollisionSystem), `Rng` (seeded, float arithmetic: identical in the
+`Path::find()` (A*), `Maps::toMap()` / `toGrid()` (a `TileMap` for TileMapRenderer / CollisionSystem, and back), `Level` (start, exit, items; `toTiledJson()` = a .tmj for the IDE's level editor), `Rng` (seeded, float arithmetic: identical in the
 browser's 32-bit PHP). Its doc and the `TilesSample` come with `extension:add`.

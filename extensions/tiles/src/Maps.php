@@ -32,4 +32,17 @@ final class Maps
         }
         return $map;
     }
+
+    /** The other way: a TileMap (made in the level editor, or Tiled) as a Grid, 1 for every tile of its collision layer (or of $layer), 0 for the rest: Path::find() works on it. */
+    public static function toGrid(TileMap $map, ?string $layer = null): Grid
+    {
+        $layer ??= $map->getCollisionLayer() ?? array_key_first($map->layers);
+        $g = new Grid($map->width, $map->height, 0);
+        for ($y = 0; $y < $map->height; $y++) {
+            for ($x = 0; $x < $map->width; $x++) {
+                $g->set($x, $y, $map->getTile((string)$layer, $x, $y) !== 0 ? 1 : 0);
+            }
+        }
+        return $g;
+    }
 }

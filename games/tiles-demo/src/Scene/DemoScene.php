@@ -4,21 +4,22 @@ namespace App\Scene;
 
 use JumPHP\Renderer\Renderer;
 use JumPHP\Scene\AbstractScene;
-use JumPHP\Tiles\Caves;
 use JumPHP\Tiles\Grid;
+use JumPHP\Tiles\Level;
 use JumPHP\Tiles\Path;
-use JumPHP\Tiles\Rooms;
 
 /**
  * Sample of jumphp/tiles: a cave or a dungeon made from a seed (Space: another seed, Tab: cave / dungeon) and the shortest way between its two ends.
  */
 final class DemoScene extends AbstractScene
 {
-    public const LABEL = 'A cave or a dungeon from a seed, with the shortest path between its ends';
+    public const LABEL = 'A level from a seed: start, exit, items and the shortest path';
 
     private const CELL = 5;
 
     public Grid $grid;
+
+    public ?Level $level = null;
 
     /** @var list<array{0: int, 1: int}> */
     public array $path = [];
@@ -55,7 +56,14 @@ final class DemoScene extends AbstractScene
             }
         }
         foreach ($this->path as [$x, $y]) {
+            $r->fillRect($x * self::CELL + 1, $y * self::CELL + 1, self::CELL - 2, self::CELL - 2, '#7a6a20');
+        }
+        foreach ($this->level->items ?? [] as [$x, $y]) {
             $r->fillRect($x * self::CELL + 1, $y * self::CELL + 1, self::CELL - 2, self::CELL - 2, '#ffd040');
+        }
+        if ($this->level) {
+            $r->fillRect($this->level->start[0] * self::CELL, $this->level->start[1] * self::CELL, self::CELL, self::CELL, '#40d060');
+            $r->fillRect($this->level->exit[0] * self::CELL, $this->level->exit[1] * self::CELL, self::CELL, self::CELL, '#ff5050');
         }
         $this->font()->draw($r, ($this->dungeon ? 'DUNGEON' : 'CAVE') . ' SEED ' . $this->seed . '  PATH ' . count($this->path), 4, $this->height() - 10, 1, '#ffffff');
     }
@@ -64,15 +72,10 @@ final class DemoScene extends AbstractScene
     {
         $w = intdiv($this->width(), self::CELL);
         $h = intdiv($this->height() - 14, self::CELL);
-        $this->grid = $this->dungeon ? (new Rooms($w, $h, $this->seed))->grid : Caves::generate($w, $h, $this->seed);
-        $open = [];
-        for ($y = 0; $y < $h; $y++) {
-            for ($x = 0; $x < $w; $x++) {
-                if ($this->grid->get($x, $y) === 0) {
-                    $open[] = [$x, $y];
-                }
-            }
-        }
-        $this->path = $open ? (Path::find($this->grid, $open[0][0], $open[0][1], $open[count($open) - 1][0], $open[count($open) - 1][1]) ?? []) : [];
+        $this->level = $this->dungeon ? Level::dungeon($w, $h, $this->seed) : Level::cave($w, $h, $this->seed);
+        $this->grid = $this->level->grid;
+        [$sx, $sy] = $this->level->start;
+        [$ex, $ey] = $this->level->exit;
+        $this->path = Path::find($this->grid, $sx, $sy, $ex, $ey) ?? [];
     }
 }

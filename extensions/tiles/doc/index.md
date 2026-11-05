@@ -24,8 +24,19 @@ $map = Maps::toMap($grid, 16);                       // a TileMap: draw it with 
 | `Rooms` | rooms that do not overlap, joined by corridors |
 | `AutoTile` | `mask()` / `apply()`: the picture of a wall from its neighbours (up 1, right 2, down 4, left 8) |
 | `Path` | `find($grid, $sx, $sy, $gx, $gy, diagonal: false)`: A*, a list of `[x, y]` or null |
-| `Maps` | `toMap($grid, $tileSize, $tileset, $autotile)` |
+| `Maps` | `toMap($grid, $tileSize, $tileset, $autotile)`, and `toGrid($map)` the other way (a level made by hand, to find paths on it) |
+| `Level` | `cave()` / `dungeon()` / `fromGrid()`: the grid + `start`, `exit` (the farthest floor by path), `items`; `toMap()` (objects `start` / `exit` / `item`), `toTiledJson()` |
+| `TiledExport` | `toJson(['collision' => $grid], $tileSize, $tileset, $objects)`: a Tiled map (.tmj) |
+
+## Generate, then finish by hand
+
+```php
+$level = Level::dungeon(60, 34, seed: 7, items: 8);
+$map = $level->toMap(16);                                  // play it: $map->object('start'), $map->objectsOfType('item')
+file_put_contents('assets/maps/level1.tmj', $level->toTiledJson(16));   // or edit it: open the .tmj in the IDE's level editor
+$grid = Maps::toGrid(TiledJsonLoader::load('assets/maps/level1.tmj'));  // and read the edited level back for Path::find()
+```
 
 ## Samples
 
-- **TilesSample**: a cave or a dungeon from a seed (Space: another seed, Tab: cave / dungeon) and the shortest path across it.
+- **TilesSample**: a cave or a dungeon from a seed (Space: another seed, Tab: cave / dungeon): start (green), exit (red), items (yellow) and the shortest path.

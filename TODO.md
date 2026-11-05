@@ -35,7 +35,7 @@ docs/video-maker.md, AGENTS.md §20.
 
 Left:
 - the other extensions: a 3D engine (meshes, cameras, lights on
-  OpenGL / WebGL), the level editor of the tiles extension (the extension itself is done: caves, rooms, auto-tiling, A*); a particle editor with a live preview.
+  OpenGL / WebGL), the tiles extension's level editor is the IDE's existing Tiled editor: `Level::toTiledJson()` writes a generated level as a .tmj to finish by hand (done 2026-11-05); a particle editor with a live preview.
   Done (2026-11-05): the dialogue / quest extension, `jumphp/dialogue` (JSON dialogues with conditions, variables, a quest log, a typewriter
   text box); the collision extension, `jumphp/collision` (circles, boxes, convex polygons, SAT with the minimum translation, rays, spatial
   hash, a CollisionWorld service); and the SDL effects extension, `jumphp/effects` (transitions, flash, vignette, easing; docs and samples), made with

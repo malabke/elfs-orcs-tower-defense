@@ -4,7 +4,9 @@ namespace Tests;
 
 use JumPHP\Tiles\AutoTile;
 use JumPHP\Tiles\Caves;
+use JumPHP\Tile\TiledJsonLoader;
 use JumPHP\Tiles\Grid;
+use JumPHP\Tiles\Level;
 use JumPHP\Tiles\Maps;
 use JumPHP\Tiles\Path;
 use JumPHP\Tiles\Rng;
@@ -88,6 +90,47 @@ final class TilesTest extends TestCase
         self::assertSame(48, $map->pixelWidth());
         self::assertNotSame(0, $map->getTile($map->getCollisionLayer(), 0, 0));
         self::assertSame(0, $map->getTile($map->getCollisionLayer(), 1, 1));
+    }
+
+    public function testALevelHasAStartAnExitFarAwayAndItemsOnTheFloor(): void
+    {
+        foreach ([Level::cave(40, 24, 3, 5), Level::dungeon(50, 30, 3, 5)] as $level) {
+            self::assertSame(0, $level->grid->get($level->start[0], $level->start[1]));
+            self::assertSame(0, $level->grid->get($level->exit[0], $level->exit[1]));
+            self::assertNotNull(Path::find($level->grid, $level->start[0], $level->start[1], $level->exit[0], $level->exit[1]), 'the exit can be reached');
+            self::assertGreaterThan(10, count(Path::find($level->grid, ...$level->start, ...$level->exit)), 'and it is far');
+            self::assertCount(5, $level->items);
+            foreach ($level->items as [$x, $y]) {
+                self::assertSame(0, $level->grid->get($x, $y));
+                self::assertNotSame($level->start, [$x, $y]);
+            }
+        }
+        self::assertSame(Level::cave(40, 24, 3)->exit, Level::cave(40, 24, 3)->exit, 'a seed gives the same level');
+    }
+
+    public function testTheLevelBecomesAMapWithItsObjects(): void
+    {
+        $level = Level::cave(40, 24, 9, 4);
+        $map = $level->toMap(16);
+        self::assertSame($level->start[0] * 16.0, $map->object('start')['x']);
+        self::assertCount(4, $map->objectsOfType('item'));
+        self::assertSame($level->grid->toRows(), Maps::toGrid($map)->toRows(), 'and back to the grid');
+    }
+
+    public function testTheLevelIsWrittenAsATiledMapThatTheLoaderReadsBack(): void
+    {
+        $level = Level::dungeon(40, 24, 5, 3);
+        $file = sys_get_temp_dir() . '/jumphp-level-' . bin2hex(random_bytes(4)) . '.tmj';
+        file_put_contents($file, $level->toTiledJson(16));
+        try {
+            $map = TiledJsonLoader::load($file);
+            self::assertSame([40, 24], [$map->width, $map->height]);
+            self::assertSame($level->grid->toRows(), Maps::toGrid($map)->toRows());
+            self::assertSame($level->exit[1] * 16.0, $map->object('exit')['y']);
+            self::assertCount(3, $map->objectsOfType('item'));
+        } finally {
+            @unlink($file);
+        }
     }
 
     /** @return array{0: int, 1: int} */
