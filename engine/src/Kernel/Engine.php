@@ -109,6 +109,13 @@ class Engine extends EventEmitter
         $this->sdl->initSDL(($fullscreen && Platform::isDesktop()) || Platform::isPhoneApp(), $c->title(), $c->width(), $c->height(),
             (bool)$c->get('vsync'), (int)$c->get('scale'));
         $this->sdl->getRenderer()->setIntegerScale((bool)$c->get('integer_scale', false));
+        // hd: 1 = retro pixels (default), 'auto' / 0 = the 2D drawn at the window's resolution, 2..4 = fixed
+        $hd = $c->get('hd', 1);
+        $this->sdl->getRenderer()->setHd(match (true) {
+            $hd === 'auto' || $hd === true => 0,
+            $hd === false || $hd === null => 1,
+            default => (int)$hd,
+        });
 
         if ($this->sound->init()) {
             $this->sound->setSfxVolume((float)$this->options->get('sfx_volume', 0.8));

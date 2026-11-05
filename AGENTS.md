@@ -256,6 +256,7 @@ Replace its scenes and entities with your game:
    | `width`, `height` | 320, 180 | virtual resolution (classic: 320×180, 256×224, 256×192, 320×240) |
    | `scale` | 3 | desktop window = width × scale |
    | `integer_scale` | false | scale by whole factors only (sharper, bigger black borders) |
+   | `hd` | 1 | `auto` (or 2..4): the 2D is drawn at the window's resolution, its coordinates unchanged: sharp TTF text (rendered at the real size), round circles, positions at fractions of a pixel; 1 = retro pixels |
    | `fullscreen`, `vsync`, `max_fps` | false, true, 120 | desktop window |
    | `background` | [0,0,0] | letterbox colour |
    | `start_scene`, `start_params` | | first scene class and its `enter()` params |
@@ -514,7 +515,9 @@ Text: `$this->font()` is the built-in **BitmapFont** (5×7 pixels, upper case, n
 `draw($r, $text, $x, $y, $scale = 1, $color = white, $align = 'left'|'center'|'right', $shadowColor = null)`,
 `width($text, $scale)`, `height($scale)`, `lineHeight($scale)`. `\n` makes new lines.
 A TTF font: `$font = new TtfFont($this->sdl(), 'assets/fonts/x.ttf', 8)` (same interface `TextDrawer`);
-`$this->engine->setFont($font)` makes it the default one.
+`$this->engine->setFont($font)` makes it the default one. `new TtfFont($sdl, $file, $size, smooth: true, style: TtfFont::BOLD,
+thicken: 0.3, outline: 0.5)`: anti-aliased, bold, its strokes thickened (view pixels: a thin variable font's default
+instance made bolder), and draw()'s shadow colour drawn as an outline around the letters. Smooth text wants `hd: auto`.
 
 Helpers: `Hud::panel($r, $x, $y, $w, $h)`, `Hud::bar($r, $x, $y, $w, $h, $ratio)`,
 `Hud::message($r, $font, "TEXT", $cx, $cy)`, `Hud::blink($time)`, `CrtFilter::apply($r)` (scanlines).
@@ -721,7 +724,10 @@ the browser (the same `gl*` calls compiled by emscripten). Write **GLSL ES 1.00*
 
 - High level, `$this->engine->gl()` (`WebGl`): a 3D layer under / over the 2D and post-processing of the whole
   picture. `setLayer('below'|'above', 'view'|'native', $keyColour)` (`setSupersample(2)`: the layer drawn at 2x, smoothed: anti-aliased) (below: the 3D shows where the 2D is the key
-  colour, e.g. clear with `[255, 0, 255]` and draw the HUD), resources once in `enter()`: `program($vsGlsl, $fsGlsl)`,
+  colour, e.g. clear with `[255, 0, 255]` and draw the HUD; there only opaque or black-translucent 2D reads well over the
+  3D). `setLayer('below', 'view', null)`: composed by the 2D's alpha instead: clear the 2D with `$r->clear([0, 0, 0, 0], true)` (`clear()` is opaque unless asked), then smooth
+  text and translucent panels of any colour lie over the 3D as they are (with `hd: auto` the view is the window's
+  resolution), resources once in `enter()`: `program($vsGlsl, $fsGlsl)`,
   `buffer($floats)`, `updateBuffer()`, `indexBuffer($ints)`, `texture('assets/x.png')`, `textureFromRgba($w, $h, $bytes)`;
   each frame in `render()`: `clear($colour)`, `draw($program, ['attributes' => ['a_pos' => [$buffer, 3, $stride,
   $offset]], 'uniforms' => ['u_mvp' => Mat4::...], 'textures' => ['u_tex' => $id], 'cull' => 'back'])`.
