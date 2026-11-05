@@ -5,6 +5,7 @@ namespace App;
 use JumPHP\Ide\Async\Deferred;
 use JumPHP\Ide\Async\Environment;
 use JumPHP\Ide\Async\Processes;
+use JumPHP\Ide\Log\LogBuffer;
 use JumPHP\Ide\Ide;
 use JumPHP\Ide\Workspace\LocalWorkspace;
 use JumPHP\Async\Task;
@@ -30,6 +31,8 @@ final class Main implements AppMain
     private ?Loopback $loopback = null;
     /** jumphp.net's "Install in my IDE" buttons come in here (LocalLink) */
     private ?LocalLink $link = null;
+    /** the logs of the IDE, across projects (Logs window) */
+    private LogBuffer $log;
 
     /** @var array{token?: string, user?: array<string, mixed>, server?: string} */
     private array $session = [];
@@ -53,9 +56,21 @@ final class Main implements AppMain
         $server = (string)(getenv('JUMPHP_IDE_SERVER') ?: ($this->session['server'] ?? Playground::DEFAULT_SERVER));
         $this->playground = new Playground($app->http(), $server, $this->session['token'] ?? null);
         $this->bridge = new ClaudeBridge($this, $this->playground, $this->processes);
+        // the detailed logs (Logs window, <storage>/logs/ide.log for bug reports): what the IDE does, the programs it runs, what fails
+        $this->log = new LogBuffer($app->storage->path('logs') . '/ide.log');
+        $this->log->onEntry(function (array $entry) use ($app): void {
+            $app->send('log.entry', $entry);
+        });
+        $this->processes->logger = function (string $level, string $source, string $message): void {
+            $this->log->add($level, $source, $message);
+        };
+        $this->log->add('info', 'ide', 'JumPHP IDE ' . $app->config->get('version') . ' started (PHP ' . PHP_VERSION . ', ' . PHP_OS_FAMILY . ')');
         // a crash is saved for JumPHP's developers and sent at the next start (CrashReports)
         $crashes = new CrashReports($app->storage, (string)$app->config->get('version'));
-        $app->on('crash', fn (\Throwable $e) => $crashes->save($e));
+        $app->on('crash', function (\Throwable $e) use ($crashes): void {
+            $this->log->add('error', 'ide', 'crash: ' . $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')');
+            $crashes->save($e);
+        });
         if (getenv('JUMPHP_IDE_CRASH_REPORTS') !== '0') {
             $crashes->send($this->playground);
         }
@@ -409,6 +424,7 @@ final class Main implements AppMain
             $this->app->send($event, $payload);
         }, $this->processes);
         // games kept in their own repository (a jumphp.net project made of the game alone) run through this copy
+        $this->ide->log = $this->log;
         $this->ide->setToolkit($this->app->storage->path('jumphp'), Creator::TEMPLATE);
         // the plugins (PHP): the user's (Settings > Plugins installs them there) and the project's .jumphp/plugins/
         $this->ide->enablePlugins($this->app->storage->path('plugins'));

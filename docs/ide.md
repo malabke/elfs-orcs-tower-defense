@@ -172,6 +172,14 @@ A project's IDE settings: `.jumphp/ide.json` (its jumphp.net project, a CPC disc
 See the playground's README ("Le JumPHP IDE"): `bin/ide-install --from ../JumPHP` copies `ide/src` and `ide/ui` into it;
 routes `/ide`, `/ide/<slug>`, `/ide/connect`, `/studio/ide`, `/api/ide/*` (Bearer `jpi_…`) and `/api/ide/<slug>/invoke`.
 
+## Logs
+
+**View > Logs** (`Alt+F11`, also Help > Show Logs): the IDE's detailed logs as they happen, like `tail -f` but visual. What the IDE does and
+fails at, and every program it runs (`bin/jumphp`, Docker, git, Claude, OpenCode…: the command, how it ended, and the end of its
+error output when it failed), with a level (debug / info / warn / error), a source, a text search, **Pause** / follow, Copy and Clear. An
+error that arrives while the window is closed puts a red mark on its button. The same lines go to `<IDE data folder>/logs/ide.log`
+(turned into `ide.log.1` at 2 MB: two files at most): the folder button copies its path, send it with a bug report.
+
 ## AI: online, local, and for the code
 
 **Generate… in the resource editors** (sprites, sound effects, tunes, levels, tilesets) asks one of:

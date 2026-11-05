@@ -127,9 +127,9 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
   on the line (the two items below); its scratch app is apps/zz-tui (delete it when done)
-- detailed logs, readable inside the IDE: a Logs view (e.g. under Help) following them live like `tail -f -s 0`, but
-  visual: every source (the IDE itself, bin/jumphp runs, Docker, Claude, plugins, the game / app run), levels, filter,
-  search, pause / follow, copy, open the file; the same logs kept on disk for bug reports
+- done (2026-11-05, not released): the Logs window (View > Logs, Alt+F11): the IDE's own events, the programs it runs (bin/jumphp, Docker, git,
+  Claude, OpenCode), filters (level, source, text), Pause / follow, Copy, a rotating file ide.log for bug reports (docs/ide.md "Logs").
+  Left: the game / app run's own output as a source, the plugins' errors with their plugin name, an "open the folder" button
 - "What's new": a section in the IDE linked to the site (and a page on jumphp.net), filled at each new feature (a
   changelog entry written with the feature: title, short text, picture or GIF, the version), shown once after an
   update, then reachable from Help; the site's page in the 14 languages. Make it part of the definition of done

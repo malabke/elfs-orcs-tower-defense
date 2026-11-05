@@ -646,3 +646,19 @@ body:has(.splitter.drag) iframe { pointer-events: none; }
 .ext-docs ul, .ext-docs ol { margin: 6px 0 6px 22px; }
 .ext-docs .md-table { border-collapse: collapse; margin: 8px 0; }
 .ext-docs .md-table th, .ext-docs .md-table td { border: 1px solid var(--border, #3a3d4d); padding: 2px 8px; text-align: left; vertical-align: top; }
+
+/* the Logs tool window (logs.js) */
+.logs-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.logs-bar { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--border, #3a3d4d); }
+.logs-bar .input { max-width: 220px; }
+.logs-status { margin-left: auto; opacity: .7; font-size: 12px; }
+.logs-list { flex: 1; overflow: auto; font: 12px/1.45 var(--mono, monospace); padding: 2px 0; outline: none; }
+.log-row { display: flex; gap: 8px; padding: 0 8px; white-space: pre-wrap; word-break: break-word; }
+.log-row:hover { background: #ffffff0d; }
+.log-time { opacity: .5; flex: none; }
+.log-source { flex: none; min-width: 64px; color: var(--accent, #6aa9ff); }
+.log-msg { flex: 1; min-width: 0; }
+.log-row.debug { opacity: .6; }
+.log-row.warn .log-msg { color: var(--yellow, #e5c07b); }
+.log-row.error .log-msg { color: var(--red, #ff6b6b); }
+.tw-actions button.on { background: #ffffff22; }

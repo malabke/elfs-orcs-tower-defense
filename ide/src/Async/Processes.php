@@ -32,6 +32,32 @@ final class Processes
      * @param bool $keepInput leave its stdin open after $input: write() sends more, closeInput() ends it
      * @return array{id: int, done: Deferred} done: {code, stdout, stderr, output}
      */
+    /**
+     * Told what happens to the programs (the Logs window): ($level, $source, $message). The source is what a user calls them: jumphp (bin/jumphp),
+     * docker, git, claude, opencode, else the program's name.
+     *
+     * @var \Closure(string, string, string): void|null
+     */
+    public ?\Closure $logger = null;
+
+    /** @param list<string> $command */
+    public static function sourceOf(array $command): string
+    {
+        $program = basename((string)($command[0] ?? ''));
+        if (in_array($program, ['bash', 'sh', 'env', 'php'], true) && isset($command[1])) {
+            $second = basename((string)$command[1]);
+            if ($second === 'jumphp') {
+                return 'jumphp';
+            }
+        }
+        return $program === 'jumphp' ? 'jumphp' : (preg_replace('/\.(exe|cmd|bat)$/i', '', $program) ?: 'process');
+    }
+
+    private function log(string $level, array $command, string $message): void
+    {
+        $this->logger?->__invoke($level, self::sourceOf($command), $message);
+    }
+
     public function start(array $command, string $cwd, array $env = [], ?callable $onOutput = null, ?string $input = null, bool $keepInput = false): array
     {
         $id = $this->next++;
@@ -54,7 +80,9 @@ final class Processes
         $process = @proc_open($command, $spec, $pipes, $cwd, $fullEnv);
         if (!is_resource($process)) {
             array_map('unlink', array_filter($temp, 'is_file'));
-            $done->reject(new \RuntimeException("cannot start $program" . (str_contains($program, '/') ? '' : ' (not found in the PATH: ' . Environment::path() . ')')));
+            $why = "cannot start $program" . (str_contains($program, '/') ? '' : ' (not found in the PATH: ' . Environment::path() . ')');
+            $this->log('error', $command, $why);
+            $done->reject(new \RuntimeException($why));
             return ['id' => $id, 'done' => $done];
         }
         if ($input !== null) {
@@ -70,6 +98,8 @@ final class Processes
             stream_set_blocking($pipes[2], false);
             $readers = [1 => $pipes[1], 2 => $pipes[2]];
         }
+        $this->log('info', $command, '$ ' . implode(' ', array_map(fn ($a) => preg_match('/^[\w@%+=:,.\/-]+$/', (string)$a) ? (string)$a : escapeshellarg((string)$a), array_slice($command, 0, 14)))
+            . (count($command) > 14 ? ' …' : '') . "   (in $cwd)");
         $this->running[$id] = ['process' => $process, 'pipes' => $readers, 'temp' => $temp, 'read' => [1 => 0, 2 => 0],
             'stdin' => $keepInput ? $pipes[0] : null, 'stdout' => '', 'stderr' => '',
             'output' => '', 'done' => $done, 'onOutput' => $onOutput, 'command' => $command, 'started' => microtime(true)];
@@ -98,7 +128,14 @@ final class Processes
                 $result = ['code' => $code, 'stdout' => $p['stdout'], 'stderr' => $p['stderr'], 'output' => $p['output'],
                     'seconds' => round(microtime(true) - $p['started'], 2)];
                 $done = $p['done'];
+                $command = $p['command'];
                 unset($this->running[$id]);
+                if ($code === 0 || $code === -1) {
+                    $this->log('info', $command, "ended, {$result['seconds']} s");
+                } else {
+                    $tail = trim(mb_substr(trim((string)$result['stderr']) !== '' ? (string)$result['stderr'] : (string)$result['stdout'], -1200));
+                    $this->log('error', $command, "ended with code $code after {$result['seconds']} s" . ($tail !== '' ? ":\n$tail" : ''));
+                }
                 $done->resolve($result);
             }
         }

@@ -58,6 +58,8 @@ final class Ide
 
     /** the Claude Code of this computer (desktop only) */
     public ?ClaudeCode $claude = null;
+    /** The detailed logs (the Logs window): set by the desktop app, which owns them across projects */
+    public ?\JumPHP\Ide\Log\LogBuffer $log = null;
 
     /** the IDE's tools for that Claude (an MCP server; the interface carries them out) */
     public ?IdeAgent $agent = null;
@@ -133,7 +135,13 @@ final class Ide
             $this->agent = new IdeAgent(fn (string $event, array $payload) => ($this->emit)($event, $payload));
             $this->register('agent.reply', fn (array $p) => $this->agent->reply((int)($p['call'] ?? 0), $p['result'] ?? null,
                 isset($p['error']) && $p['error'] !== '' ? (string)$p['error'] : null));
-            $this->claude = new ClaudeCode($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload), $this->agent);
+            $this->claude = new ClaudeCode($this->processes, $root, function (string $event, array $payload): void {
+                // what ends badly is in the logs too (the conversation itself is in the Claude window)
+                if ($event === 'claude.exit' && !empty($payload['error'])) {
+                    $this->log?->add('error', 'claude', (string)$payload['error']);
+                }
+                ($this->emit)($event, $payload);
+            }, $this->agent);
             $this->register('claude.status', fn () => $this->claude->status());
             $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
                 (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
@@ -288,6 +296,7 @@ final class Ide
                 $onError && $onError();
             } catch (\Throwable) {
             }
+            $this->log?->add('error', 'ide', "$where: {$e->getMessage()} (" . basename($e->getFile()) . ':' . $e->getLine() . ')');
             ($this->emit)('ide.error', ['where' => $where, 'message' => $e->getMessage(), 'at' => basename($e->getFile()) . ':' . $e->getLine()]);
         }
     }
@@ -414,6 +423,14 @@ final class Ide
 
     private function registerCore(): void
     {
+        // the Logs window: the entries (history, then the new ones come as events), the sources seen, and where the file is
+        $this->register('log.list', fn (array $p) => $this->log === null ? ['entries' => [], 'sources' => [], 'file' => null] : [
+            'entries' => $this->log->list((int)($p['after'] ?? 0), (string)($p['level'] ?? 'debug'), (string)($p['source'] ?? ''), (string)($p['q'] ?? ''), (int)($p['limit'] ?? 500)),
+            'sources' => $this->log->sources(), 'file' => $this->log->file()]);
+        $this->register('log.clear', function (): bool {
+            $this->log?->clear();
+            return true;
+        });
         // the extensions added to the project's games, their documentation and samples (extensions/<name>/extension.json)
         $this->register('extensions.installed', fn () => (new \JumPHP\Ide\Extension\InstalledExtensions($this->workspace))->all());
         $this->register('extension.docs', fn (array $p) => (new \JumPHP\Ide\Extension\InstalledExtensions($this->workspace))->docs((string)($p['package'] ?? ''), isset($p['game']) ? (string)$p['game'] : null)
@@ -428,6 +445,7 @@ final class Ide
                 'run' => $this->runner !== null, 'preview' => false, 'tests' => false,
                 'local' => $this->workspace->localPath() !== null,
                 'claude' => $this->claude !== null,
+                'logs' => $this->log !== null,
                 // Xdebug through bin/jumphp (JUMPHP_XDEBUG): a JumPHP project run on this computer
                 'debug' => $this->debugger !== null && $this->docker !== null,
                 'plugins' => $this->plugins !== null,
