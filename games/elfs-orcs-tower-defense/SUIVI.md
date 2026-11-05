@@ -25,6 +25,11 @@ Dernière mise à jour : 2026-11-05.
   listed=true` seulement sur demande). Poussé le 2026-11-04 (« pousse tout ») : l'URL du dépôt contient le compte
   `malabke` (`https://malabke@github.com/...`) pour que Git Credential Manager prenne ce compte et pas `clement-cdy`.
   Pour un état de travail sans publier : une autre branche. Sur un autre PC : `git pull`.
+- **Tests sur le playground** (`run_tests` du MCP, run n° 10 du 2026-11-05) : coupés à 63 tests sur 175 par sa limite
+  de 120 s, aucun échec avant la coupure. Le bac à sable filme chaque test de jeu (une image sur 4, `JUMPHP_FILM`) :
+  les longues parties (démos des peuples, équilibrage) n'y tiennent pas. La suite complète ne passe qu'en local
+  (`bin/jumphp test`, 13 min). Idée proposée, pas encore demandée : y sauter les tests longs quand `JUMPHP_FILM` est
+  défini. Les jours précédents, l'outil ne répondait pas du tout (délai dépassé).
 - **Le playground n'utilise pas le moteur de ce dépôt** mais son moteur partagé (la version officielle de `VERSION`,
   0.4.0) : les ajouts faits au moteur ici (2D en HD, composition par transparence, options de TtfFont) n'y sont pas.
   Le jeu le détecte (`src/Ui/Hd.php`) et y garde l'ancienne manière : police pixel, 3D par couleur clé (vérifié avec
