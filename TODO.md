@@ -128,6 +128,8 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
+- bug (David, 2026-11-05): when Claude (in the IDE's Claude window) asks for a permission, a click elsewhere (e.g. to give the focus back to the
+  window) closes the request and it cannot be opened again: the request must stay until answered (or be reopenable)
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
   on the line (the two items below); its scratch app is apps/zz-tui (delete it when done)
 - done (2026-11-05, not released): the Logs window (View > Logs, Alt+F11): the IDE's own events, the programs it runs (bin/jumphp, Docker, git,
