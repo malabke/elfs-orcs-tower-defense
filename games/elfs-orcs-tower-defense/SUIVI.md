@@ -140,9 +140,11 @@ Dernière mise à jour : 2026-11-05.
    (tests + smoke) ; moteur sur `contrib/touch-pad-none` : 137 tests + phpstan OK ; le jeu avec `clear(..., true)` :
    ThreeD, LegacyEngine, Menus, Vignettes OK (14 tests). Pour lancer `bin/jumphp` dans un worktree sous Git Bash, y
    copier le `bin/jumphp` corrigé (puis `git checkout -- bin/jumphp`).
-   Reste : les **pousser sur un fork et
-   ouvrir les pull requests** : pas d'outil `gh` ici et aucun fork sur `malabke` / `clement-cdy` /
-   `cdy-respawnsive` ; le compte à utiliser n'est pas encore choisi par l'utilisateur. Ensuite : mettre le projet à
+   **Pull requests ouvertes le 2026-11-05** (compte `malabke`, fork `github.com/malabke/jumPhp`, remote `fork` du
+   projet ; `gh` installé dans `C:\Program Files\GitHub CLI\gh.exe`, connecté à `malabke`) :
+   https://github.com/davidnurdin/jumPhp/pull/2 (HD), /3 (pad none), /4 (double-clic), /5 (textures), /6 (Git Bash).
+   Descriptions dans `C:\JUMPHP\contrib-patches\pr\`. Corriger une PR : committer sur la branche dans son worktree
+   puis `git push fork <branche>`. Ensuite, une fois acceptées et publiées : mettre le projet à
    jour vers la version de JumPHP qui les contient (`bin/jumphp update`), sur une branche, tout retester. Le
    playground construit peut-être la page du jeu avec son propre code : `double_click_fullscreen` et `touch` doivent
    y arriver (à vérifier dans `jumphp-playground`).
