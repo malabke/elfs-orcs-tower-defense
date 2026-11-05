@@ -136,7 +136,11 @@ Dernière mise à jour : 2026-11-05.
    - `contrib/gl-row-length` : correctif des textures, bureau seulement (pas WebGL ni OpenGL ES des applis).
    - `contrib/git-bash-windows` : `bin/jumphp` sous Git Bash. **Sans** la liste de mots interdits de notre jeu
      (elle ferait échouer le lint de jeux d'autres personnes).
-   Reste : faire passer les tests des jeux d'exemple de JumPHP sur ces branches, puis les **pousser sur un fork et
+   **Vérifié** : avec `contrib/hd-2d`, les jeux d'exemple pong, hello-webgl, jumpball (3D) et hello-gui passent
+   (tests + smoke) ; moteur sur `contrib/touch-pad-none` : 137 tests + phpstan OK ; le jeu avec `clear(..., true)` :
+   ThreeD, LegacyEngine, Menus, Vignettes OK (14 tests). Pour lancer `bin/jumphp` dans un worktree sous Git Bash, y
+   copier le `bin/jumphp` corrigé (puis `git checkout -- bin/jumphp`).
+   Reste : les **pousser sur un fork et
    ouvrir les pull requests** : pas d'outil `gh` ici et aucun fork sur `malabke` / `clement-cdy` /
    `cdy-respawnsive` ; le compte à utiliser n'est pas encore choisi par l'utilisateur. Ensuite : mettre le projet à
    jour vers la version de JumPHP qui les contient (`bin/jumphp update`), sur une branche, tout retester. Le
