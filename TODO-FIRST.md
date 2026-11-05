@@ -30,7 +30,22 @@ gui and a plugin project in `apps/`: install, test, run (inside the folder), sho
 headless, app:release to a local folder), `export:standalone` and `installer --standalone --linux` of a gui app,
 `build:remote` + remote webshot, `site:new` + `build:site` + `siteshot` of a game with `config/project.yaml`, the IDE on a
 repository with `apps/` (modules and run configurations right); `pages` / `deploy` read (they go through `project_path`).
-Not tried: the apple / android workflows (GitHub's machines), `deploy` / `pages` run for real (they publish).
+Tried for real (2026-11-05): `bin/jumphp update` of an older project (a 0.5.4 copy with its own history and its own games/: now 0.5.8,
+games/ and README untouched); `pages` (build + index + push, to a throwaway branch: gh-pages itself not touched); `deploy` in its rsync
+mode (JUMPHP_DEPLOY_LOCAL=1 + JUMPHP_DEPLOY_TARGET: 18 files copied); the apple workflow on an app in `apps/` (the `web` job passes; the
+macOS job waited 15 minutes for a GitHub machine and was cancelled, run again once). Not tried: `deploy`'s server modes (FrankenPHP /
+Traefik: they need a server of the project), the android workflow (it signs with the repository's keys and publishes a release: read,
+not run), a game in its own repository linked into the IDE, the IDE's Run / Test / Terminal / debugger on an `apps/` project, publishing
+a test project on jumphp.net (it makes a repository on the user's account).
+
+Done (2026-11-05): names. `project_dir` / `default_project` / `project_runtime` in bin/jumphp and tools/ (the old names stay as functions),
+`JumPHP\Kernel\ProjectConfig` and `JumPHP\Testing\ProjectTestCase` (aliases of GameConfig / GameTestCase: both forever), "Which project,
+what kind, what starts" in AGENTS.md. Kept: `game.json` (read by other sites), the IDE's kind labels ("Game" is a kind).
+
+Done (2026-11-05): a clean project. A new project no longer holds JumPHP's own development files: `tools/project-clean.list` +
+`tools/project-clean.sh` (composer create-project, the IDE's New Project, jumphp.net's RepoInitializer), `bin/jumphp tidy [--examples]` for an
+older project, `.jumphp/excluded` so that `bin/jumphp update` neither brings them back nor conflicts (tried: a project, an upstream change
+to files it tidied away, the update merges and stays clean). docs/extensions.md "A clean project".
 
 Plan (agreed):
 - one function in `bin/jumphp` finds `<id>` in `games/` then `apps/`; every command and every tools/ script goes through
