@@ -1,0 +1,57 @@
+{
+    "name": "jumphp/effects",
+    "description": "Screen effects for JumPHP games: transitions (fade, wipes, iris, blinds, dissolve), a flash, a vignette, easing curves",
+    "type": "jumphp-extension",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "JumPHP\\Effects\\": "src/"
+        }
+    },
+    "extra": {
+        "jumphp": {
+            "name": "Effects",
+            "engine": "^0.5",
+            "services": [
+                "JumPHP\\Effects\\Flash",
+                "JumPHP\\Effects\\Transition"
+            ],
+            "boot": "JumPHP\\Effects\\Effects",
+            "config": {
+                "effects": {
+                    "default": {
+                        "color": "#ffffff",
+                        "seconds": 0.3
+                    },
+                    "doc": "The flash: its colour and how long it fades"
+                }
+            },
+            "summary": "Fades, wipes, an iris and a dissolve to change scene, a flash, a vignette and easing curves: all drawn with translucent rectangles.",
+            "features": [
+                "Transitions: fade, wipe (4 sides), iris on a point, blinds, dissolve; cover, change the scene under it, reveal",
+                "Flash: light the screen in a colour, it fades",
+                "Vignette: darker edges",
+                "Ease: 10 curves (quad, cubic, back, bounce, elastic) and lerp",
+                "Pure PHP, 32-bit safe: the same in the browser"
+            ],
+            "example": "$this->transition->cover('iris', 0.6, '#000000', fn () => $this->scenes()->switchTo(PlayScene::class, [], false));\n// the new scene's enter(): $this->transition->reveal('iris', 0.6);",
+            "docs": "https://github.com/davidnurdin/jumPhp/blob/main/extensions/effects/doc/index.md"
+        }
+    },
+    "keywords": [
+        "jumphp",
+        "jumphp-extension",
+        "game",
+        "effects",
+        "transitions",
+        "easing"
+    ],
+    "homepage": "https://jumphp.net/extensions/effects",
+    "support": {
+        "source": "https://github.com/davidnurdin/jumPhp/tree/main/extensions/effects",
+        "issues": "https://github.com/davidnurdin/jumPhp/issues"
+    }
+}

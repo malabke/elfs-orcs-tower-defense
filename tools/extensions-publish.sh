@@ -43,6 +43,11 @@ for id in "${ids[@]}"; do
     [ -d "$target" ] || git init --quiet --bare -b main "$target"
   fi
   shown="$(printf '%s' "$target" | sed -E 's#//[^/@]*@#//#')"   # never print a token
+  # a new extension whose repository is not made yet must not stop the others: it is said, and skipped (make davidnurdin/jumphp-<id>, then Packagist)
+  if [ "$push" = 1 ] && ! git ls-remote "$target" >/dev/null 2>&1; then
+    echo "[!] $id: no repository at $shown yet: skipped (make it, then submit it on Packagist: docs/extensions.md)" >&2
+    continue
+  fi
   echo "==> $id: ${sha:0:12} -> $shown (main, $tag)" >&2
   git push --quiet "$target" "$sha:refs/heads/main"
   # an existing tag is left as it is (a version never moves)

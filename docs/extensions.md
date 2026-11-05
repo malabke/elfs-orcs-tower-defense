@@ -57,7 +57,7 @@ What an extension brings into a game besides its code (`bin/jumphp extension:add
   the install (Tools > Engine Extensions…) with a **Play** button for each sample, and from the External Libraries (the extension
   has its package name and a **Docs** button there).
 - `extra.jumphp.samples` / `extra.jumphp.doc` name other folders than `samples/` and `doc/`.
-- JumPHP's own three (`particles`, `physics`, `shorts`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
+- JumPHP's own four (`particles`, `physics`, `shorts`, `effects`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
 
 ## A clean project
 
@@ -126,7 +126,7 @@ each new tag is a new version). Games then `bin/jumphp extension:add <game> <you
 https://jumphp.net/extensions lists it (it reads Packagist's `jumphp-extension` packages). Do not require
 `jumphp/engine`: it is not on Packagist, and every JumPHP project already has it (`../../engine`).
 
-**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`): developed here in `extensions/<id>`, split to
+**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`, `jumphp/effects`): developed here in `extensions/<id>`, split to
 one read-only repository each, `davidnurdin/jumphp-<id>`, by `.github/workflows/extensions-split.yml` on each release
 tag `v*` (the split gets the same tag) — the same as `tools/extensions-publish.sh --push`. Without `--push` the script is
 a dry run: the splits go to `.build/extensions-split/<id>.git`, to look at or to require through a `vcs` repository.
@@ -137,6 +137,14 @@ Once, to set it up:
    the JumPHP repository's secret `EXTENSIONS_SPLIT_TOKEN`;
 3. run the workflow once (Actions > extensions-split > Run workflow, or the next `v*` tag);
 4. submit each repository on https://packagist.org/packages/submit.
+
+## The effects extension
+
+`extensions/effects` (`jumphp/effects`), shown by `games/effects-demo`: screen **transitions** (`Transition`: fade, four wipes, an iris on a
+point, blinds, a dissolve; `cover()` a scene change `reveal()`), a **flash**, a **vignette** and **easing curves** (`Ease`). Everything is
+drawn with translucent rectangles, pure PHP, 32-bit safe. Its `doc/index.md` has the code; `bin/jumphp extension:add <game> jumphp/effects`
+brings two samples (`FlashSample`, `TransitionSample`) into your game. Before its repository `davidnurdin/jumphp-effects` exists and it is
+submitted on Packagist, the release split skips it with a warning (the others are not blocked).
 
 ## The particles extension
 

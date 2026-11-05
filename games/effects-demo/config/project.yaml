@@ -1,0 +1,17 @@
+# The example game of the extension. Every key is optional (defaults: JumPHP\Kernel\GameConfig::DEFAULTS).
+project:
+  id: effects-demo
+  title: "Effects"
+  version: 0.1.0
+  description: "The example game of the Effects engine extension"
+  width: 320
+  height: 180
+  scale: 3
+  background: [12, 12, 28]
+  start_scene: App\Scene\DemoScene
+  smoke:
+    scene: App\Scene\DemoScene
+    params: { demo: true }
+  # the extension's own key (its defaults: composer.json extra.jumphp.config)
+  effects:
+    color: "#ffd040"

@@ -35,8 +35,9 @@ docs/video-maker.md, AGENTS.md §20.
 
 Left:
 - the other extensions: a collision engine (shapes, polygons, broad phase), a 3D engine (meshes, cameras, lights on
-  OpenGL / WebGL), an SDL effects engine (transitions, shakes, palettes, scanlines, distortions), a tile engine with its
-  level editor, a dialogue / quest system; a particle editor with a live preview
+  OpenGL / WebGL), a tile engine with its level editor, a dialogue / quest system; a particle editor with a live preview.
+  Done (2026-11-05): the SDL effects extension, `jumphp/effects` (transitions, flash, vignette, easing; docs and samples), made with
+  `extension:new`. To publish it: create `davidnurdin/jumphp-effects` on GitHub, then submit it on Packagist (the split skips it until then)
 - JumPHP's own extensions on Packagist: done (2026-11-04): jumphp/particles, physics, shorts submitted on packagist.org (repos
   davidnurdin/jumphp-<id>, tag v0.5.6; Packagist account = "Log in with GitHub"). Left: the secret EXTENSIONS_SPLIT_TOKEN (fine-grained
   token, Contents read/write on the 3 repos; David creates it) so extensions-split.yml pushes each new tag (Packagist's own hook is on: the 3
