@@ -597,6 +597,8 @@ class App {
       a.add('commitAll', 'Commit All and Push…', () => this.git.commitAll(), { kbd: 'Ctrl+Alt+K', icon: 'upload' });
       a.add('gitRemotes', 'Git Remotes…', () => this.git.extra.remotes(), { icon: 'globe' });
       a.add('gitTags', 'Git Tags…', () => this.git.extra.tags(), { icon: 'branch' });
+      a.add('gitSubmodules', 'Git Submodules…', () => this.git.extra.submodules(), { icon: 'folder' });
+      if (backend.kind === 'native') a.add('sshKeys', 'SSH Keys…', () => this.git.extra.sshKeys(), { icon: 'user' });
       a.add('gitStashes', 'Git Stashes…', () => this.git.extra.stashes(), { icon: 'package' });
       if (backend.kind === 'native') a.add('gitCredentials', 'Git Credentials…', () => this.git.extra.credentials(), { icon: 'user' });
       a.add('push', 'Push…', () => this.git.push(), { kbd: 'Ctrl+Shift+K', icon: 'push' });
@@ -735,7 +737,7 @@ class App {
       section('Refactor', ['rename', 'usages']),
       section('Run', ['run', 'debug', 'test', 'shot', 'rerun', 'stop', 'runConfigs', 'runAnything', '-', 'debugResume', 'stepOver', 'stepInto', 'stepOut', 'runToCursor', 'toggleBreakpoint', 'exceptionBreakpoints', 'debugTool', 'preview', 'previewTab', '-', 'createInstaller']),
       section('Tools', ['plugins', 'pluginUpdates', 'extensions', 'opencode', 'opencodeAsk', 'videoPreview']),
-      section('Git', ['commit', 'commitAll', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile', 'gitStashes', 'gitTags', 'gitRemotes', 'gitCredentials']),
+      section('Git', ['commit', 'commitAll', 'push', 'update', 'branches', 'gitLog', 'fileHistory', 'annotate', 'rollbackFile', 'gitStashes', 'gitTags', 'gitRemotes', 'gitSubmodules', 'gitCredentials', 'sshKeys']),
       { label: 'Help', items: [
         { label: 'Keyboard Shortcuts', action: () => this.shortcuts() },
         { label: 'JumPHP Documentation', action: () => this.openUrl('https://jumphp.net/docs') },
@@ -910,18 +912,27 @@ class App {
   publishExtension() {
     const ext = this.project.extension;
     const version = el('input.input', { value: ext.nextVersion });
+    const pkUser = el('input.input', { placeholder: 'your Packagist user name', style: { width: '200px' } });
+    const pkToken = el('input.input', { type: 'password', placeholder: 'API token (kept: leave empty)', style: { flex: 1 } });
+    backend.invoke('packagist.get').then((p) => { pkUser.value = p.username || ''; if (p.saved) pkToken.placeholder = 'API token saved (leave empty to keep it)'; });
     dialog({
       title: 'Publish extension ' + (ext.name || ext.id), wide: true,
       body: el('div', {}, el('label.field', {}, el('span', {}, 'Version (the Git tag v<version>)'), version),
+        el('label.field', {}, el('span', {}, 'Packagist (optional): your user name and API token (packagist.org > Profile > Show API token). The IDE then makes or updates the package itself.'),
+          el('div', { style: { display: 'flex', gap: '6px' } }, pkUser, pkToken)),
         el('p.pub-faint', {}, `${ext.dir} goes to its own public repository on your GitHub account (jumphp-${ext.id}, made the first time), under the Composer name <your login>/${ext.id}, tagged. `
           + 'Then submit it once on packagist.org (the IDE opens the page); jumphp.net lists it in its extensions directory a few hours later.')),
       buttons: [{ label: 'Cancel' }, { label: 'Publish', primary: true, action: async () => {
         const done = this.task('Publishing the extension…');
         try {
+          if (pkToken.value.trim()) await backend.invoke('packagist.set', { username: pkUser.value.trim(), token: pkToken.value.trim() });
           const r = await backend.invoke('extension.publish', { version: version.value.trim() });
-          notify(`${r.package} ${r.tag} is on GitHub. Submit ${r.url} on Packagist (once): its page opens.`, 'success', { title: 'Extension', timeout: 0,
-            actions: [{ label: 'Open Packagist', action: () => { copyText(r.url); this.openUrl(r.submitUrl); } }, { label: 'Open the repository', action: () => this.openUrl(r.url) }] });
-          this.openUrl(r.submitUrl);
+          const onPackagist = r.packagist === 'created' || r.packagist === 'updated';
+          notify(onPackagist ? `${r.package} ${r.tag} is on GitHub and ${r.packagist} on Packagist; jumphp.net lists it shortly.`
+            : `${r.package} ${r.tag} is on GitHub. ${r.packagist?.startsWith('error') ? r.packagist + '. ' : ''}Submit ${r.url} on Packagist (once): its page opens.`,
+          onPackagist ? 'success' : 'warning', { title: 'Extension', timeout: 0,
+            actions: [{ label: 'Open Packagist', action: () => this.openUrl(onPackagist ? 'https://packagist.org/packages/' + r.package : r.submitUrl) }, { label: 'Open the repository', action: () => this.openUrl(r.url) }] });
+          if (!onPackagist) { copyText(r.url); this.openUrl(r.submitUrl); }
         } catch (e) { notify(e.message, 'error', { title: 'Publish extension' }); return false; } finally { done(); }
       } }],
     });

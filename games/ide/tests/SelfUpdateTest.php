@@ -13,6 +13,7 @@ final class SelfUpdateTest extends AppTestCase
 
     protected function setUp(): void
     {
+        putenv('JUMPHP_VAR=' . sys_get_temp_dir() . '/jumphp-ide-var-' . bin2hex(random_bytes(4)));
         putenv('JUMPHP_IDE_UPDATES=0');                 // no check at start: the tests ask themselves
         putenv('JUMPHP_IDE_SERVER=http://127.0.0.1:9');
         parent::setUp();

@@ -137,6 +137,13 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.50): Publish extension submits / updates the package on Packagist itself (the user's Packagist user name + API token, kept in the IDE's
+  storage; Authorization header) and asks jumphp.net to refresh its directory (`POST /api/ide/extensions/refresh`, at most once a minute); jumphp.net: an extension has its
+  own page content (table extension_page: summary, features, demo, screenshots written by its author in the studio, "Modifier la page") and a views counter, shown with the
+  reviews' stars in "Mes extensions". Git client: the log's branch graph, Stage by Change (hunks, git apply --cached), conflicts by block, submodules (list / update / add),
+  SSH keys (list, generate, test). Escape no longer refuses a Claude permission request. Not done: extensions as a full jumphp.net project type (the same entity as games:
+  that would touch the publisher, the studio lists and the sitemap), staging by line (hunks only), a three-way conflict editor, passphrase-protected key generation,
+  ssh-agent management. Not tried in the GUI nor against Packagist / GitHub.
 - done (2026-11-05, IDE 0.1.49): an engine extension is created like a game (local, one commit, in the IDE's own PHP, no account); `Publish extension`
   (the Publish button on such a project) puts the package in `<login>/jumphp-<id>` (made the first time, composer name `<login>/<id>`, tag v<version>, version asked,
   next patch proposed) and opens Packagist's submit page; the welcome list tags it "extension"; jumphp.net's studio has "Mes extensions" (the directory's entries whose

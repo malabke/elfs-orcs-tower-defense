@@ -154,7 +154,8 @@ function overlay(dim, onClose, backdrop = true) {
     document.removeEventListener('keydown', onKey, true);
     onClose && onClose();
   };
-  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+  // a sticky dialog (Claude's permission request or question) is answered with its buttons: Escape would refuse it with no way back
+  const onKey = (e) => { if (e.key === 'Escape' && backdrop) { e.preventDefault(); e.stopPropagation(); close(); } };
   // backdrop false: a click beside it (to take the window back) keeps it; only its buttons / Escape close it
   if (backdrop) layer.addEventListener('mousedown', (e) => { if (e.target === layer) close(); });
   document.addEventListener('keydown', onKey, true);

@@ -40,6 +40,47 @@ final class GitBranchesTest extends TestCase
         self::assertSame("ada\n", $this->wait($this->git->run(['config', '--local', 'credential.https://github.com.username'])));
     }
 
+    public function testOneHunkOfAFileIsStagedAndUnstaged(): void
+    {
+        $lines = [];
+        for ($i = 1; $i <= 40; $i++) {
+            $lines[] = "line $i";
+        }
+        $this->write('big.txt', implode("\n", $lines) . "\n");
+        $this->wait($this->git->commit('Big file', ['big.txt']));
+        $lines[1] = 'changed 2';
+        $lines[37] = 'changed 38';
+        $this->write('big.txt', implode("\n", $lines) . "\n");
+        $hunks = $this->wait($this->git->hunks('big.txt'));
+        self::assertCount(2, $hunks);
+        self::assertSame([1, 1], [$hunks[0]['added'], $hunks[0]['removed']]);
+        $this->wait($this->git->stageHunk('big.txt', 1));
+        $staged = $this->wait($this->git->hunks('big.txt', true));
+        self::assertCount(1, $staged);
+        self::assertStringContainsString('changed 38', $staged[0]['text']);
+        self::assertStringNotContainsString('changed 2', $staged[0]['text']);
+        self::assertCount(1, $this->wait($this->git->hunks('big.txt')), 'the other hunk is still unstaged');
+        $this->wait($this->git->stageHunk('big.txt', 0, true));
+        self::assertCount(0, $this->wait($this->git->hunks('big.txt', true)), 'taken out again');
+        self::assertCount(2, $this->wait($this->git->hunks('big.txt')));
+    }
+
+    public function testSubmodulesAreListed(): void
+    {
+        self::assertSame([], $this->wait($this->git->submodules()));
+        $sub = sys_get_temp_dir() . '/jumphp-sub-' . bin2hex(random_bytes(4));
+        mkdir($sub);
+        exec('cd ' . escapeshellarg($sub) . ' && git init -q -b main && git -c user.name=a -c user.email=a@b commit -q --allow-empty -m init 2>&1');
+        try {
+            $this->wait($this->git->run(['-c', 'protocol.file.allow=always', 'submodule', 'add', $sub, 'vendor-sub']));
+            $list = $this->wait($this->git->submodules());
+            self::assertSame('vendor-sub', $list[0]['path']);
+            self::assertSame('ok', $list[0]['state']);
+        } finally {
+            exec('rm -rf ' . escapeshellarg($sub));
+        }
+    }
+
     public function testTagsAreMadeListedPushedNamesAndDeleted(): void
     {
         $this->wait($this->git->createTag('v1'));

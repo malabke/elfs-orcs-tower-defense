@@ -544,6 +544,90 @@ final class Git
         return $this->run(['stash', 'drop', "stash@{{$index}}"]);
     }
 
+    // hunks --------------------------------------------------------------------------------------------------
+
+    /**
+     * The changes of a file as hunks (git diff -U3), to stage or unstage one at a time.
+     *
+     * @return Deferred resolves with list<array{index: int, header: string, added: int, removed: int, text: string}>
+     */
+    public function hunks(string $path, bool $staged = false): Deferred
+    {
+        return $this->run(['diff', '-U3', '--no-color', ...($staged ? ['--cached'] : []), '--', $path])->then(fn (string $diff) => self::parseHunks($diff)['hunks']);
+    }
+
+    /** @return array{header: string, hunks: list<array{index: int, header: string, added: int, removed: int, text: string}>} */
+    public static function parseHunks(string $diff): array
+    {
+        $lines = explode("\n", $diff);
+        $header = [];
+        $i = 0;
+        for (; $i < count($lines) && !str_starts_with($lines[$i], '@@'); $i++) {
+            $header[] = $lines[$i];
+        }
+        $hunks = [];
+        $current = null;
+        for (; $i < count($lines); $i++) {
+            if (str_starts_with($lines[$i], '@@')) {
+                $current !== null && $hunks[] = $current;
+                $current = ['index' => count($hunks), 'header' => $lines[$i], 'added' => 0, 'removed' => 0, 'text' => $lines[$i] . "\n"];
+                continue;
+            }
+            if ($current === null || ($lines[$i] === '' && $i === count($lines) - 1)) {
+                continue;
+            }
+            $current['text'] .= $lines[$i] . "\n";
+            if (str_starts_with($lines[$i], '+')) {
+                $current['added']++;
+            } elseif (str_starts_with($lines[$i], '-')) {
+                $current['removed']++;
+            }
+        }
+        $current !== null && $hunks[] = $current;
+        return ['header' => implode("\n", $header) . "\n", 'hunks' => $hunks];
+    }
+
+    /** Puts one hunk of a file in the index (git apply --cached), or takes it out ($unstage). */
+    public function stageHunk(string $path, int $index, bool $unstage = false): Deferred
+    {
+        return $this->run(['diff', '-U3', '--no-color', ...($unstage ? ['--cached'] : []), '--', $path])->then(function (string $diff) use ($index, $unstage) {
+            $parsed = self::parseHunks($diff);
+            if (!isset($parsed['hunks'][$index])) {
+                throw new GitException('That change is gone: the file changed meanwhile.');
+            }
+            return $this->run(['apply', '--cached', '--recount', '--whitespace=nowarn', ...($unstage ? ['--reverse'] : []), '-'], false, null, null, $parsed['header'] . $parsed['hunks'][$index]['text']);
+        });
+    }
+
+    // submodules ---------------------------------------------------------------------------------------------
+
+    /** @return Deferred resolves with list<array{path: string, sha: string, state: string, describe: string}> state: ok, uninitialized, modified (another commit), conflict */
+    public function submodules(): Deferred
+    {
+        return $this->run(['submodule', 'status'])->then(function (string $out) {
+            $list = [];
+            foreach (array_filter(explode("\n", $out)) as $line) {
+                if (preg_match('/^([ +\-U])([0-9a-f]+) (\S+)(?: \((.*)\))?/', $line, $m)) {
+                    $list[] = ['path' => $m[3], 'sha' => substr($m[2], 0, 8), 'describe' => $m[4] ?? '',
+                        'state' => ['-' => 'uninitialized', '+' => 'modified', 'U' => 'conflict'][$m[1]] ?? 'ok'];
+                }
+            }
+            return $list;
+        });
+    }
+
+    public function updateSubmodules(?callable $onOutput = null): Deferred
+    {
+        return $this->run(['-c', 'protocol.file.allow=user', 'submodule', 'update', '--init', '--recursive', '--progress'], true, $onOutput);
+    }
+
+    public function addSubmodule(string $url, string $path, ?callable $onOutput = null): Deferred
+    {
+        return preg_match('#^[A-Za-z0-9._/-]+$#', $path) && !str_contains($path, '..')
+            ? $this->run(['submodule', 'add', '--', $url, $path], true, $onOutput)
+            : Deferred::rejected(new GitException("bad folder: $path"));
+    }
+
     // remotes ------------------------------------------------------------------------------------------------
 
     public function addRemote(string $name, string $url): Deferred

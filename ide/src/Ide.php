@@ -652,6 +652,11 @@ final class Ide
         $this->register('git.remoteAdd', fn (array $p) => $git->addRemote((string)$p['name'], (string)$p['url']));
         $this->register('git.remoteRemove', fn (array $p) => $git->removeRemote((string)$p['name']));
         $this->register('git.remoteSetUrl', fn (array $p) => $git->setRemoteUrl((string)$p['name'], (string)$p['url']));
+        $this->register('git.hunks', fn (array $p) => $git->hunks((string)$p['path'], !empty($p['staged'])));
+        $this->register('git.stageHunk', fn (array $p) => $git->stageHunk((string)$p['path'], (int)$p['index'], !empty($p['unstage'])));
+        $this->register('git.submodules', fn () => $git->submodules());
+        $this->register('git.submodulesUpdate', fn () => $after($git->updateSubmodules($output)));
+        $this->register('git.submoduleAdd', fn (array $p) => $after($git->addSubmodule((string)$p['url'], (string)$p['path'], $output)));
         $this->register('git.tags', fn () => $git->tags());
         $this->register('git.tagCreate', fn (array $p) => $git->createTag((string)$p['name'], isset($p['revision']) ? (string)$p['revision'] : null, isset($p['message']) ? (string)$p['message'] : null));
         $this->register('git.tagDelete', fn (array $p) => $git->deleteTag((string)$p['name'], !empty($p['remote'])));

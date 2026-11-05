@@ -233,6 +233,10 @@ final class Main implements AppMain
         $c['session.login'] = fn (array $p = []) => $this->login(!empty($p['another']));
         // several GitHub accounts (each one a jumphp.net sign-in), one assigned to each project
         // the user and token of any https host (GitLab, a company's server, a second GitHub...): git here uses them for that host (the tokens stay in this computer's storage)
+        // ssh keys (git over git@github.com:...): the keys of ~/.ssh, a new one, a test of the connection
+        $c['ssh.keys'] = fn () => $this->sshKeys();
+        $c['ssh.generate'] = fn (array $p) => $this->sshGenerate((string)($p['name'] ?? 'id_ed25519'), (string)($p['comment'] ?? ''));
+        $c['ssh.test'] = fn (array $p) => $this->sshTest((string)($p['host'] ?? 'github.com'));
         $c['git.credentials'] = fn () => array_map(fn ($host, $c) => ['host' => $host, 'user' => $c[0]], array_keys($this->gitCredentials()), $this->gitCredentials());
         $c['git.credentialSet'] = function (array $p) {
             $host = strtolower(trim((string)($p['host'] ?? '')));
@@ -260,6 +264,14 @@ final class Main implements AppMain
             return $this->accountsState();
         };
         $c['extension.publish'] = fn (array $p) => $this->publishExtension((string)($p['version'] ?? ''));
+        // the user's Packagist API token (packagist.org > Profile > API token): the IDE submits / updates the package itself
+        $c['packagist.get'] = fn () => ['username' => (string)($this->packagistCredentials()['username'] ?? ''), 'saved' => !empty($this->packagistCredentials()['token'])];
+        $c['packagist.set'] = function (array $p) {
+            $username = trim((string)($p['username'] ?? ''));
+            $token = trim((string)($p['token'] ?? ''));
+            $this->app->storage->writeJson('packagist.json', $username === '' || $token === '' ? [] : ['username' => $username, 'token' => $token]);
+            return ['username' => $username, 'saved' => $username !== '' && $token !== ''];
+        };
         $c['project.setAccount'] = function (array $p) {
             $root = $this->ide !== null ? (string)$this->ide->workspace->localPath() : '';
             $login = (string)($p['login'] ?? '');
@@ -480,6 +492,57 @@ final class Main implements AppMain
     public function user(): ?array
     {
         return $this->session['user'] ?? null;
+    }
+
+    private function sshDir(): string
+    {
+        return rtrim((string)(getenv('JUMPHP_SSH_DIR') ?: ((getenv('HOME') ?: getenv('USERPROFILE') ?: '') . '/.ssh')), '/\\');
+    }
+
+    /** @return list<array{name: string, type: string, comment: string, publicKey: string}> */
+    private function sshKeys(): array
+    {
+        $keys = [];
+        foreach (glob($this->sshDir() . '/*.pub') ?: [] as $file) {
+            $line = trim((string)file_get_contents($file));
+            if (preg_match('/^(ssh-\S+|ecdsa-\S+|sk-\S+)\s+(\S+)\s*(.*)$/', $line, $m)) {
+                $keys[] = ['name' => basename($file, '.pub'), 'type' => $m[1], 'comment' => $m[3], 'publicKey' => $line];
+            }
+        }
+        return $keys;
+    }
+
+    /** A new ed25519 key without a passphrase in ~/.ssh/<name>: never over an existing key. @return Deferred resolves with the key */
+    private function sshGenerate(string $name, string $comment): Deferred
+    {
+        $dir = $this->sshDir();
+        if (!preg_match('/^[A-Za-z0-9._-]{1,60}$/', $name) || $dir === '') {
+            return Deferred::rejected(new \InvalidArgumentException('A file name like id_ed25519, please.'));
+        }
+        if (file_exists("$dir/$name") || file_exists("$dir/$name.pub")) {
+            return Deferred::rejected(new \RuntimeException("$dir/$name exists: the IDE never replaces a key."));
+        }
+        @mkdir($dir, 0700, true);
+        $started = $this->processes->start(['ssh-keygen', '-t', 'ed25519', '-f', "$dir/$name", '-N', '', '-C', $comment !== '' ? $comment : 'jumphp-ide', '-q'], $dir, []);
+        return $started['done']->then(function (array $r) use ($name) {
+            if ($r['code'] !== 0) {
+                throw new \RuntimeException('ssh-keygen failed: ' . trim($r['stderr'] ?: $r['stdout']));
+            }
+            return array_values(array_filter($this->sshKeys(), fn ($k) => $k['name'] === $name))[0] ?? throw new \RuntimeException('the key was not written');
+        });
+    }
+
+    /** ssh -T git@<host>: GitHub / GitLab answer with who you are, then close (exit 1 for GitHub: not an error). @return Deferred resolves with {ok, message} */
+    private function sshTest(string $host): Deferred
+    {
+        if (!preg_match('/^[a-z0-9.-]+$/i', $host)) {
+            return Deferred::rejected(new \InvalidArgumentException('A host like github.com, please.'));
+        }
+        $started = $this->processes->start(['ssh', '-T', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10', "git@$host"], sys_get_temp_dir(), []);
+        return $started['done']->then(function (array $r) {
+            $text = trim($r['stderr'] . "\n" . $r['stdout']);
+            return ['ok' => (bool)preg_match('/successfully authenticated|Welcome to GitLab|You\'ve successfully/i', $text), 'message' => $text];
+        });
     }
 
     /** @return array<string, array{0: string, 1: string}> host => [user, token] */
@@ -769,7 +832,8 @@ final class Main implements AppMain
                     ->then(fn () => $git->createTag("v$version", null, "$package $version"))
                     ->then(fn () => $git->run(['push', '-u', 'origin', 'main'], true))
                     ->then(fn () => $git->pushTag("v$version"))
-                    ->then(fn () => ['repository' => (string)$repo['full_name'], 'url' => (string)$repo['html_url'], 'package' => $package, 'tag' => "v$version",
+                    ->then(fn () => $this->submitToPackagist((string)$repo['html_url']))
+                    ->then(fn (string $packagist) => ['packagist' => $packagist, 'repository' => (string)$repo['full_name'], 'url' => (string)$repo['html_url'], 'package' => $package, 'tag' => "v$version",
                         'submitUrl' => 'https://packagist.org/packages/submit']);
             });
         })->then(function (array $result) use ($root, $version, $work) {
@@ -780,6 +844,42 @@ final class Main implements AppMain
             Creator::removeTree($work);
             throw $e;
         });
+    }
+
+    /** @return array{username?: string, token?: string} */
+    private function packagistCredentials(): array
+    {
+        return (array)$this->app->storage->readJson('packagist.json', []);
+    }
+
+    /**
+     * Makes (or refreshes) the package on packagist.org with the user's API token, then asks jumphp.net to look at Packagist again.
+     *
+     * @return Deferred resolves with 'created' | 'updated' | 'no-token' | 'error: <why>' (never fails: the package is on GitHub already)
+     */
+    private function submitToPackagist(string $repositoryUrl): Deferred
+    {
+        $c = $this->packagistCredentials();
+        if (empty($c['username']) || empty($c['token'])) {
+            return Deferred::resolved('no-token');
+        }
+        $headers = ['Authorization' => 'Bearer ' . $c['username'] . ':' . $c['token'], 'Accept' => 'application/json', 'User-Agent' => 'jumphp-ide'];
+        $body = ['repository' => ['url' => $repositoryUrl]];
+        $http = $this->app->http();
+        $call = function (string $path) use ($http, $headers, $body): Deferred {
+            $d = new Deferred();
+            $http->request('POST', 'https://packagist.org/api/' . $path, $body, $headers, 30.0)->then(fn ($r) => $d->resolve($r), fn (\Throwable $e) => $d->reject($e));
+            return $d;
+        };
+        $refresh = fn (string $result) => self::deferred($this->playground->request('POST', '/api/ide/extensions/refresh', []))->then(fn () => $result, fn () => $result);
+        return $call('create-package')->then(function ($r) use ($call, $refresh) {
+            if ($r->status === 200 || $r->status === 201 || $r->status === 202) {
+                return $refresh('created');
+            }
+            // the package exists already (a new tag): Packagist is told to read it again
+            return $call('update-package')->then(fn ($u) => in_array($u->status, [200, 202], true) ? $refresh('updated')
+                : 'error: Packagist answered HTTP ' . $r->status . ' / ' . $u->status . ' ' . substr(trim((string)$u->body), 0, 200));
+        })->then(null, fn (\Throwable $e) => 'error: ' . $e->getMessage());
     }
 
     /** jumphp.net's slug is taken (names are shared by everyone): the next candidate, a few times. Resolves with the project. */

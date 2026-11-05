@@ -143,8 +143,227 @@ export class GitExtra {
     draw();
   }
 
+  /** One change (hunk) of a file at a time into the index, or back out: the diff of the file, split. */
+  async hunks(path) {
+    const body = el('div', { style: { maxHeight: '60vh', overflow: 'auto' } });
+    dialog({ title: 'Stage by hunk: ' + path, wide: true, body, buttons: [{ label: 'Close' }] });
+    const draw = async () => {
+      clear(body);
+      const [open, staged] = await Promise.all([backend.invoke('git.hunks', { path }).catch(() => []), backend.invoke('git.hunks', { path, staged: true }).catch(() => [])]);
+      const block = (h, isStaged) => el('div', { style: { margin: '8px 0', border: '1px solid var(--border-2)', borderRadius: '6px' } },
+        el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', padding: '4px 8px', background: 'var(--panel)' } }, el('code', { style: { flex: 1 } }, h.header.replace(/^(@@[^@]*@@).*/, '$1')),
+          el('span', { style: { color: 'var(--green)' } }, '+' + h.added), el('span', { style: { color: 'var(--red)' } }, '−' + h.removed),
+          el('button.btn.small', { onclick: async () => { await this.call('git.stageHunk', { path, index: h.index, unstage: isStaged }); await this.git.refresh(); draw(); } }, isStaged ? 'Unstage' : 'Stage')),
+        el('pre', { style: { margin: 0, padding: '6px 8px', fontSize: '12px', overflow: 'auto' } }, ...h.text.split('\n').slice(1).map((l) => el('div', { style: { color: l.startsWith('+') ? 'var(--green)' : l.startsWith('-') ? 'var(--red)' : '' } }, l || ' '))));
+      if (staged.length) body.append(el('h4', {}, 'Staged'), ...staged.map((h) => block(h, true)));
+      if (open.length) body.append(el('h4', {}, 'Not staged'), ...open.map((h) => block(h, false)));
+      if (!staged.length && !open.length) body.append(el('p.pub-faint', {}, 'No changes in this file.'));
+    };
+    draw();
+  }
+
+  async submodules() {
+    const body = el('div');
+    dialog({ title: 'Git Submodules', wide: true, body, buttons: [{ label: 'Close' }] });
+    const draw = async () => {
+      clear(body);
+      const list = await backend.invoke('git.submodules').catch(() => []);
+      for (const s of list) {
+        body.append(el('div', { style: { display: 'flex', gap: '8px', margin: '4px 0' } }, el('b', { style: { width: '200px' } }, s.path), el('code', {}, s.sha), el('span.pub-faint', { style: { flex: 1 } }, `${s.describe} · ${s.state}`)));
+      }
+      if (!list.length) body.append(el('p.pub-faint', {}, 'No submodules.'));
+      const url = el('input.input', { placeholder: 'https://…/repository.git', style: { flex: 1 } });
+      const path = el('input.input', { placeholder: 'folder', style: { width: '160px' } });
+      body.append(el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px' } }, url, path,
+        el('button.btn.small', { onclick: async () => { if (url.value.trim() && path.value.trim()) { await this.run('git.submoduleAdd', { url: url.value.trim(), path: path.value.trim() }, 'Submodule added', true); draw(); } } }, 'Add'),
+        el('button.btn.small.primary', { onclick: async () => { await this.run('git.submodulesUpdate', {}, 'Submodules updated', true); draw(); } }, 'Update all (init, recursive)')));
+    };
+    draw();
+  }
+
+  /** ssh keys for git@github.com:... : the keys of ~/.ssh, a new ed25519 one, the public key to paste on GitHub / GitLab, a test of the connection. */
+  async sshKeys() {
+    const body = el('div');
+    dialog({ title: 'SSH Keys', wide: true, body, buttons: [{ label: 'Close' }] });
+    const draw = async () => {
+      clear(body);
+      const keys = await backend.invoke('ssh.keys').catch(() => []);
+      for (const k of keys) {
+        body.append(el('div', { style: { margin: '6px 0' } }, el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('b', { style: { width: '160px' } }, k.name), el('span.pub-faint', { style: { flex: 1 } }, `${k.type} ${k.comment}`),
+          el('button.btn.small', { onclick: async () => { await copyText(k.publicKey); notify('Public key copied: paste it in GitHub > Settings > SSH keys.', 'success', { title: 'SSH' }); } }, 'Copy public key')),
+          el('code', { style: { display: 'block', fontSize: '11px', wordBreak: 'break-all', opacity: 0.7 } }, k.publicKey.slice(0, 110) + '…')));
+      }
+      if (!keys.length) body.append(el('p.pub-faint', {}, 'No key in ~/.ssh yet.'));
+      const name = el('input.input', { value: 'id_ed25519', style: { width: '160px' } });
+      const comment = el('input.input', { placeholder: 'comment (your e-mail)', style: { flex: 1 } });
+      const host = el('input.input', { value: 'github.com', style: { width: '140px' } });
+      body.append(el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px' } }, name, comment,
+        el('button.btn.small.primary', { onclick: async () => { if (await this.call('ssh.generate', { name: name.value.trim(), comment: comment.value.trim() })) draw(); } }, 'Generate (ed25519)')),
+      el('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } }, host,
+        el('button.btn.small', { onclick: async () => { const r = await this.call('ssh.test', { host: host.value.trim() }); if (r) notify(r.message || 'No answer', r.ok ? 'success' : 'warning', { title: 'ssh ' + host.value }); } }, 'Test the connection')));
+    };
+    draw();
+  }
+
   /** A command whose error is shown, not thrown. */
   async call(command, payload) {
     try { return await backend.invoke(command, payload); } catch (e) { notify(e.message, 'error', { title: 'Git' }); return null; }
+  }
+
+  // hunks ---------------------------------------------------------------------------------------------------
+
+  /** One change of a file at a time: what goes into the next commit (staged) and what stays out. */
+  async hunks(path) {
+    const body = el('div');
+    dialog({ title: 'Stage by change: ' + path, wide: true, body, buttons: [{ label: 'Close' }] });
+    const draw = async () => {
+      clear(body);
+      const [unstaged, staged] = await Promise.all([backend.invoke('git.hunks', { path }).catch(() => []), backend.invoke('git.hunks', { path, staged: true }).catch(() => [])]);
+      const section = (title, list, unstage) => {
+        body.append(el('h4', {}, `${title} (${list.length})`));
+        for (const h of list) {
+          body.append(el('div', { style: { margin: '6px 0', border: '1px solid var(--border-2)', borderRadius: '4px' } },
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 8px', background: 'var(--bg-2)' } }, el('code', { style: { flex: 1 } }, h.header),
+              el('span', { style: { color: 'var(--green)' } }, '+' + h.added), el('span', { style: { color: 'var(--red)' } }, '−' + h.removed),
+              el('button.btn.small', { onclick: async () => { await this.call('git.stageHunk', { path, index: h.index, unstage }); await this.git.refresh(); draw(); } }, unstage ? 'Unstage' : 'Stage')),
+            el('pre', { style: { margin: 0, padding: '4px 8px', maxHeight: '180px', overflow: 'auto', fontSize: '12px' } }, ...h.text.split('\n').slice(1).map((l) => el('div', { style: { color: l.startsWith('+') ? 'var(--green)' : l.startsWith('-') ? 'var(--red)' : '' } }, l || ' ')))));
+        }
+      };
+      section('Staged: in the next commit', staged, true);
+      section('Not staged', unstaged, false);
+      if (!staged.length && !unstaged.length) body.append(el('p.pub-faint', {}, 'No change in this file (a new file is staged whole, with its check box).'));
+    };
+    draw();
+  }
+
+  // conflicts, one block at a time --------------------------------------------------------------------------
+
+  /** A file with <<<<<<< ======= >>>>>>> markers: for each block, ours / theirs / both, then the file is written and marked resolved. */
+  async resolveBlocks(path) {
+    let text;
+    try { text = (await backend.invoke('file.read', { path })).content ?? ''; } catch (e) { return notify(e.message, 'error', { title: 'Git' }); }
+    const re = /^<<<<<<< ([^\n]*)\n([\s\S]*?)(?:^\|\|\|\|\|\|\| [^\n]*\n[\s\S]*?)?^=======\n([\s\S]*?)^>>>>>>> ([^\n]*)\n?/gm;
+    const blocks = [...text.matchAll(re)].map((m) => ({ start: m.index, end: m.index + m[0].length, ours: m[2], theirs: m[3], oursName: m[1], theirsName: m[4], choice: 'both' }));
+    if (!blocks.length) return notify('No conflict markers left in this file.', 'info', { title: 'Git' });
+    const body = el('div');
+    blocks.forEach((b, i) => {
+      const radio = (value, label) => el('label.checkbox', { style: { marginRight: '14px' } }, el('input', { type: 'radio', name: 'blk' + i, checked: b.choice === value, onchange: () => { b.choice = value; } }), ' ' + label);
+      const code = (t, color) => el('pre', { style: { flex: 1, margin: 0, padding: '4px 8px', overflow: 'auto', maxHeight: '140px', fontSize: '12px', borderLeft: `3px solid ${color}` } }, t || ' ');
+      body.append(el('div', { style: { margin: '8px 0 14px' } }, el('div', {}, el('b', {}, `Conflict ${i + 1} of ${blocks.length}`), '  ', radio('ours', `Ours (${b.oursName})`), radio('theirs', `Theirs (${b.theirsName})`), radio('both', 'Both')),
+        el('div', { style: { display: 'flex', gap: '8px' } }, code(b.ours, 'var(--accent)'), code(b.theirs, 'var(--green)'))));
+    });
+    dialog({ title: 'Resolve conflicts: ' + path, wide: true, body, buttons: [{ label: 'Cancel' }, { label: 'Apply and mark resolved', primary: true, action: async () => {
+      let out = '';
+      let at = 0;
+      for (const b of blocks) {
+        out += text.slice(at, b.start) + (b.choice === 'ours' ? b.ours : b.choice === 'theirs' ? b.theirs : b.ours + b.theirs);
+        at = b.end;
+      }
+      out += text.slice(at);
+      await backend.invoke('file.write', { path, content: out });
+      await this.run('git.resolve', { path, how: 'mark' }, 'Conflicts resolved', true);
+    } }] });
+  }
+
+  // submodules ----------------------------------------------------------------------------------------------
+
+  async submodules() {
+    const body = el('div');
+    dialog({ title: 'Git Submodules', wide: true, body, buttons: [{ label: 'Close' }] });
+    const draw = async () => {
+      clear(body);
+      const list = await backend.invoke('git.submodules').catch(() => []);
+      for (const m of list) {
+        body.append(el('div', { style: { display: 'flex', gap: '8px', margin: '4px 0' } }, el('b', { style: { flex: 1 } }, m.path), el('span.pub-faint', {}, `${m.sha} ${m.describe}`),
+          el('span', { style: { color: m.state === 'ok' ? 'var(--green)' : 'var(--yellow)' } }, m.state === 'uninitialized' ? 'not cloned yet' : m.state === 'modified' ? 'another commit than the project\'s' : m.state === 'conflict' ? 'conflict' : 'up to date')));
+      }
+      if (!list.length) body.append(el('p.pub-faint', {}, 'No submodules (other repositories kept inside this one).'));
+      const url = el('input.input', { placeholder: 'https://… repository', style: { flex: 1 } });
+      const dir = el('input.input', { placeholder: 'folder (libs/name)', style: { width: '180px' } });
+      body.append(el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px' } },
+        el('button.btn.small', { onclick: async () => { await this.run('git.submodulesUpdate', {}, 'Submodules cloned / updated', true); draw(); } }, 'Update all (init, recursive)'), url, dir,
+        el('button.btn.primary.small', { onclick: async () => { if (url.value.trim() && dir.value.trim()) { await this.run('git.submoduleAdd', { url: url.value.trim(), path: dir.value.trim() }, 'Submodule added', true); draw(); } } }, 'Add')));
+    };
+    draw();
+  }
+
+  // ssh keys ------------------------------------------------------------------------------------------------
+
+  async sshKeys() {
+    const body = el('div');
+    dialog({ title: 'SSH Keys', wide: true, body, buttons: [{ label: 'Close' }] });
+    const draw = async () => {
+      clear(body);
+      body.append(el('p.pub-faint', {}, 'For repositories addressed git@host:owner/repo. The IDE uses the keys of ~/.ssh (and your ssh agent). Give the PUBLIC key to GitHub (Settings > SSH keys) or GitLab; the private key never leaves this computer.'));
+      const keys = await backend.invoke('ssh.keys').catch(() => []);
+      for (const k of keys) {
+        body.append(el('div', { style: { margin: '8px 0' } }, el('b', {}, k.name), ' ', el('span.pub-faint', {}, `${k.type} ${k.comment}`),
+          el('textarea.input', { readonly: true, rows: 2, style: { width: '100%', fontSize: '11px' }, value: k.publicKey }),
+          el('button.btn.small', { onclick: () => { copyText(k.publicKey); notify('Public key copied.', 'success', { title: 'SSH' }); } }, 'Copy the public key')));
+      }
+      if (!keys.length) body.append(el('p', {}, 'No key yet.'));
+      const name = el('input.input', { value: 'id_ed25519', style: { width: '160px' } });
+      const host = el('input.input', { value: 'github.com', style: { width: '140px' } });
+      body.append(el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center' } }, name,
+        el('button.btn.small', { onclick: async () => { if (await this.call('ssh.generate', { name: name.value.trim() })) draw(); } }, 'Generate a key (ed25519)'), el('span', { style: { flex: 1 } }), host,
+        el('button.btn.small', { onclick: async () => { const r = await this.call('ssh.test', { host: host.value.trim() }); if (r) notify(r.message || 'No answer', r.ok ? 'success' : 'warning', { title: 'ssh ' + host.value }); } }, 'Test the connection'),
+        el('button.btn.small', { onclick: () => this.app.openUrl('https://github.com/settings/ssh/new') }, 'Add it on GitHub…')));
+    };
+    draw();
+  }
+
+  // the log's graph -----------------------------------------------------------------------------------------
+
+  /** One small SVG per commit (lines of the branches, a dot, merges joining): lanes worked out from the parents, newest first. @return Node[] */
+  graph(list) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const colors = ['#4c8bf5', '#e5683c', '#4caf7d', '#c678dd', '#e5c07b', '#56b6c2', '#e06c75'];
+    const W = 12;
+    const H = 22;
+    let lanes = [];
+    const rows = [];
+    for (const c of list) {
+      const before = lanes.slice();
+      let col = before.indexOf(c.sha);
+      if (col < 0) { col = before.indexOf(null); if (col < 0) col = before.length; before[col] = c.sha; }
+      const after = before.slice();
+      const merges = [];
+      // every lane that waits for this commit ends here (a branch joining)
+      const joins = before.map((s, i) => (s === c.sha && i !== col ? i : -1)).filter((i) => i >= 0);
+      for (const i of joins) after[i] = null;
+      after[col] = c.parents[0] || null;
+      for (const p of c.parents.slice(1)) {
+        let at = after.indexOf(p);
+        if (at < 0) { at = after.indexOf(null); if (at < 0 || at === col) at = after.length; after[at] = p; }
+        merges.push(at);
+      }
+      rows.push({ before, after, col, joins, merges });
+      lanes = after;
+      while (lanes.length && lanes[lanes.length - 1] == null) lanes.pop();
+    }
+    const width = Math.max(1, ...rows.map((r) => Math.max(r.before.length, r.after.length))) * W + 6;
+    return rows.map((r) => {
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('width', String(width));
+      svg.setAttribute('height', String(H));
+      svg.style.flex = 'none';
+      const line = (x1, y1, x2, y2, color) => {
+        const l = document.createElementNS(ns, 'line');
+        l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+        l.setAttribute('stroke', color); l.setAttribute('stroke-width', '1.6');
+        svg.append(l);
+      };
+      const x = (i) => i * W + W / 2 + 2;
+      const color = (i) => colors[i % colors.length];
+      r.before.forEach((s, i) => { if (s != null && i !== r.col && !r.joins.includes(i)) line(x(i), 0, x(i), H, color(i)); });
+      if (r.before[r.col] != null && r.before.indexOf(r.before[r.col]) === r.col) line(x(r.col), 0, x(r.col), H / 2, color(r.col));
+      for (const i of r.joins) line(x(i), 0, x(r.col), H / 2, color(i));
+      if (r.after[r.col] != null) line(x(r.col), H / 2, x(r.col), H, color(r.col));
+      for (const i of r.merges) line(x(r.col), H / 2, x(i), H, color(i));
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('cx', x(r.col)); dot.setAttribute('cy', H / 2); dot.setAttribute('r', '3.6'); dot.setAttribute('fill', color(r.col));
+      svg.append(dot);
+      return svg;
+    });
   }
 }

@@ -12,6 +12,9 @@ final class MainTest extends AppTestCase
 
     protected function setUp(): void
     {
+        // a folder of its own for the IDE's storage (accounts, sessions, recent projects): the tests never read or change a real one
+        $this->varDir = sys_get_temp_dir() . '/jumphp-ide-var-' . bin2hex(random_bytes(4));
+        putenv('JUMPHP_VAR=' . $this->varDir);
         $this->project = sys_get_temp_dir() . '/jumphp-ide-test-' . bin2hex(random_bytes(4));
         mkdir($this->project . '/games/demo/config', 0777, true);
         mkdir($this->project . '/games/demo/src/Scene', 0777, true);
@@ -39,7 +42,11 @@ final class MainTest extends AppTestCase
         putenv('JUMPHP_IDE_PROJECT');
         putenv('PATH=' . $this->path);
         exec('rm -rf ' . escapeshellarg($this->project));
+        putenv('JUMPHP_VAR');
+        $this->varDir !== '' && exec('rm -rf ' . escapeshellarg($this->varDir));
     }
+
+    private string $varDir = '';
 
     private function ide(string $name, array $payload = []): mixed
     {
@@ -161,6 +168,34 @@ final class MainTest extends AppTestCase
             self::assertSame([], $this->ide('git.credentials'));
         } finally {
             $this->app->storage->writeJson('git-credentials.json', []);
+        }
+    }
+
+    public function testSshKeysAreListedAndNeverReplaced(): void
+    {
+        $dir = sys_get_temp_dir() . '/jumphp-ssh-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        putenv("JUMPHP_SSH_DIR=$dir");
+        try {
+            self::assertSame([], $this->ide('ssh.keys'));
+            file_put_contents("$dir/id_demo.pub", "ssh-ed25519 AAAAC3Nza demo@pc\n");
+            $keys = $this->ide('ssh.keys');
+            self::assertSame([['name' => 'id_demo', 'type' => 'ssh-ed25519', 'comment' => 'demo@pc', 'publicKey' => 'ssh-ed25519 AAAAC3Nza demo@pc']], $keys);
+            try {
+                $this->ide('ssh.generate', ['name' => 'id_demo']);
+                self::fail('a key was replaced');
+            } catch (\Throwable $e) {
+                self::assertStringContainsString('never replaces', $e->getMessage());
+            }
+            try {
+                $this->ide('ssh.generate', ['name' => '../evil']);
+                self::fail('a path was accepted');
+            } catch (\Throwable $e) {
+                self::assertStringContainsString('file name', $e->getMessage());
+            }
+        } finally {
+            putenv('JUMPHP_SSH_DIR');
+            exec('rm -rf ' . escapeshellarg($dir));
         }
     }
 

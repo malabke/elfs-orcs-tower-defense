@@ -2,7 +2,7 @@
 game:
   id: ide
   title: "JumPHP IDE"
-  version: 0.1.49
+  version: 0.1.50
   description: "An IDE for PHP games and apps (JumPHP): code intelligence, Git, run and tests, visual HTML editor."
   lang: en
   ui: webview
