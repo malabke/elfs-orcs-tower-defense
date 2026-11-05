@@ -402,6 +402,24 @@ export const prefs = {
   },
 };
 
+/** The languages jumphp.net speaks (its news come in them): "" = the system's. */
+export const LANGUAGES = [['', 'Automatic (the system\'s language)'], ['fr', 'Français'], ['en', 'English'], ['es', 'Español'], ['de', 'Deutsch'], ['it', 'Italiano'], ['pt', 'Português'],
+  ['nl', 'Nederlands'], ['pl', 'Polski'], ['ru', 'Русский'], ['uk', 'Українська'], ['tr', 'Türkçe'], ['ja', '日本語'], ['zh', '中文'], ['ko', '한국어']];
+
+/** The language of the IDE's texts that come from jumphp.net (the news): the one chosen in Settings, else the system's (two letters). */
+export function uiLang() {
+  const chosen = prefs.get('lang', '');
+  return LANGUAGES.some(([code]) => code && code === chosen) ? chosen : (navigator.language || 'en').slice(0, 2).toLowerCase();
+}
+
+/** A <select> of the languages, saved at once in prefs (Settings, the News tab). */
+export function languageSelect(onChange) {
+  const select = el('select.input', {}, ...LANGUAGES.map(([code, name]) => el('option', { value: code }, name)));
+  select.value = prefs.get('lang', '');
+  select.addEventListener('change', () => { prefs.set('lang', select.value); onChange?.(select.value); });
+  return select;
+}
+
 /**
  * Text to the system clipboard. The desktop IDE's WebView has no navigator.clipboard: the native one (native.copy)
  * there; in the web IDE the browser's, else the old way through a hidden text field.

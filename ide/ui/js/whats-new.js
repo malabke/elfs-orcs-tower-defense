@@ -1,9 +1,9 @@
 // What's new (jumphp.net/nouveautes): the entries in the user's language, shown once after an update to a new IDE version (the
 // version seen last is kept), and from Help > What's New… at any time.
 import { backend } from './backend.js';
-import { el, dialog, prefs } from './ui.js';
+import { el, dialog, prefs, uiLang } from './ui.js';
 
-const lang = () => (navigator.language || 'en').slice(0, 2).toLowerCase();
+const lang = uiLang;
 
 export class WhatsNew {
   constructor(app) { this.app = app; }

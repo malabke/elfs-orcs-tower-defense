@@ -1,7 +1,7 @@
 // The desktop app's welcome screen (no project open): sign in with jumphp.net, your playground projects (clone and
 // open), recent projects, open a folder, and New Project (game, desktop app, hybrid, Amstrad CPC remake, port).
 import { backend } from './backend.js';
-import { el, clear, icon, notify, dialog, timeAgo, confirm, basename, progressBar, menu } from './ui.js';
+import { el, clear, icon, notify, dialog, timeAgo, confirm, basename, progressBar, menu, uiLang, languageSelect } from './ui.js';
 
 const KINDS = [
   { id: 'original', game: true, icon: 'game', title: 'Game', text: 'An original retro game in PHP: desktop, browser, phones. Published on jumphp.net.', playground: true },
@@ -232,14 +232,16 @@ export class Welcome {
       this.offUpdate = backend.on('update.state', (st) => { if (this.section === 'news') draw(st); });
     }
     const list = el('div', {}, el('p.pub-faint', {}, 'Loading the news…'));
-    backend.invoke('whatsnew.get', { lang: (navigator.language || 'en').slice(0, 2).toLowerCase() }).then((entries) => {
+    const load = () => backend.invoke('whatsnew.get', { lang: uiLang() }).then((entries) => {
       clear(list);
       if (!entries?.length) { list.append(el('p.pub-faint', {}, 'jumphp.net cannot be reached right now.')); return; }
       for (const e of entries.slice(0, 6)) {
         list.append(el('h3', {}, e.title), el('p.pub-faint', {}, `JumPHP ${e.version} · IDE ${e.ide} · ${e.date}`), el('ul', {}, ...e.items.map((i) => el('li', {}, i))));
       }
     }).catch(() => { clear(list); list.append(el('p.pub-faint', {}, 'jumphp.net cannot be reached right now.')); });
-    main.append(el('h1', {}, 'News'), el('p.lead', {}, 'What is new in JumPHP and its IDE.'), card, list,
+    load();
+    main.append(el('h1', {}, 'News'), el('p.lead', {}, 'What is new in JumPHP and its IDE.'), card,
+      el('label.field', { style: { maxWidth: '320px' } }, el('span', {}, 'Language of the news'), languageSelect(() => { clear(list).append(el('p.pub-faint', {}, 'Loading the news…')); load(); })), list,
       el('p', {}, el('button.btn', { onclick: () => this.app.openUrl('https://jumphp.net/nouveautes') }, icon('globe'), 'All the news on jumphp.net')));
   }
 
