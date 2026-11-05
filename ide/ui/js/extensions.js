@@ -90,6 +90,15 @@ export class Extensions {
 
   async install(pkg, game) {
     if (!game || !/^[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*$/.test(pkg)) { notify('Not an installable package name.', 'error', { title: 'Engine Extensions' }); return; }
+    // an older JumPHP in the project (made on the server some versions ago) adds the package but not its documentation and samples: update it first
+    const supports = () => backend.invoke('jumphp.supports', { feature: 'extension-adopt', file: 'tools/extension-commands.sh' }).then((r) => r.ok, () => true);
+    if (!(await supports())) {
+      await this.app.updateJumphp({ ask: true, why: 'An extension brings its documentation and samples into your game: that needs a newer JumPHP in this project.' });
+      if (!(await supports())) {
+        notify('This project\'s JumPHP is too old to add the extension\'s documentation and samples: update JumPHP in the project (it was not updated), then install it again.', 'error', { title: 'Engine Extensions' });
+        return;
+      }
+    }
     const id = await this.app.runner.start({ id: 'adhoc', kind: 'tool', label: `extension:add ${game} ${pkg}`, command: ['bin/jumphp', 'extension:add', game, pkg] });
     // added: its documentation opens, with a Play button for each sample it brought into the game
     if (id === null || id === undefined) return;

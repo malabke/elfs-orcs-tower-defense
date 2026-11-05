@@ -27,6 +27,7 @@ final class InstalledExtensionsTest extends TestCase
         self::assertSame(['mine', 'other'], array_column($list, 'gameId'));
         self::assertSame(['games/mine', 'games/other'], array_column($list, 'game'));
         self::assertSame('A fire', $list[0]['samples'][0]['label']);
+        self::assertSame('games/mine/src/Extensions/Particles/FireSample.php', $list[0]['samples'][0]['file'], 'a path of the project, to open it in the editor');
         self::assertTrue($list[0]['hasDoc']);
         self::assertFalse($list[1]['hasDoc']);
     }

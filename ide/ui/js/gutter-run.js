@@ -97,7 +97,8 @@ export class GutterRun {
   sceneConfig(model, mark) {
     const game = this.gameOf(pathOf(model.uri));
     const base = this.app.runner.config('run:' + game);
-    return { config: { ...base, id: base.id + ':' + mark.name, label: `${game}: ${mark.name}` }, env: { JUMPHP_SCENE: mark.scene } };
+    // ad hoc: the backend runs the command given, for ids it does not know (run:<game>:<Scene> is not one of the project's configurations)
+    return { config: { id: 'adhoc', kind: base.kind || 'run', label: `${game}: ${mark.name}`, command: base.command }, env: { JUMPHP_SCENE: mark.scene } };
   }
 
   open(model, mark, at) {

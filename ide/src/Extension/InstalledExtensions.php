@@ -32,11 +32,17 @@ final class InstalledExtensions
                 'package' => $data['package'], 'name' => (string)($data['name'] ?? $m[2]), 'version' => (string)($data['version'] ?? ''),
                 'description' => (string)($data['description'] ?? ''), 'game' => $game, 'gameId' => basename($game) ?: basename((string)$this->workspace->name()),
                 'folder' => "{$m[1]}extensions/{$m[2]}", 'hasDoc' => is_string($data['doc'] ?? null),
-                'samples' => array_values(array_map(fn ($s) => ['class' => (string)($s['class'] ?? ''), 'label' => (string)($s['label'] ?? ''), 'file' => (string)($s['file'] ?? '')], (array)($data['samples'] ?? []))),
+                'samples' => array_values(array_map(fn ($s) => ['class' => (string)($s['class'] ?? ''), 'label' => (string)($s['label'] ?? ''), 'file' => self::inProject($game, (string)($s['file'] ?? ''))], (array)($data['samples'] ?? []))),
             ];
         }
         usort($out, fn ($a, $b) => [$a['package'], $a['game']] <=> [$b['package'], $b['game']]);
         return $out;
+    }
+
+    /** A sample's file is written relative to its game (src/Extensions/<Name>/X.php): the editor opens paths of the project (games/<id>/src/...). */
+    private static function inProject(string $game, string $file): string
+    {
+        return $file === '' || $game === '' || str_starts_with($file, "$game/") ? $file : "$game/$file";
     }
 
     /**

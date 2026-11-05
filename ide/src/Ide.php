@@ -126,7 +126,12 @@ final class Ide
             $updater = new JumphpUpdater($this->processes, $root);
             $this->register('jumphp.check', fn () => $updater->check());
             $this->register('jumphp.update', fn (array $p) => $updater->update(!empty($p['force'])));
-            $this->register('jumphp.supports', fn (array $p) => ['ok' => str_contains((string)@file_get_contents("$root/bin/jumphp"), (string)($p['feature'] ?? ''))]);
+            // whether the project's JumPHP knows a feature: its text in bin/jumphp, or in one of the tools/ files (tools/extension-commands.sh...)
+            $this->register('jumphp.supports', function (array $p) use ($root) {
+                $file = (string)($p['file'] ?? 'bin/jumphp');
+                $file = $file === 'bin/jumphp' || preg_match('#^tools/[A-Za-z0-9._-]+$#', $file) ? $file : 'bin/jumphp';
+                return ['ok' => str_contains((string)@file_get_contents("$root/$file"), (string)($p['feature'] ?? ''))];
+            });
         }
         if ($root !== null && $this->runner !== null) {
             $this->registerDebug($root);

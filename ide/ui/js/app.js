@@ -427,8 +427,10 @@ class App {
         return false;
       }
       if (plan.upToDate) { if (plan.latest && plan.current !== plan.latest) await backend.invoke('jumphp.update').catch(() => null); return true; }
+      // "Later" is for a day: an old JumPHP in a project breaks things (extensions, the debugger...), the question comes back
       const declined = prefs.get('jumphpDeclined:' + this.projectKey);
-      if (plan.changed.length && !ask && declined === plan.latest) return false;
+      const [declinedFor, declinedAt] = String(declined || '').split('@');
+      if (plan.changed.length && !ask && declinedFor === plan.latest && Date.now() - Number(declinedAt || 0) < 24 * 3600 * 1000) return false;
       const apply = async (force) => {
         const task = this.task('Updating JumPHP in this project…');
         try {
@@ -453,7 +455,7 @@ class App {
       return new Promise((resolve) => {
         dialog({ title: 'Update JumPHP in this project', body: el('div', {}, el('p', { style: { whiteSpace: 'pre-wrap' } }, text), el('pre.console', { style: { maxHeight: '180px', overflow: 'auto' } }, list)),
           buttons: [
-            { label: 'Later', action: () => { prefs.set('jumphpDeclined:' + this.projectKey, plan.latest); resolve(false); } },
+            { label: 'Later', action: () => { prefs.set('jumphpDeclined:' + this.projectKey, plan.latest + '@' + Date.now()); resolve(false); } },
             ...(plan.known ? [{ label: 'Keep my changes', action: async () => resolve(await apply(false)) }] : []),
             { label: 'Update', primary: true, action: async () => resolve(await apply(true)) },
           ],

@@ -65,9 +65,8 @@ final class JumphpUpdater
             }
             return $this->fetch('main')
                 ->then(fn () => $this->cached(['rev-parse', 'FETCH_HEAD']))
-                ->then(function (array $r) {
+                ->then(fn (array $r) => $this->knownCurrent()->then(function (?string $current) use ($r) {
                     $latest = trim($r['stdout']);
-                    $current = $this->current();
                     if ($current === $latest) {
                         return ['upToDate' => true, 'latest' => $latest, 'current' => $current, 'files' => [], 'deleted' => [], 'changed' => []];
                     }
@@ -76,8 +75,26 @@ final class JumphpUpdater
                             : $this->fetch($current)->then(fn () => $this->tree($current), fn () => null);
                         return $base->then(fn (?array $old) => $this->compare($latest, $current, $new, $old));
                     });
-                });
+                }));
         });
+    }
+
+    /**
+     * The commit the project's JumPHP comes from: the record, else (a project made on the server, which keeps no record) the commit of the tag
+     * v<VERSION> of its VERSION file: then only what the user changed is asked about, the rest is updated quietly.
+     *
+     * @return Deferred resolves with ?string
+     */
+    private function knownCurrent(): Deferred
+    {
+        $current = $this->current();
+        $version = trim((string)@file_get_contents("$this->root/VERSION"));
+        if ($current !== null || !preg_match('/^\d+\.\d+\.\d+$/', $version)) {
+            return Deferred::resolved($current);
+        }
+        return $this->fetch("refs/tags/v$version")
+            ->then(fn () => $this->cached(['rev-parse', 'FETCH_HEAD^{commit}']))
+            ->then(fn (array $r) => preg_match('/^[0-9a-f]{40}$/', trim($r['stdout'])) ? trim($r['stdout']) : null, fn () => null);
     }
 
     /** Whether the project's own git has JumPHP's history (JumPHP's repository, a fork, a clone of it). */

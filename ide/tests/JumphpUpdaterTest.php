@@ -37,13 +37,17 @@ final class JumphpUpdaterTest extends TestCase
     }
 
     /** A project made from JumPHP's first version as the IDE makes them: a fresh history, the commit recorded. */
-    private function project(bool $record = true): JumphpUpdater
+    private function project(bool $record = true, ?string $version = null): JumphpUpdater
     {
         $first = $this->sh('git -C up rev-parse HEAD');
         $this->sh('mkdir app && cd up && git archive HEAD | tar -x -C ../app && cd ../app && rm -rf games/pong && mkdir -p games/clock && echo mine > games/clock/Main.php && git init -q -b main');
         if ($record) {
             mkdir("$this->dir/app/.jumphp");
             file_put_contents("$this->dir/app/.jumphp/jumphp.json", json_encode(['commit' => $first]));
+        }
+        if ($version !== null) {   // a project made on the server: no record, but the VERSION of the JumPHP it came from (its tag)
+            file_put_contents("$this->dir/app/VERSION", "$version\n");
+            $this->sh("git -C up tag v$version $first");
         }
         // JumPHP moves on
         $this->sh('cd up && echo v2 > bin/jumphp && echo e2 > engine/Engine.php && echo n > tools/new.sh && git rm -q tools/gone.sh && echo readme2 > README.md && git add -A && git commit -qm two');
@@ -57,6 +61,16 @@ final class JumphpUpdaterTest extends TestCase
             usleep(5000);
         }
         return $deferred->result();
+    }
+
+    public function testAProjectMadeOnTheServerIsKnownByItsVersionFile(): void
+    {
+        $updater = $this->project(false, '0.5.8');
+        self::assertNull($updater->current(), 'no record');
+        $plan = $this->settle($updater->check());
+        self::assertFalse($plan['upToDate']);
+        self::assertSame([], $plan['changed'], 'nothing of JumPHP was changed by the user: no question asked');
+        self::assertTrue($plan['known'] ?? false);
     }
 
     public function testAnUntouchedProjectIsUpdatedAndItsGamesAreLeftAlone(): void
