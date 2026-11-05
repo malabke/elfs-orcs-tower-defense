@@ -993,7 +993,7 @@ class App {
     const previewTabs = el('input', { type: 'checkbox', checked: prefs.get('previewTabs', true) });
     const autoscroll = el('input', { type: 'checkbox', checked: prefs.get('autoscroll', false) });
     const sideBySide = el('input', { type: 'checkbox', checked: prefs.get('diffSideBySide', true) });
-    dialog({ title: 'Settings', body: el('div', {}, field('Theme', theme), field('Language of the news (jumphp.net)', languageSelect()), field('Editor font size', size),
+    dialog({ title: 'Settings', body: el('div', {}, field('Theme', theme), field('Language (the news; the welcome screen)', languageSelect(() => this.welcome?.changeLanguage?.())), field('Editor font size', size),
       el('label.checkbox', {}, minimap, 'Show the minimap'), el('br'), el('label.checkbox', {}, autosave, 'Save files automatically'), el('br'),
       el('label.checkbox', {}, previewTabs, 'Open files in a preview tab on single click'), el('br'), el('label.checkbox', {}, autoscroll, 'Always select the opened file in the Project view'), el('br'),
       el('label.checkbox', {}, sideBySide, 'Diffs side by side')),

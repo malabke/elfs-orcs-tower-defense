@@ -406,6 +406,21 @@ export const prefs = {
 export const LANGUAGES = [['', 'Automatic (the system\'s language)'], ['fr', 'Français'], ['en', 'English'], ['es', 'Español'], ['de', 'Deutsch'], ['it', 'Italiano'], ['pt', 'Português'],
   ['nl', 'Nederlands'], ['pl', 'Polski'], ['ru', 'Русский'], ['uk', 'Українська'], ['tr', 'Türkçe'], ['ja', '日本語'], ['zh', '中文'], ['ko', '한국어']];
 
+// The IDE's own texts: English in the code (the key), translated by ide/ui/js/i18n/<code>.js (loaded when the language is chosen).
+let dictionary = {};
+
+/** Loads the texts of the chosen language (English: none to load). Call it, then draw again. */
+export async function loadLanguage() {
+  const code = uiLang();
+  if (code === 'en') { dictionary = {}; return; }
+  try { dictionary = (await import(`./i18n/${code}.js`)).default || {}; } catch { dictionary = {}; }
+}
+
+/** An IDE text in the chosen language: t('version {v}', { v: '0.1.57' }); a text with no translation shows as written (English). */
+export function t(key, vars = {}) {
+  return String(dictionary[key] ?? key).replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m));
+}
+
 /** The language of the IDE's texts that come from jumphp.net (the news): the one chosen in Settings, else the system's (two letters). */
 export function uiLang() {
   const chosen = prefs.get('lang', '');
