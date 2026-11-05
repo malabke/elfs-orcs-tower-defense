@@ -131,7 +131,9 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 - to check (a colleague of David, Windows, 2026-11-05), projects moved / cloned by the IDE: (1) after moving a project folder, the IDE asks to
   sign in to jumphp.net again and wants to clone the project again unless the folder is reopened by hand (atypical case, but remember
   the folder's new place); (2) on a second PC, resuming a project clones it without asking where: let the user choose the folder;
-  it went into AppData; (3) something shown in red there: find out what it is and whether it is an error or just noise
+  it went into %LOCALAPPDATA%\Temp\JumPHP-Projects\<id> (Temp: Windows may clean it, so the default place must be a durable one, e.g.
+  Documents\JumPHP, and asked); (3) the red message was robocopy's exit code 1 (= files copied, not an error) shown as a failure in the Claude
+  window: only when Claude itself moved the project; the IDE could offer a "Move project" action (and keep its new place) instead
 - to check (David, on Windows, 2026-11-05): is the message the IDE puts in the clipboard normal? (what it copies, when, whether it should copy at all)
 - bug (David, Windows, 2026-11-05): the IDE sometimes shows "update" and "Restart now"; after the restart it still shows "update" and
   "Restart now" (a loop): check that the new version is really installed / its version compared to update.json (the updater, the installer)
