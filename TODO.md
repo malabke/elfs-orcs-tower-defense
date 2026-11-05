@@ -146,8 +146,8 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   (`account` in .jumphp/ide.json, "Use <login> for this project"), switching changes the token git and jumphp.net use; the trash's repository
   box asks GitHub's delete_repo right first (`/connect/github?extra=delete_repo`, `me.canDeleteRepo`), nothing is deleted before; pictures in .md
   (relative to the file, none from the internet). Not tried in the GUI nor with two real accounts. Left: an integrated Git client.
-- in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
-  on the line (the two items below); its scratch app is apps/zz-tui (delete it when done)
+- done (IDE 0.1.39): Xdebug on a TUI app (the Debug of a CLI app runs in the Terminal, so its screens get a terminal under Xdebug) and Run / Debug icons
+  on a CLI app's commands, with remembered arguments (the two items below are the same work)
 - done (2026-11-05, not released): the Logs window (View > Logs, Alt+F11): the IDE's own events, the programs it runs (bin/jumphp, Docker, git,
   Claude, OpenCode), filters (level, source, text), Pause / follow, Copy, a rotating file ide.log for bug reports (docs/ide.md "Logs").
   Left: the game / app run's own output as a source, the plugins' errors with their plugin name, an "open the folder" button
