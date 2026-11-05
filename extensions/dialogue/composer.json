@@ -1,0 +1,53 @@
+{
+    "name": "jumphp/dialogue",
+    "description": "Dialogues and quests for JumPHP games: branching conversations with conditions and variables, a quest log, a typewriter text box, all from JSON files",
+    "type": "jumphp-extension",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "JumPHP\\Dialogue\\": "src/"
+        }
+    },
+    "extra": {
+        "jumphp": {
+            "name": "Dialogue",
+            "engine": ">=0.5.9 <0.6",
+            "services": [
+                "JumPHP\\Dialogue\\Variables",
+                "JumPHP\\Dialogue\\QuestLog",
+                "JumPHP\\Dialogue\\DialogueRunner",
+                "JumPHP\\Dialogue\\DialogueBox"
+            ],
+            "summary": "Branching dialogues with conditions and variables, a quest log and a typewriter text box, written as JSON files and checked when loaded.",
+            "features": [
+                ".dialogue.json files: nodes, choices, conditions (gold >= 5 && !helped), set / action, {variables} in the text",
+                "Variables and a QuestLog (objectives with counts, started / progress / done / failed events) that dialogues can read and drive",
+                "DialogueRunner: start, line(), advance(), choose(); actions go to your code",
+                "DialogueBox: the text letter by letter, choices with a cursor, sized to the view",
+                "Errors say where (the dialogue, the node, the choice); save and restore of the whole state; pure PHP, 32-bit safe"
+            ],
+            "example": "$runner->load($this->engine->extensions()->load('assets/dialogue/village.dialogue.json'));\n$runner->start('elder');\n// each frame: $box->update($dt, $this->actions());  then  $box->render($r, $this->font());",
+            "docs": "https://github.com/davidnurdin/jumPhp/blob/main/extensions/dialogue/doc/index.md",
+            "loaders": {
+                ".dialogue.json": "JumPHP\\Dialogue\\DialogueLoader"
+            }
+        }
+    },
+    "keywords": [
+        "jumphp",
+        "jumphp-extension",
+        "game",
+        "dialogue",
+        "quests",
+        "rpg",
+        "story"
+    ],
+    "homepage": "https://jumphp.net/extensions/dialogue",
+    "support": {
+        "source": "https://github.com/davidnurdin/jumPhp/tree/main/extensions/dialogue",
+        "issues": "https://github.com/davidnurdin/jumPhp/issues"
+    }
+}

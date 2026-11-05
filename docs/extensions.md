@@ -57,7 +57,7 @@ What an extension brings into a game besides its code (`bin/jumphp extension:add
   the install (Tools > Engine Extensions…) with a **Play** button for each sample, and from the External Libraries (the extension
   has its package name and a **Docs** button there).
 - `extra.jumphp.samples` / `extra.jumphp.doc` name other folders than `samples/` and `doc/`.
-- JumPHP's own five (`particles`, `physics`, `shorts`, `effects`, `collision`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
+- JumPHP's own six (`particles`, `physics`, `shorts`, `effects`, `collision`, `dialogue`) have both: try `bin/jumphp extension:add <game> jumphp/particles`.
 
 ## A clean project
 
@@ -126,7 +126,7 @@ each new tag is a new version). Games then `bin/jumphp extension:add <game> <you
 https://jumphp.net/extensions lists it (it reads Packagist's `jumphp-extension` packages). Do not require
 `jumphp/engine`: it is not on Packagist, and every JumPHP project already has it (`../../engine`).
 
-**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`, `jumphp/effects`, `jumphp/collision`): developed here in `extensions/<id>`, split to
+**JumPHP's own** (`jumphp/particles`, `jumphp/physics`, `jumphp/shorts`, `jumphp/effects`, `jumphp/collision`, `jumphp/dialogue`): developed here in `extensions/<id>`, split to
 one read-only repository each, `davidnurdin/jumphp-<id>`, by `.github/workflows/extensions-split.yml` on each release
 tag `v*` (the split gets the same tag) — the same as `tools/extensions-publish.sh --push`. Without `--push` the script is
 a dry run: the splits go to `.build/extensions-split/<id>.git`, to look at or to require through a `vcs` repository.
@@ -145,6 +145,14 @@ point, blinds, a dissolve; `cover()` a scene change `reveal()`), a **flash**, a 
 drawn with translucent rectangles, pure PHP, 32-bit safe. Its `doc/index.md` has the code; `bin/jumphp extension:add <game> jumphp/effects`
 brings two samples (`FlashSample`, `TransitionSample`) into your game. Before its repository `davidnurdin/jumphp-effects` exists and it is
 submitted on Packagist, the release split skips it with a warning (the others are not blocked).
+
+## The dialogue extension
+
+`extensions/dialogue` (`jumphp/dialogue`), shown by `games/dialogue-demo`: branching **dialogues** in `.dialogue.json` files (nodes, choices, `if`
+conditions read by a safe parser, `set` and `action`, `{variables}` in the text, `branch` routers), **variables**, a **quest log** (objectives
+with counts, `quest.<id>` readable by conditions) and a **text box** (`DialogueBox`: letter by letter, a cursor for the choices). A file is
+checked when loaded and its errors say the dialogue, the node and the choice. Everything can be saved and restored. `doc/index.md` has the
+file format and the code, and `bin/jumphp extension:add <game> jumphp/dialogue` brings `DialogueSample` into your game.
 
 ## The collision extension
 

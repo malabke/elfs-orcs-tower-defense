@@ -1,0 +1,38 @@
+{
+    "variables": { "gold": 5, "name": "traveller" },
+    "quests": {
+        "rescue": {
+            "title": "The lost key",
+            "text": "The elder lost his key in the grass.",
+            "objectives": [
+                { "id": "find-key", "text": "Find the key" },
+                { "id": "coins", "text": "Pick up the coins", "count": 3 }
+            ]
+        }
+    },
+    "dialogues": {
+        "elder": {
+            "start": "router",
+            "nodes": {
+                "router": { "branch": [
+                    { "if": "quest.rescue == 'done'", "next": "thanks" },
+                    { "if": "quest.rescue == 'active'", "next": "waiting" },
+                    { "if": "seen.elder.hello", "next": "again" },
+                    { "next": "hello" }
+                ] },
+                "hello": { "speaker": "Elder", "text": ["Welcome, {name}.", "I lost my key in the grass."], "next": "ask" },
+                "again": { "speaker": "Elder", "text": "Ah, you are back. Will you help?", "next": "ask" },
+                "ask": { "speaker": "Elder", "text": "Will you help me find it?", "choices": [
+                    { "text": "Of course", "next": "yes", "action": "quest.start:rescue" },
+                    { "text": "I only have {gold} gold. What do you pay?", "if": "gold < 10 && !asked_pay", "next": "pay" },
+                    { "text": "Not now", "next": "no" }
+                ] },
+                "pay": { "speaker": "Elder", "text": "Ten gold, and my thanks.", "set": { "asked_pay": true }, "next": "ask" },
+                "yes": { "speaker": "Elder", "text": "Thank you! Look near the stones.", "end": true },
+                "no": { "speaker": "Elder", "text": "Come back if you change your mind.", "end": true },
+                "waiting": { "speaker": "Elder", "text": "Any luck with the key?", "end": true },
+                "thanks": { "speaker": "Elder", "text": "You found it! Take this.", "set": { "gold": "+10" }, "action": "give:reward", "end": true }
+            }
+        }
+    }
+}
