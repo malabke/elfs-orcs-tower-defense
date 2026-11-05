@@ -143,68 +143,6 @@ export class GitExtra {
     draw();
   }
 
-  /** One change (hunk) of a file at a time into the index, or back out: the diff of the file, split. */
-  async hunks(path) {
-    const body = el('div', { style: { maxHeight: '60vh', overflow: 'auto' } });
-    dialog({ title: 'Stage by hunk: ' + path, wide: true, body, buttons: [{ label: 'Close' }] });
-    const draw = async () => {
-      clear(body);
-      const [open, staged] = await Promise.all([backend.invoke('git.hunks', { path }).catch(() => []), backend.invoke('git.hunks', { path, staged: true }).catch(() => [])]);
-      const block = (h, isStaged) => el('div', { style: { margin: '8px 0', border: '1px solid var(--border-2)', borderRadius: '6px' } },
-        el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', padding: '4px 8px', background: 'var(--panel)' } }, el('code', { style: { flex: 1 } }, h.header.replace(/^(@@[^@]*@@).*/, '$1')),
-          el('span', { style: { color: 'var(--green)' } }, '+' + h.added), el('span', { style: { color: 'var(--red)' } }, '−' + h.removed),
-          el('button.btn.small', { onclick: async () => { await this.call('git.stageHunk', { path, index: h.index, unstage: isStaged }); await this.git.refresh(); draw(); } }, isStaged ? 'Unstage' : 'Stage')),
-        el('pre', { style: { margin: 0, padding: '6px 8px', fontSize: '12px', overflow: 'auto' } }, ...h.text.split('\n').slice(1).map((l) => el('div', { style: { color: l.startsWith('+') ? 'var(--green)' : l.startsWith('-') ? 'var(--red)' : '' } }, l || ' '))));
-      if (staged.length) body.append(el('h4', {}, 'Staged'), ...staged.map((h) => block(h, true)));
-      if (open.length) body.append(el('h4', {}, 'Not staged'), ...open.map((h) => block(h, false)));
-      if (!staged.length && !open.length) body.append(el('p.pub-faint', {}, 'No changes in this file.'));
-    };
-    draw();
-  }
-
-  async submodules() {
-    const body = el('div');
-    dialog({ title: 'Git Submodules', wide: true, body, buttons: [{ label: 'Close' }] });
-    const draw = async () => {
-      clear(body);
-      const list = await backend.invoke('git.submodules').catch(() => []);
-      for (const s of list) {
-        body.append(el('div', { style: { display: 'flex', gap: '8px', margin: '4px 0' } }, el('b', { style: { width: '200px' } }, s.path), el('code', {}, s.sha), el('span.pub-faint', { style: { flex: 1 } }, `${s.describe} · ${s.state}`)));
-      }
-      if (!list.length) body.append(el('p.pub-faint', {}, 'No submodules.'));
-      const url = el('input.input', { placeholder: 'https://…/repository.git', style: { flex: 1 } });
-      const path = el('input.input', { placeholder: 'folder', style: { width: '160px' } });
-      body.append(el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px' } }, url, path,
-        el('button.btn.small', { onclick: async () => { if (url.value.trim() && path.value.trim()) { await this.run('git.submoduleAdd', { url: url.value.trim(), path: path.value.trim() }, 'Submodule added', true); draw(); } } }, 'Add'),
-        el('button.btn.small.primary', { onclick: async () => { await this.run('git.submodulesUpdate', {}, 'Submodules updated', true); draw(); } }, 'Update all (init, recursive)')));
-    };
-    draw();
-  }
-
-  /** ssh keys for git@github.com:... : the keys of ~/.ssh, a new ed25519 one, the public key to paste on GitHub / GitLab, a test of the connection. */
-  async sshKeys() {
-    const body = el('div');
-    dialog({ title: 'SSH Keys', wide: true, body, buttons: [{ label: 'Close' }] });
-    const draw = async () => {
-      clear(body);
-      const keys = await backend.invoke('ssh.keys').catch(() => []);
-      for (const k of keys) {
-        body.append(el('div', { style: { margin: '6px 0' } }, el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, el('b', { style: { width: '160px' } }, k.name), el('span.pub-faint', { style: { flex: 1 } }, `${k.type} ${k.comment}`),
-          el('button.btn.small', { onclick: async () => { await copyText(k.publicKey); notify('Public key copied: paste it in GitHub > Settings > SSH keys.', 'success', { title: 'SSH' }); } }, 'Copy public key')),
-          el('code', { style: { display: 'block', fontSize: '11px', wordBreak: 'break-all', opacity: 0.7 } }, k.publicKey.slice(0, 110) + '…')));
-      }
-      if (!keys.length) body.append(el('p.pub-faint', {}, 'No key in ~/.ssh yet.'));
-      const name = el('input.input', { value: 'id_ed25519', style: { width: '160px' } });
-      const comment = el('input.input', { placeholder: 'comment (your e-mail)', style: { flex: 1 } });
-      const host = el('input.input', { value: 'github.com', style: { width: '140px' } });
-      body.append(el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px' } }, name, comment,
-        el('button.btn.small.primary', { onclick: async () => { if (await this.call('ssh.generate', { name: name.value.trim(), comment: comment.value.trim() })) draw(); } }, 'Generate (ed25519)')),
-      el('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } }, host,
-        el('button.btn.small', { onclick: async () => { const r = await this.call('ssh.test', { host: host.value.trim() }); if (r) notify(r.message || 'No answer', r.ok ? 'success' : 'warning', { title: 'ssh ' + host.value }); } }, 'Test the connection')));
-    };
-    draw();
-  }
-
   /** A command whose error is shown, not thrown. */
   async call(command, payload) {
     try { return await backend.invoke(command, payload); } catch (e) { notify(e.message, 'error', { title: 'Git' }); return null; }
