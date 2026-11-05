@@ -136,6 +136,10 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   shows the older version is explained once (installed X, runs Y from <path>) instead of looping "update / Restart now". Permission requests
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
+- todo (David, 2026-11-05): the IDE reads .md files interpreted by default (rendered), with 3 modes: view, full edit mode (source), edit + view (split).
+- todo (David, 2026-11-05): on the welcome screen's project list, beside the "x" that removes a project from the list, a trash icon: a red warning
+  that it deletes the project's FILES on this computer; in its dialog an unchecked-by-default box "Delete the repository" (dangerous) that also deletes
+  the GitHub repository AND the project on jumphp.net (the GitHub delete needs the delete_repo scope: ask for it only then, with a second confirmation).
 - idea (2026-11-05): several GitHub accounts signed in the IDE, one assigned to each project (a token or a credential helper of the IDE,
   no Windows credential manager), the account shown; an integrated Git client with its own authentication. (Pinning is done, see above.)
 - in progress (2026-11-04, stopped by the usage limit, resume on David's word): Xdebug on a TUI app + Run / Debug icons
