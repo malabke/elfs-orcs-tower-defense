@@ -116,6 +116,7 @@ export class Git {
         el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', paddingLeft: '28px' } },
         el('button.btn', { title: 'Their version beside yours', onclick: () => this.compareConflict(f.path) }, 'Compare'),
         el('button.btn', { title: 'Edit the file with its <<<<<<< / >>>>>>> markers, then mark it resolved', onclick: () => this.app.editors.open(f.path) }, 'Open'),
+        el('button.btn', { title: 'Each conflict: ours, theirs or both', onclick: () => this.extra.resolveBlocks(f.path) }, 'By block…'),
         take(f, 'ours', 'Ours', `Keep ${this.status.branch || 'the current branch'}'s version`),
         take(f, 'theirs', 'Theirs', `Take ${this.status.merging || 'the merged branch'}'s version`),
         take(f, 'both', 'Both', 'Ours, then theirs'),
@@ -167,6 +168,7 @@ export class Git {
       { label: 'Open File', icon: 'file', action: () => this.app.editors.open(f.path), disabled: f.status === 'deleted' },
       { label: 'Rollback…', icon: 'rollback', action: () => this.rollback([f.path]) },
       this.caps.log ? { label: 'Show History', icon: 'history', action: () => this.showLog(f.path) } : null,
+      f.status !== 'untracked' && f.status !== 'deleted' && this.caps.gitMode !== 'drafts' ? { label: 'Stage by Change…', icon: 'diff', action: () => this.extra.hunks(f.path) } : null,
     ].filter(Boolean), { x: e.clientX, y: e.clientY });
   }
 
@@ -263,6 +265,7 @@ export class Git {
       { label: 'Stashes…', icon: 'package', action: () => this.extra.stashes(), group: 'Actions' },
       { label: 'Tags…', icon: 'branch', action: () => this.extra.tags(), group: 'Actions' },
       { label: 'Remotes…', icon: 'globe', action: () => this.extra.remotes(), group: 'Actions' },
+      { label: 'Submodules…', icon: 'folder', action: () => this.extra.submodules(), group: 'Actions' },
       { label: 'Push, Force with Lease…', icon: 'push', action: () => this.forcePush(), group: 'Actions' },
       { label: 'Fetch (and prune)', icon: 'pull', action: () => this.run('git.fetch', {}, 'Fetched'), group: 'Actions' },
       ...local.map((b) => ({ label: (b.current ? '★ ' : '') + b.name, hint: b.upstream || b.sha, icon: 'branch', group: 'Local', action: () => this.branchMenu(b, at) })),
@@ -389,20 +392,23 @@ export class Git {
 
   async showLog(path = null) {
     if (!this.caps.log) return;
-    this.app.showTool('git');
+    // the content goes in BEFORE the window is shown: showTool('git') calls showLog() again while the log is empty (app.js), which showed the
+    // tool again... thousands of nested showLog / `git log` runs (the IDE froze on "Indexing" with the Git window open at start)
     clear(this.logNode);
     const commits = el('div.tree', { tabIndex: 0, style: { flex: '1', overflow: 'auto', minWidth: '0' } });
     const details = el('div', { style: { width: '38%', borderLeft: '1px solid var(--border-2)', overflow: 'auto' } });
     this.logNode.append(commits, details);
+    this.app.showTool('git');
     commits.append(el('div.placeholder', {}, 'Loading history…'));
     let list = [];
     try { list = await backend.invoke('git.log', { path, limit: 300 }); } catch (e) { clear(commits).append(el('div.placeholder', {}, e.message)); return; }
     clear(commits);
     if (path) commits.append(el('div.section-title', {}, icon('history'), 'History of ' + path));
-    for (const c of list) {
+    const graph = path ? [] : this.extra.graph(list);
+    for (const [n, c] of list.entries()) {
       const refs = c.refs ? c.refs.split(', ').filter(Boolean).map((r) => el('span.p-tag', { style: { marginRight: '4px', fontSize: '10px' } }, r.replace('HEAD -> ', '★ '))) : [];
       const row = el('div.row', { style: { paddingLeft: '10px' }, oncontextmenu: (e) => { e.preventDefault(); this.extra.commitMenu(c, e); }, onclick: () => { commits.querySelectorAll('.row').forEach((r) => r.classList.remove('sel')); row.classList.add('sel'); this.commitDetails(c, details, path); } },
-        el('span', { style: { color: 'var(--accent-2)', width: '10px' } }, '●'), ...refs, el('span.label', {}, c.subject),
+        graph[n] || el('span', { style: { color: 'var(--accent-2)', width: '10px' } }, '●'), ...refs, el('span.label', {}, c.subject),
         el('span.right', {}, `${c.author} · ${timeAgo(c.time)}`));
       commits.append(row);
     }
