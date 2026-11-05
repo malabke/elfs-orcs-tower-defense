@@ -7,6 +7,9 @@ import { backend } from './backend.js';
 import { el, clear, icon, basename, menu, prompt, notify, prefs, debounce } from './ui.js';
 import { monaco, pathOf, uriOf } from './editor.js';
 
+/** The debugging engines (the programs connect to the IDE with DBGp either way; Xdebug is the default). */
+const DEBUG_ENGINES = { xdebug: 'Xdebug', 'php-debugger': 'PHP Debugger (php-debugger.dev)' };
+
 export class DebugPanel {
   constructor(app) {
     this.app = app;
@@ -159,7 +162,7 @@ export class DebugPanel {
   // running ------------------------------------------------------------------------------------------------------
 
   /** Debugs a run configuration (the selected one by default): JUMPHP_XDEBUG=<port> makes bin/jumphp start PHP with Xdebug. */
-  async debug(config = this.app.runner.config(), extraEnv = {}) {
+  async debug(config = this.app.runner.config(), extraEnv = {}, engine = this.engine()) {
     if (!config) return null;
     let port;
     try { ({ port } = await backend.invoke('debug.listen')); } catch (e) { notify(e.message, 'error', { title: 'The debugger cannot start' }); return null; }
@@ -174,18 +177,36 @@ export class DebugPanel {
     }
     if (!this.breakpoints.size) notify('No breakpoint yet: click in the gutter left of a line of PHP to stop there.', 'info', { title: 'Debug ' + config.label });
     this.app.showTool('debug', true);
-    const id = await this.app.runner.start(config, { ...extraEnv, JUMPHP_XDEBUG: String(port) });
-    if (id !== null && id !== undefined) this.watchConnection(id, config);
+    // the engine: Xdebug (default) or PHP Debugger (https://php-debugger.dev), both speak DBGp to this debugger
+    const env = { ...extraEnv, JUMPHP_XDEBUG: String(port) };
+    if (engine === 'php-debugger') env.JUMPHP_DEBUGGER = 'php-debugger';
+    const id = await this.app.runner.start(config, env);
+    if (id !== null && id !== undefined) this.watchConnection(id, config, DEBUG_ENGINES[engine] || 'Xdebug');
     return id;
   }
 
+  /** The engine Debug uses: the saved choice, Xdebug until the user picks another one. */
+  engine() { const e = prefs.get('debugEngine', 'xdebug'); return DEBUG_ENGINES[e] ? e : 'xdebug'; }
+
+  /** Debug with... : a menu to pick the engine for this run (the checked one is the default; "Make default" below). */
+  debugWith(at) {
+    const current = this.engine();
+    menu([
+      { head: 'Debug with' },
+      ...Object.entries(DEBUG_ENGINES).map(([id, label]) => ({ label, checked: id === current, action: () => this.debug(undefined, {}, id) })),
+      '-',
+      { head: 'Default engine' },
+      ...Object.entries(DEBUG_ENGINES).map(([id, label]) => ({ label, checked: id === current, action: () => { prefs.set('debugEngine', id); notify(`Debug now uses ${label} by default.`, 'info', { title: 'Debugger' }); } })),
+    ], at);
+  }
+
   /** Says so when the program never connects to the debugger (instead of nothing happening). */
-  watchConnection(runId, config) {
+  watchConnection(runId, config, name = 'Xdebug') {
     let connected = false;
     const offs = [];
     const stop = () => { offs.forEach((off) => off?.()); clearTimeout(timer); };
-    const warn = (why) => notify(`${config.label}: Xdebug did not connect to the IDE (${why}). The run's output (Run window) may say why; `
-      + 'the first Debug builds the desktop image with Xdebug (about a minute).', 'error', { title: 'Debugger' });
+    const warn = (why) => notify(`${config.label}: ${name} did not connect to the IDE (${why}). The run's output (Run window) may say why; `
+      + 'the first Debug builds the desktop image with ${name} (about a minute).', 'error', { title: 'Debugger' });
     offs.push(backend.on('debug.state', (s) => { if ((s.sessions || []).length) { connected = true; stop(); } }));
     offs.push(backend.on('run.exit', (p) => { if (p.id === runId) { stop(); if (!connected) warn('the program ended first'); } }));
     const timer = setTimeout(() => { stop(); if (!connected) warn('nothing after 3 minutes'); }, 180000);

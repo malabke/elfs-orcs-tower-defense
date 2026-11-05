@@ -322,6 +322,7 @@ class App {
     $('runConfig').addEventListener('click', (e) => this.runner?.choose(e.currentTarget));
     $('runBtn').addEventListener('click', () => this.actions.run('run'));
     $('debugBtn').addEventListener('click', () => this.actions.run('debug'));
+    $('debugBtn').addEventListener('contextmenu', (e) => { e.preventDefault(); this.debugger?.debugWith(e.currentTarget); });
     $('testBtn').addEventListener('click', () => this.actions.run('test'));
     $('stopBtn').addEventListener('click', () => this.runner?.stop());
     $('pullBtn').addEventListener('click', () => this.git?.pull());
@@ -630,6 +631,7 @@ class App {
         const d = this.debugger;
         const paused = () => !!d.paused;
         a.add('debug', 'Debug', () => d.debug(), { kbd: 'Shift+F9', icon: 'debug' });
+        a.add('debugWith', 'Debug with… (Xdebug / PHP Debugger)', () => d.debugWith($('debugBtn')), { icon: 'debug' });
         a.add('debugResume', 'Resume Program', () => d.step('run'), { kbd: 'F9', icon: 'play', when: paused });
         a.add('stepOver', 'Step Over', () => d.step('step_over'), { kbd: 'F8', icon: 'stepOver', when: paused });
         a.add('stepInto', 'Step Into', () => d.step('step_into'), { kbd: 'F7', icon: 'stepInto', when: paused });

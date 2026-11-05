@@ -264,10 +264,18 @@ live_announce() {
 # base images stay without it (Xdebug slows PHP down).
 xdebug_image() {
   local base_image="$1" image="$2" dir="$3" what="$4" base
+  # JUMPHP_DEBUGGER=php-debugger: PHP Debugger (https://php-debugger.dev, DBGp like Xdebug, which stays the default) in
+  # place of Xdebug; it reads the same XDEBUG_* variables. PHP 8.2-8.5 only: the async runtime (8.6) keeps Xdebug.
+  if [ "${JUMPHP_DEBUGGER:-xdebug}" = php-debugger ]; then
+    case "$dir" in
+      *async*) say "PHP Debugger does not run on PHP 8.6 (async runtime): Xdebug is used" ;;
+      *) image="${image/xdebug/phpdebugger}"; dir=docker/desktop-phpdebugger; what="$what with PHP Debugger instead of" ;;
+    esac
+  fi
   base="$(docker image inspect -f '{{.Id}}' "$base_image")"
   if [ "$(docker image inspect -f '{{index .Config.Labels "jumphp.base"}}' "$image" 2>/dev/null)" != "$base" ]; then
-    say "building $image ($what with Xdebug, the first time)"
-    docker build -q -t "$image" --label "jumphp.base=$base" --build-arg "BASE=$base_image" "$dir" >/dev/null || die "Xdebug image not built ($image)"
+    say "building $image ($what Xdebug, the first time)"
+    docker build -q -t "$image" --label "jumphp.base=$base" --build-arg "BASE=$base_image" "$dir" >/dev/null || die "debugger image not built ($image)"
   fi
   XDEBUG_IMAGE_USED="$image"
   local port="${JUMPHP_XDEBUG##*:}"
@@ -319,8 +327,14 @@ php_run() {
 # the IDE's debugger as an MCP server on stdin / stdout, for Claude Code in a terminal (tools/debug-mcp.php):
 #   claude mcp add jumphp-debug -- bin/jumphp debug
 # it waits for Xdebug on JUMPHP_DEBUG_PORT (9003): Claude runs JUMPHP_XDEBUG=9003 bin/jumphp test <game>, then debug_wait
+# JUMPHP_DEBUGGER=php-debugger: PHP Debugger's own MCP server instead (https://php-debugger.dev/agentic-debugging/dbgp-client:
+# `dbgp` installed on this computer; claude mcp add dbgp -- dbgp mcp), then JUMPHP_DEBUGGER=php-debugger JUMPHP_XDEBUG=9003 bin/jumphp test <game>
 cmd_debug() {
   local port="${JUMPHP_DEBUG_PORT:-9003}" net=()
+  if [ "${JUMPHP_DEBUGGER:-xdebug}" = php-debugger ]; then
+    command -v dbgp >/dev/null || die "dbgp is not installed: curl -fsSL https://github.com/php-debugger/dbgp-client/releases/latest/download/install.sh | sh"
+    if [ "$port" = 9003 ]; then exec dbgp mcp; else exec dbgp -php-port "$port" mcp; fi
+  fi
   ensure_desktop_image >&2      # stdout is the MCP channel: nothing else may be written there
   case "$(uname -s)" in
     Linux) net=(--network host) ;;

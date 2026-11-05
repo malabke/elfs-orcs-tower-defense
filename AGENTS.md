@@ -194,6 +194,7 @@ the player's files are never touched; `JUMPHP_VAR=<dir>` forces a folder). They 
 | `JUMPHP_GL=0` / `1` | headless OpenGL off / on (default: on when the game's code calls `gl()` / `opengl()`: real window on Xvfb, Mesa) |
 | `JUMPHP_DEBUG=1` | FPS / scene overlay (F3 toggles it too) |
 | `JUMPHP_XDEBUG=<port>` | step debugging: PHP runs with Xdebug (desktop image + Xdebug, built once) and connects to a debugger listening on that port of this computer (the JumPHP IDE's Debug sets it); composer, phpstan and `php -l` run without it |
+| `JUMPHP_DEBUGGER=xdebug\|php-debugger` | the engine for `JUMPHP_XDEBUG` (default `xdebug`): `php-debugger` = [PHP Debugger](https://php-debugger.dev) (DBGp like Xdebug, near-zero overhead, PHP 8.2-8.5: the async runtime keeps Xdebug; image `docker/desktop-phpdebugger`, built once). The IDE: Debug with… (right click on the Debug button) picks it per run; `bin/jumphp debug` then starts PHP Debugger's own MCP server (`dbgp mcp`, `dbgp` installed: `claude mcp add dbgp -- dbgp mcp`) |
 
 **Which project, what kind, what starts** (the same for a game, a desktop app, a graphic app, a CLI app, a plugin):
 - which project: its folder name, `games/<id>` or `apps/<id>`, given to the commands; without it: the folder of `games/` / `apps/`
