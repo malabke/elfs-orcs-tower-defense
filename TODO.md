@@ -128,6 +128,11 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
 
 ## JumPHP IDE: the next features
 
+- to look into (David, 2026-11-05, not urgent): on his new PC `bin/jumphp run <game>` prints `amdgpu: unknown (family_id, chip_external_rev): (150, 193)`,
+  `libGL error: glx: failed to create dri3 screen` / `dri2 screen`, `failed to load driver: radeonsi`. Guess: the desktop Docker image's Mesa is too old for this
+  new AMD GPU (family 150), so GLX cannot make a hardware screen and SDL falls back to software (does the game still run, and how fast?). Ideas: a newer Mesa in
+  docker/desktop (backports / a newer base image), or when /dev/dri is passed and the driver fails, set `LIBGL_ALWAYS_SOFTWARE=1` (and `SDL_RENDER_DRIVER`) so the
+  messages and the failed attempts go away; check with `glxinfo -B` inside the container; find out whether the window really draws on the GPU or the CPU.
 - done (2026-11-05, IDE 0.1.43), problems reported by David and a colleague on Windows: "Commit All and Push…" (header button, Ctrl+Alt+K); the
   Claude window's instructions say to commit at once; a tool returning a non-zero code is muted yellow (robocopy 1 = copied, not an error);
   a project's clone is asked where to go (the default is the user's home, no longer the Temp folder, which Windows empties); the GitHub
