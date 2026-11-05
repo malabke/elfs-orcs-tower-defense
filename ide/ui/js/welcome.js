@@ -93,7 +93,7 @@ export class Welcome {
       for (const r of recent) {
         list.append(el('div.proj', { onclick: () => this.open(r.path), title: r.path },
           el('span.avatar-letter', {}, r.name[0].toUpperCase()), el('div.p-main', {}, el('div.p-name', {}, r.name), el('div.p-path', {}, r.path)),
-          r.slug ? el('span.p-tag', {}, 'jumphp.net') : null, el('span.p-path', {}, r.opened ? timeAgo(r.opened) : ''),
+          r.slug ? el('span.p-tag', {}, 'jumphp.net') : null, r.kind === 'extension' ? el('span.p-tag', { title: 'An engine extension' }, 'extension') : null, el('span.p-path', {}, r.opened ? timeAgo(r.opened) : ''),
           el('button.icon-btn.trash', { title: 'Delete the project from this computer…', onclick: (e) => { e.stopPropagation(); this.deleteProject(r); } }, icon('trash')),
           el('button.icon-btn', { title: 'Remove from the list', onclick: async (e) => { e.stopPropagation(); await backend.invoke('projects.forget', { path: r.path }); this.show(); } }, icon('close'))));
       }
@@ -163,7 +163,7 @@ export class Welcome {
       extra.append(el('label.field', {}, el('span', {}, 'Source code of the original (git URL)'), source));
       extra.source = source;
     }
-    const shared = kind.id === 'plugin' || kind.id === 'extension';
+    const shared = kind.id === 'plugin';
     if (kind.playground) {
       // a game or an application is made on this computer (no account needed); a plugin / extension gets its GitHub repository at once
       if (!s.user && shared) {
@@ -185,7 +185,7 @@ export class Welcome {
       el('label.field', {}, el('span', {}, 'Folder (the project goes in a new folder inside)'), el('div', { style: { display: 'flex', gap: '6px' } }, folder,
         el('button.btn', { onclick: async () => { const f = await backend.invoke('native.open', { folder: true }).catch(() => null); if (f) folder.value = f; } }, 'Choose…'))),
       el('p', { style: { color: 'var(--text-3)', fontSize: '12px' } }, kind.id === 'extension'
-        ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the extension and its example game there (bin/jumphp extension:new), pushes it and opens it.`
+        ? 'Made on this computer: the package (extensions/<name>) and its example game (games/<name>-demo), nothing online. “Publish extension” then puts the package in its own GitHub repository (tagged) and you submit it on Packagist.'
         : kind.id === 'plugin'
         ? `Creates the public GitHub repository ${s.user?.login || 'you'}/<name> on your account, makes the plugin there (bin/jumphp plugin:new), pushes it and opens it. Share it with Tools > Plugins… > Publish on jumphp.net.`
         : 'Made on this computer, from the JumPHP template, with BRIEF.md: nothing goes online until you want it. Publish (or “Create its GitHub repository”) then puts it on your GitHub account and on jumphp.net.'),

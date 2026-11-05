@@ -210,3 +210,11 @@ public function render(Renderer $r): void
 automaton, one open area), `Rooms` (non-overlapping rooms joined by corridors), `AutoTile` (picture of a wall from its neighbours, 16-tile mask),
 `Path::find()` (A*), `Maps::toMap()` / `toGrid()` (a `TileMap` for TileMapRenderer / CollisionSystem, and back), `Level` (start, exit, items; `toTiledJson()` = a .tmj for the IDE's level editor), `Rng` (seeded, float arithmetic: identical in the
 browser's 32-bit PHP). Its doc and the `TilesSample` come with `extension:add`.
+
+## Make and publish your own, from the IDE
+
+New Project > Engine extension makes it on your computer (the package `extensions/<id>` with its `doc/`, `samples/` and the example game
+`games/<id>-demo`; nothing online). **Publish** (header button / Alt+J area) asks for a version, then puts the package in its own public repository
+`<your login>/jumphp-<id>` (Composer wants `composer.json` at the root: the project's repository is not the package's), the composer name becoming
+`<your login>/<id>`, tagged `v<version>`. Submit that repository on packagist.org once (the IDE opens the page; Packagist then follows the tags by
+itself when you sign in there with GitHub); jumphp.net's directory refreshes within hours, and the studio's "My extensions" page lists what is yours.

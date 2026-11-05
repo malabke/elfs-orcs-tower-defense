@@ -137,6 +137,11 @@ WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps 
   no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
   true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
 - done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.49): an engine extension is created like a game (local, one commit, in the IDE's own PHP, no account); `Publish extension`
+  (the Publish button on such a project) puts the package in `<login>/jumphp-<id>` (made the first time, composer name `<login>/<id>`, tag v<version>, version asked,
+  next patch proposed) and opens Packagist's submit page; the welcome list tags it "extension"; jumphp.net's studio has "Mes extensions" (the directory's entries whose
+  vendor is the login). Left: submitting on Packagist from the IDE (needs the user's Packagist API token), a refresh of jumphp.net's directory right after a publish,
+  extensions as a real jumphp.net project type (reviews, stats, edit page). Not tried in the GUI nor against GitHub.
 - done (2026-11-05, IDE 0.1.48): the integrated Git client's missing parts, after an audit of what existed (status, stage / unstage, commit + amend, push, pull +
   rebase, fetch --prune, branches, merge with conflict resolution, stash / pop, log, file history, blame, clone, per-project GitHub account): the commit
   menu in the log (new branch, tag, cherry-pick, revert, reset), remotes, tags, stash list / apply / drop, branch rename, delete on the server,

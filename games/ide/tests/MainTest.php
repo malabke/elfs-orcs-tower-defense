@@ -92,9 +92,9 @@ final class MainTest extends AppTestCase
         $this->frames(2);
     }
 
-    public function testAPluginOrAnExtensionNeedsItsGitHubRepositoryAtOnceHenceTheSignIn(): void
+    public function testAPluginNeedsItsGitHubRepositoryAtOnceHenceTheSignIn(): void
     {
-        foreach (['plugin', 'extension'] as $kind) {   // a game or an application is made on this computer: no account, no repository until it is published
+        foreach (['plugin'] as $kind) {   // a game or an application is made on this computer: no account, no repository until it is published
             try {
                 $this->ide('projects.create', ['kind' => $kind, 'title' => 'Todo', 'folder' => $this->project . '/new']);
                 self::fail("$kind was created without a GitHub repository of its own");
@@ -128,6 +128,19 @@ final class MainTest extends AppTestCase
             $this->app->storage->writeJson('accounts.json', []);   // the storage outlives the test: leave it signed out
             $this->app->storage->writeJson('session.json', []);
         }
+    }
+
+    public function testAProjectHoldingAnEngineExtensionKnowsIt(): void
+    {
+        self::assertNull($this->ide('session.state')['project']['extension']);
+        mkdir($this->project . '/extensions/wind', 0777, true);
+        file_put_contents($this->project . '/extensions/wind/composer.json', '{"name": "jumphp-extensions/wind", "type": "jumphp-extension", "description": "Wind"}');
+        $ext = $this->ide('project.info')['extension'] ?? null;
+        $state = $this->ide('session.state')['project']['extension'];
+        self::assertSame('wind', $state['id']);
+        self::assertSame('extensions/wind', $state['dir']);
+        self::assertSame('0.1.0', $state['nextVersion']);
+        self::assertNull($ext, 'project.info is the core\'s: the desktop adds the extension');
     }
 
     public function testGitCredentialsForAnotherHostAreKeptAndListedWithoutTheirToken(): void

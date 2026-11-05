@@ -2,7 +2,7 @@
 // the page), lays out the tool windows (Project, Commit, Structure / Run, Find, Problems, Git), and binds PhpStorm's
 // keyboard shortcuts to the IDE's actions.
 import { backend } from './backend.js';
-import { el, clear, icon, hydrateIcons, progressBar, menu, chooser, dialog, notify, notificationHistory, splitter, prefs, debounce, kbd, basename, timeAgo } from './ui.js';
+import { el, clear, icon, hydrateIcons, progressBar, menu, chooser, dialog, copyText, notify, notificationHistory, splitter, prefs, debounce, kbd, basename, timeAgo } from './ui.js';
 import { Editors, loadMonaco, monaco } from './editor.js';
 import { ProjectTree } from './tree.js';
 import { Plugins } from './plugins.js';
@@ -906,7 +906,29 @@ class App {
 
   fileStructure() { fileStructure(this); }
 
+  /** Publish extension: the package in its own GitHub repository, tagged; Packagist reads it (submitted once, by hand). */
+  publishExtension() {
+    const ext = this.project.extension;
+    const version = el('input.input', { value: ext.nextVersion });
+    dialog({
+      title: 'Publish extension ' + (ext.name || ext.id), wide: true,
+      body: el('div', {}, el('label.field', {}, el('span', {}, 'Version (the Git tag v<version>)'), version),
+        el('p.pub-faint', {}, `${ext.dir} goes to its own public repository on your GitHub account (jumphp-${ext.id}, made the first time), under the Composer name <your login>/${ext.id}, tagged. `
+          + 'Then submit it once on packagist.org (the IDE opens the page); jumphp.net lists it in its extensions directory a few hours later.')),
+      buttons: [{ label: 'Cancel' }, { label: 'Publish', primary: true, action: async () => {
+        const done = this.task('Publishing the extension…');
+        try {
+          const r = await backend.invoke('extension.publish', { version: version.value.trim() });
+          notify(`${r.package} ${r.tag} is on GitHub. Submit ${r.url} on Packagist (once): its page opens.`, 'success', { title: 'Extension', timeout: 0,
+            actions: [{ label: 'Open Packagist', action: () => { copyText(r.url); this.openUrl(r.submitUrl); } }, { label: 'Open the repository', action: () => this.openUrl(r.url) }] });
+          this.openUrl(r.submitUrl);
+        } catch (e) { notify(e.message, 'error', { title: 'Publish extension' }); return false; } finally { done(); }
+      } }],
+    });
+  }
+
   async publish() {
+    if (this.project.extension) { this.publishExtension(); return; }
     if (this.project.needsRepository) { this.createRepository(); return; }
     const done = this.task('Publishing on jumphp.net…');
     try {

@@ -39,7 +39,10 @@ final class Creator
         if ($title === '') {
             return Deferred::rejected(new \InvalidArgumentException('A title, please.'));
         }
-        if ($kind === 'plugin' || $kind === 'extension') {
+        if ($kind === 'extension') {
+            return $this->localExtension($title, $p);
+        }
+        if ($kind === 'plugin') {
             if ($this->main->user() === null) {
                 return Deferred::rejected(new \RuntimeException('Sign in with jumphp.net first: it creates the project\'s GitHub repository on your account.'));
             }
@@ -149,7 +152,7 @@ final class Creator
         }
     }
 
-    private static function copyTree(string $from, string $to): void
+    public static function copyTree(string $from, string $to): void
     {
         @mkdir($to, 0777, true);
         foreach (scandir($from) ?: [] as $name) {
@@ -173,6 +176,59 @@ final class Creator
             }
         }
         @rmdir($dir);
+    }
+
+    /**
+     * An engine extension, made on this computer only (like a game): the package in extensions/<id>, its example game in games/<id>-demo, one commit.
+     * Publishing (Main::publishExtension) makes the package's own repository and tags it.
+     */
+    private function localExtension(string $title, array $p): Deferred
+    {
+        $id = trim((string)preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-') ?: 'extension';
+        if (!preg_match('/^[a-z]/', $id)) {
+            $id = "extension-$id";
+        }
+        $parent = $this->folder($p);
+        @mkdir($parent, 0777, true);
+        $root = "$parent/$id";
+        for ($n = 2; file_exists($root); $n++) {
+            $root = "$parent/$id-$n";
+        }
+        $description = (string)($p['description'] ?? '');
+        $brief = trim((string)($p['brief'] ?? ''));
+        $login = (string)($this->main->user()['login'] ?? 'jumphp');
+        return $this->template($root, $parent)
+            ->then(function () use ($root, $id, $title, $description, $brief) {
+                $this->progress('The skeleton of your extension…');
+                foreach (["extensions/$id" => 'skeleton-extension/package', "games/$id-demo" => 'skeleton-extension/example'] as $to => $from) {
+                    if (!is_dir("$root/$from")) {
+                        throw new \RuntimeException('This version of JumPHP has no ' . $from . ': update JumPHP first');
+                    }
+                    self::copyTree("$root/$from", "$root/$to");
+                }
+                foreach (['app.php', 'phpstan.neon'] as $f) {
+                    is_file("$root/skeleton/$f") && copy("$root/skeleton/$f", "$root/games/$id-demo/$f");
+                }
+                self::runScript("$root/tools/new-extension.php", $root, [$id, $title]);
+                $composer = "$root/extensions/$id/composer.json";
+                $json = json_decode((string)file_get_contents($composer), true) ?: [];
+                if ($description !== '') {
+                    $json['description'] = $description;
+                }
+                file_put_contents($composer, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+                file_put_contents("$root/extensions/$id/BRIEF.md", "# $title\n\n" . ($description !== '' ? "$description\n\n" : '') . ($brief !== '' ? $brief : 'What it should be: write it here.') . "\n");
+                file_put_contents("$root/README.md", "# $title\n\n" . ($description !== '' ? "$description\n\n" : '') . "An engine extension for [JumPHP](https://jumphp.net): extensions/$id (the package) and games/$id-demo (its example game).\n");
+                foreach (["$root/.github/workflows"] as $dir) {
+                    self::removeTree($dir);
+                }
+                return null;
+            })
+            ->then(function () use ($root, $login, $title) {
+                $git = new Git($this->processes, $root);
+                $git->setFallbackAuthor(['name' => $login, 'email' => $login . '@users.noreply.github.com']);
+                return $git->commit($title . ': a JumPHP engine extension', ['.']);
+            })
+            ->then(fn () => $this->main->openProject($root));
     }
 
     /** An IDE plugin: the template, bin/jumphp plugin:new, then the user's own public repository (created here) and a push. */

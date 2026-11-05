@@ -259,6 +259,7 @@ final class Main implements AppMain
             }
             return $this->accountsState();
         };
+        $c['extension.publish'] = fn (array $p) => $this->publishExtension((string)($p['version'] ?? ''));
         $c['project.setAccount'] = function (array $p) {
             $root = $this->ide !== null ? (string)$this->ide->workspace->localPath() : '';
             $login = (string)($p['login'] ?? '');
@@ -545,7 +546,8 @@ final class Main implements AppMain
         $this->app->options->set('reopen', true);
         $settings = $this->projectSettings($root);
         $recent = array_values(array_filter($this->recent(), fn ($r) => $r['path'] !== $root));
-        array_unshift($recent, ['path' => $root, 'name' => basename($root), 'opened' => time(), 'slug' => $settings['slug'] ?? null]);
+        array_unshift($recent, ['path' => $root, 'name' => basename($root), 'opened' => time(), 'slug' => $settings['slug'] ?? null,
+            'kind' => $this->extensionOf($root) !== null ? 'extension' : null]);
         $this->app->storage->writeJson('recent.json', array_slice($recent, 0, 30));
         $this->app->window()->setTitle(basename($root) . ' – JumPHP IDE');
         return $this->info();
@@ -557,6 +559,8 @@ final class Main implements AppMain
         $info = $this->ide->handle('project.info', []);
         $settings = $this->projectSettings((string)$info['root']);
         $info['playground'] = $settings['slug'] ?? null;
+        $info['extension'] = ($ext = $this->extensionOf((string)$info['root'])) === null ? null
+            : $ext + ['version' => (string)($settings['extensionVersion'] ?? ''), 'nextVersion' => self::nextVersion((string)($settings['extensionVersion'] ?? ''))];
         $info['repository'] = self::ownRepository((string)$info['root']);
         // a JumPHP project (not JumPHP's own checkout) with no repository of its own: the IDE offers to create it
         $info['needsRepository'] = $info['repository'] === null && is_file($info['root'] . '/bin/jumphp')
@@ -623,6 +627,9 @@ final class Main implements AppMain
                     ->then(fn () => $r)))
             ->then(function (array $repo) use ($root, $module) {
                 $kind = match ($module['kind'] ?? 'game') { 'app' => 'desktop', 'cli' => 'cli', 'gui' => 'gui', 'plugin' => null, default => 'original' };
+                if ($this->extensionOf($root) !== null) {
+                    $kind = null;   // an engine extension is not a jumphp.net game: Publish extension makes its own repository
+                }
                 if ($kind === null || $module === null) {
                     return ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => null, 'message' => null];
                 }
@@ -676,6 +683,102 @@ final class Main implements AppMain
             $this->app->storage->writeJson('recent.json', $kept);
             return ['deleted' => !file_exists($real), 'repository' => (bool)($r['repository'] ?? false), 'repositoryUrl' => $r['repositoryUrl'] ?? null, 'message' => $r['message'] ?? null]
                 + ($r['project'] ?? false ? ['jumphp' => true] : []);
+        });
+    }
+
+    /** The engine extension a project holds (extensions/<id>/composer.json of type jumphp-extension), or null. @return array{id: string, dir: string, name: string, description: string}|null */
+    private function extensionOf(string $root): ?array
+    {
+        foreach (glob("$root/extensions/*/composer.json") ?: [] as $file) {
+            $json = json_decode((string)file_get_contents($file), true);
+            if (is_array($json) && ($json['type'] ?? '') === 'jumphp-extension') {
+                $dir = dirname($file);
+                return ['id' => basename($dir), 'dir' => 'extensions/' . basename($dir), 'name' => (string)($json['name'] ?? ''), 'description' => (string)($json['description'] ?? '')];
+            }
+        }
+        return null;
+    }
+
+    private static function nextVersion(string $last): string
+    {
+        return preg_match('/^v?(\d+)\.(\d+)\.(\d+)$/', $last, $m) ? "$m[1].$m[2]." . ((int)$m[3] + 1) : '0.1.0';
+    }
+
+    /**
+     * Publish extension: the package (extensions/<id>) goes, on its own, to the user's GitHub repository <login>/jumphp-<id> (made the first time),
+     * its composer name becoming <login>/<id>, tagged v<version>: what Packagist reads (the submit page is given). The project's own repository
+     * is not the package's: Composer wants composer.json at the root.
+     *
+     * @return Deferred resolves with {repository, url, package, tag, submitUrl}
+     */
+    private function publishExtension(string $version): Deferred
+    {
+        $root = $this->ide !== null ? (string)$this->ide->workspace->localPath() : '';
+        $ext = $root !== '' ? $this->extensionOf($root) : null;
+        $user = $this->user();
+        $version = ltrim(trim($version), 'v');
+        if ($ext === null || $user === null) {
+            return Deferred::rejected(new \RuntimeException($ext === null ? 'This project holds no engine extension.' : 'Sign in with jumphp.net first: it gives the IDE access to your GitHub account.'));
+        }
+        if (!preg_match('/^\d+\.\d+\.\d+$/', $version)) {
+            return Deferred::rejected(new \InvalidArgumentException('A version like 0.1.0, please.'));
+        }
+        $login = (string)$user['login'];
+        $vendor = preg_replace('/[^a-z0-9_.-]+/', '-', strtolower($login)) ?: 'me';
+        $package = "$vendor/{$ext['id']}";
+        $name = 'jumphp-' . $ext['id'];
+        $work = sys_get_temp_dir() . '/jumphp-extension-' . bin2hex(random_bytes(4));
+        $creator = new Creator($this, $this->playground, $this->processes);
+        $http = $this->app->http();
+        $existing = new Deferred();
+        $http->request('GET', "https://api.github.com/repos/$login/$name", null, ['Accept' => 'application/vnd.github+json', 'User-Agent' => 'jumphp-ide'], 20.0)
+            ->then(fn ($r) => $existing->resolve($r->status === 200 ? $r->json() : null), fn (\Throwable $e) => $existing->reject($e));
+        $git = new \JumPHP\Ide\Git\Git($this->processes, sys_get_temp_dir());
+        $git->setFallbackAuthor(['name' => $login, 'email' => $login . '@users.noreply.github.com']);
+        return $existing->then(function (?array $repo) use ($git, $creator, $name, $ext, $work) {
+            return self::deferred($this->playground->githubToken())->then(function (array $r) use ($git, $repo, $creator, $name, $ext, $work) {
+                $git->setToken($r['token'] ?? null);
+                if ($repo !== null) {
+                    return $git->cloneInto((string)$repo['clone_url'], $work)->then(fn () => $repo);
+                }
+                return $creator->createRepository($git, $name, $ext['description'])->then(function (array $created) use ($git, $work) {
+                    @mkdir($work, 0777, true);
+                    return (new \JumPHP\Ide\Git\Git($this->processes, $work, $git->token()))->run(['init', '-q', '-b', 'main'])
+                        ->then(fn () => (new \JumPHP\Ide\Git\Git($this->processes, $work))->run(['remote', 'add', 'origin', (string)$created['clone_url']]))
+                        ->then(fn () => $created);
+                });
+            });
+        })->then(function (array $repo) use ($root, $ext, $work, $package, $version, $login) {
+            // the package's files replace the repository's (its history stays), the composer name is the user's
+            foreach (scandir($work) ?: [] as $f) {
+                if ($f !== '.' && $f !== '..' && $f !== '.git') {
+                    is_dir("$work/$f") ? Creator::removeTree("$work/$f") : @unlink("$work/$f");
+                }
+            }
+            Creator::copyTree("$root/{$ext['dir']}", $work);
+            Creator::removeTree("$work/vendor");
+            $composer = json_decode((string)file_get_contents("$work/composer.json"), true) ?: [];
+            $composer['name'] = $package;
+            unset($composer['version']);
+            file_put_contents("$work/composer.json", json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+            $git = new \JumPHP\Ide\Git\Git($this->processes, $work);
+            $git->setFallbackAuthor(['name' => $login, 'email' => $login . '@users.noreply.github.com']);
+            return self::deferred($this->playground->githubToken())->then(function (array $r) use ($git, $repo, $version, $package) {
+                $git->setToken($r['token'] ?? null);
+                return $git->status()->then(fn (array $st) => $st['files'] !== [] || $st['branch'] === null ? $git->commit("Release v$version", ['.']) : null)
+                    ->then(fn () => $git->createTag("v$version", null, "$package $version"))
+                    ->then(fn () => $git->run(['push', '-u', 'origin', 'main'], true))
+                    ->then(fn () => $git->pushTag("v$version"))
+                    ->then(fn () => ['repository' => (string)$repo['full_name'], 'url' => (string)$repo['html_url'], 'package' => $package, 'tag' => "v$version",
+                        'submitUrl' => 'https://packagist.org/packages/submit']);
+            });
+        })->then(function (array $result) use ($root, $version, $work) {
+            Creator::removeTree($work);
+            $this->saveProjectSettings($root, ['extensionVersion' => $version]);
+            return $result;
+        }, function (\Throwable $e) use ($work) {
+            Creator::removeTree($work);
+            throw $e;
         });
     }
 
