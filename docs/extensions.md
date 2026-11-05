@@ -143,8 +143,7 @@ Once, to set it up:
 `extensions/effects` (`jumphp/effects`), shown by `games/effects-demo`: screen **transitions** (`Transition`: fade, four wipes, an iris on a
 point, blinds, a dissolve; `cover()` a scene change `reveal()`), a **flash**, a **vignette** and **easing curves** (`Ease`). Everything is
 drawn with translucent rectangles, pure PHP, 32-bit safe. Its `doc/index.md` has the code; `bin/jumphp extension:add <game> jumphp/effects`
-brings two samples (`FlashSample`, `TransitionSample`) into your game. Before its repository `davidnurdin/jumphp-effects` exists and it is
-submitted on Packagist, the release split skips it with a warning (the others are not blocked).
+brings two samples (`FlashSample`, `TransitionSample`) into your game. Its repository is `davidnurdin/jumphp-effects` (the release split writes it, Packagist reads it).
 
 ## The dialogue extension
 
