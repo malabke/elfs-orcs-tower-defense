@@ -53,13 +53,20 @@ Dernière mise à jour : 2026-11-05.
    `git credential-manager github login --username malabke`, puis `git push origin main`, lancés par l'utilisateur
    dans son propre terminal.
 5. **En cours (2026-11-05) : vignettes 3D vivantes** sur les cartes de l'écran de choix du peuple (demandé : « go pour
-   les vignettes »). Fait par une **autre session** Claude Code sur le même dossier (`elfs-orcs-tower-defense-73`), qui
-   garde ces fichiers : `src/View3d/Diorama.php` (île flottante, emplacements des 4 tours, ennemis qui tournent
+   les vignettes »). **Commité (`415837f`) sur la branche GitHub `vignettes`, PAS sur `main`** : l'utilisateur a dit
+   « pousse sur github mais ne sync pas avec jumphp », et pousser sur `main` publierait. **Pour reprendre sur un autre
+   PC** : `git fetch origin` puis `git checkout -B main origin/vignettes` (le `main` local part de la branche ; la
+   branche contient tout `main` + les vignettes). Tester (`bin/jumphp test`, capture de l'écran de choix du peuple
+   `JUMPHP_SCENE='App\Scene\FactionSelectScene' bin/jumphp shot <id> 60`, vérification avec le moteur partagé), puis
+   publier **seulement sur demande** avec `git push origin main` ; ensuite supprimer la branche
+   (`git push origin --delete vignettes`). Écrit par deux sessions Claude Code sur le 2e PC : `src/View3d/Diorama.php` (île flottante, emplacements des 4 tours, ennemis qui tournent
    autour), `FactionSelectScene::vignette()` (ciel peint en 2D, la 3D par-dessus). Base écrite par cette session-ci
    dans `src/Ui/World3d.php` : `bootOver()` (calque 3D « above », existe aussi dans le moteur 0.4.0 du playground),
    `vignette()` (la projection d'une petite caméra resserrée dans le cadre de la carte), `u_clip` dans le shader (rien
-   ne déborde du cadre), `studio()` avec un fond facultatif. **Pas encore testé ni commité.** Reste : tests,
-   captures, vérification avec le moteur partagé, commit ; peut-être la même chose pour l'écran des cartes.
+   ne déborde du cadre), `studio()` avec un fond facultatif. **Jamais testé ni vu en capture** (la machine saturait).
+   À surveiller : cadrage de la caméra (`Diorama::SCALE`, distance 420 dans `vignette()`, `Rig::NEAR` = 180), que rien
+   ne déborde de la carte, `World3d::shutdown()` en quittant l'écran, le repli sans WebGL (image des cartes). Ensuite,
+   peut-être la même chose pour l'écran des cartes. `composer.lock` du jeu est maintenant suivi par git.
 6. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (1er PC, voir les pièges).
 
 ## Décisions de l'utilisateur (à respecter)
@@ -105,4 +112,5 @@ Dernière mise à jour : 2026-11-05.
   **Sur un nouveau PC Windows : `git config core.autocrlf false` juste après le clone.**
 - 2026-11-04 / 05 (2e PC) : portraits 3D (`f9a4176`), particules et coups (`32419b8`), tous les tests et le lint
   passent, vérifiés avec le moteur partagé ; poussés et publiés après connexion au compte `malabke` ; vignettes 3D commencées
-  (`World3d` ici, `Diorama` + `FactionSelectScene` par l'autre session).
+  (`World3d` ici, `Diorama` + `FactionSelectScene` par l'autre session), commitées sans test sur la branche `vignettes`
+  (pas publiées) avant de changer de PC.
