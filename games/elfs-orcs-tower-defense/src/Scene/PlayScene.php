@@ -18,6 +18,7 @@ use App\Ui\World3d;
 use App\View3d\FlatView;
 use App\View3d\MapModel;
 use App\View3d\Mesh;
+use App\View3d\Particles;
 use App\View3d\Projection;
 use App\View3d\Props;
 use App\View3d\Rig;
@@ -73,6 +74,8 @@ final class PlayScene extends AbstractScene implements HotReloadable
     private array $floaters = [];
     /** @var list<array{x: float, y: float, kind: string, t: float, splash: float}> */
     private array $flashes = [];
+    /** sparks, dust, embers, coins of the 3D battle */
+    private Particles $particles;
     /** @var list<array{0: string, 1: string, 2: float}> banners waiting: title, line, seconds */
     private array $banners = [];
     private float $bannerTime = 0.0;
@@ -97,6 +100,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
     public function __construct(private FontProvider $fonts, private Sprites $sprites, private Progress $progress, private World3d $world)
     {
         $this->cam = new FlatView(self::MAP_Y);
+        $this->particles = new Particles();
     }
 
     /** Where a point of the map is on the screen (the 3D camera, or the flat view): for tests and overlays. @return array{0: float, 1: float} */
@@ -189,6 +193,7 @@ final class PlayScene extends AbstractScene implements HotReloadable
         $this->keyboard = false;
         $this->floaters = [];
         $this->flashes = [];
+        $this->particles = new Particles((int)($params['seed'] ?? 7));
         $this->seen = [];
         $this->endTimer = -1.0;
         $this->shake = 0.0;
@@ -634,6 +639,9 @@ final class PlayScene extends AbstractScene implements HotReloadable
             }
         };
         foreach ($this->battle->events as $event) {
+            if ($this->use3d) {
+                $this->particlesOf($event);
+            }
             switch ($event['type']) {
                 case 'shot':
                     $play(self::SHOT_SOUNDS[(string)$event['projectile']] ?? 'arrow');
@@ -714,6 +722,71 @@ final class PlayScene extends AbstractScene implements HotReloadable
             }
         }
         $this->battle->events = [];
+    }
+
+    /** The particles of what happened (3D only). */
+    private function particlesOf(array $event): void
+    {
+        $p = $this->particles;
+        $slot = fn (): array => $this->battle->slots[(int)$event['slot']] ?? ['x' => 0.0, 'y' => 0.0];
+        switch ($event['type']) {
+            case 'hit':
+                $p->hit($event['pulse'] ? 'pulse' : (string)$event['kind'], (float)$event['x'], (float)$event['y'], (float)$event['splash']);
+                break;
+            case 'kill':
+                $p->kill((float)$event['x'], (float)$event['y'], (int)$event['gold']);
+                break;
+            case 'soldier_down':
+            case 'hero_down':
+                $p->kill((float)$event['x'], (float)$event['y'], 0);
+                break;
+            case 'build':
+            case 'upgrade':
+                $s = $slot();
+                $p->build((float)$s['x'], MapModel::PLATFORM, (float)$s['y'], $event['type'] === 'upgrade');
+                break;
+            case 'sell':
+                $s = $slot();
+                $p->sell((float)$s['x'], MapModel::PLATFORM, (float)$s['y']);
+                break;
+            case 'heal':
+                $p->heal((float)$event['x'], (float)$event['y'], (float)$event['radius']);
+                break;
+            case 'power':
+                $p->power((float)$event['x'], (float)$event['y'], (float)$event['radius']);
+                break;
+            case 'hero_skill':
+                $p->hit('star', (float)$event['x'], (float)$event['y'], (float)$event['radius']);
+                break;
+            case 'wall_down':
+                $p->hit('rock', (float)$event['x'], (float)$event['y'], 14.0);
+                break;
+            case 'trap':
+                $p->hit('root', (float)$event['x'], (float)$event['y'], 0.0);
+                break;
+            case 'leak':
+                [$bx, $by] = $this->map['bastion'];
+                $p->leak($bx * 16.0 + 24.0, $by * 16.0 + 48.0);
+                break;
+        }
+    }
+
+    /** Embers over what burns, sparks behind the glowing shots: a few each frame, as the battle goes. */
+    private function ambientParticles(float $dt): void
+    {
+        $p = $this->particles;
+        $rate = $dt * $this->speed;
+        foreach ($this->battle->enemies as $e) {
+            if ($e->isBurning() && !$e->isUnderground() && $p->rand() < $rate * 9.0) {
+                $p->ember($e->x, ($e->isFlying() ? 18.0 : 8.0), $e->y);
+            }
+        }
+        foreach ($this->battle->projectiles as $shot) {
+            $kind = $shot->kind();
+            if (in_array($kind, ['orb', 'note', 'star', 'spark', 'pitch'], true) && $p->rand() < $rate * 30.0) {
+                $p->trail($kind, $shot->x, 18.0, $shot->y);
+            }
+        }
     }
 
     /** A number or a word that rises from a point of the map (above the ground by $height). */
@@ -805,6 +878,13 @@ final class PlayScene extends AbstractScene implements HotReloadable
             }
         }
         unset($flash);
+        if ($this->use3d) {
+            // the particles follow the battle's speed
+            $this->particles->update($dt * $this->speed);
+            if ($this->endTimer < 0) {
+                $this->ambientParticles($dt);
+            }
+        }
         $this->shake = max(0.0, $this->shake - $dt);
         if ($this->banners !== []) {
             $this->bannerTime += $dt;
@@ -931,15 +1011,19 @@ final class PlayScene extends AbstractScene implements HotReloadable
             foreach ($t->soldiers as $s) {
                 if ($s->isAlive()) {
                     $sprite = (string)$t->stats['soldiers']['sprite'];
-                    $this->creature3d($sprite, 1.0, $s->x, $s->y, $this->headingOf($s->x, $s->y, $s->target, $s->facingLeft), self::walkFrame($s->age));
+                    $yaw = $this->headingOf($s->x, $s->y, $s->target, $s->facingLeft);
+                    [$lx, $lz] = $this->lunge($yaw, $s->isFighting(), $s->age);
+                    $this->creature3d($sprite, 1.0, $s->x + $lx, $s->y + $lz, $yaw, self::walkFrame($s->age));
                 }
             }
         }
         if ($b->hero?->isAlive()) {
             $h = $b->hero;
             $moving = $h->isWalking() || $h->isFighting();
-            $this->creature3d((string)$h->def['sprite'], (float)($h->def['scale'] ?? 1.0), $h->x, $h->y,
-                $this->headingOf($h->x, $h->y, $h->target, $h->facingLeft), $moving ? self::walkFrame($h->age) : 0);
+            $yaw = $this->headingOf($h->x, $h->y, $h->target, $h->facingLeft);
+            [$lx, $lz] = $this->lunge($yaw, $h->isFighting(), $h->age);
+            $this->creature3d((string)$h->def['sprite'], (float)($h->def['scale'] ?? 1.0), $h->x + $lx, $h->y + $lz,
+                $yaw, $moving ? self::walkFrame($h->age) : 0);
         }
         foreach ($b->enemies as $e) {
             $this->enemy3d($e);
@@ -1005,8 +1089,28 @@ final class PlayScene extends AbstractScene implements HotReloadable
         }
         $alpha = $e->isStealthy() && !$e->revealed ? 0.28 : 1.0;
         $lift = $e->isFlying() ? 15.0 + sin($e->age * 5) * 1.5 : 0.3;
-        $this->creature3d((string)$def['sprite'], (float)($def['scale'] ?? 1.0), $e->x, $e->y, -atan2($e->dirY, $e->dirX),
+        $yaw = -atan2($e->dirY, $e->dirX);
+        // held by a soldier or a wall: it strikes at what holds it
+        [$lx, $lz] = $this->lunge($yaw, $e->isHeld() && !$e->isStunned(), $e->age + 0.4);
+        $this->creature3d((string)$def['sprite'], (float)($def['scale'] ?? 1.0), $e->x + $lx, $e->y + $lz, $yaw,
             $e->isStunned() ? 0 : self::walkFrame($e->age), $tint, $alpha, $lift);
+    }
+
+    /**
+     * A fighter's blow: a quick step towards where it looks and back, about twice a second (none when not fighting).
+     * @return array{0: float, 1: float} the offset on the ground
+     */
+    private function lunge(float $yaw, bool $fighting, float $age): array
+    {
+        if (!$fighting) {
+            return [0.0, 0.0];
+        }
+        $phase = fmod($age * 2.2, 1.0);
+        // fast forward, slow back
+        $reach = $phase < 0.25 ? $phase / 0.25 : max(0.0, 1.0 - ($phase - 0.25) / 0.5);
+        $d = 3.2 * $reach;
+        // yaw turns +x towards -z (World3d::matrix): the facing on the ground is (cos, -sin)
+        return [cos($yaw) * $d, -sin($yaw) * $d];
     }
 
     private function tower3d(Tower $t): void
@@ -1076,6 +1180,13 @@ final class PlayScene extends AbstractScene implements HotReloadable
                 }
             } elseif ($k > 0.05) {
                 $w->ball($f['x'], 8.0, $f['y'], 1.2 + (1 - $k) * 2.4, [1.0, 1.0, 0.86], $k);
+            }
+        }
+
+        foreach ($this->particles->list as $p) {
+            [$alpha, $size] = Particles::look($p);
+            if ($alpha > 0.03) {
+                $w->ball($p['x'], $p['y'], $p['z'], $size, $p['rgb'], $alpha, $p['glow']);
             }
         }
 

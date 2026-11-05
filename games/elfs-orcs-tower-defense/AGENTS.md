@@ -80,6 +80,12 @@ drawn smoothed by `Sprites::drawPortrait()` (false when missing: the old pixel d
 through `World3d::studio()` (no land, plain background), over black then white; the difference gives the alpha. Re-run
 it after changing a model (`bin/jumphp test <id> --filter PortraitShotsTest`): it rewrites the PNGs. The 2D fallback
 battle (no WebGL) still draws the pixel sprites of `Sprites`.
+**Particles** (3D only): `App\View3d\Particles` (pure, seeded, at most `MAX` = 240) holds sparks and dust where shots
+land, puffs and coins of kills, dust and golden motes of builds / upgrades, dust of sales, green motes of heals, the
+power's shower, red flares of leaks, embers over burning enemies and trails behind glowing shots. `PlayScene` emits them
+from the battle's events (`particlesOf()`) and each frame (`ambientParticles()`), steps them at the battle's speed and
+draws each as a `World3d::ball()` (fading in / out: `Particles::look()`). **Blows**: fighting soldiers, the hero and
+held enemies step towards their foe and back about twice a second (`PlayScene::lunge()`). Tests: `tests/ParticlesTest.php`.
 
 Site pictures: `tests/SiteShotsTest.php` photographs the game (var/screenshots/tests/site-*.png), then
 `bin/jumphp php games/elfs-orcs-tower-defense tools/site/make.php` cuts them into site/images/, the thumbnail and the

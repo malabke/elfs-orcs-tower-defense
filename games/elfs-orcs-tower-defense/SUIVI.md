@@ -42,7 +42,11 @@ Dernière mise à jour : 2026-11-04.
    **portraits photographiés des modèles 3D** (`assets/sprites/portraits/`, faits par `tests/PortraitShotsTest.php` :
    voir `AGENTS.md` « Portraits »). Tests complets + lint OK, vérifié avec le moteur partagé (`build:remote` +
    `JUMPHP_WEB=remote webshot` : portraits affichés, police pixel en repli). Pousser = publier : seulement sur demande.
-3. Idées proposées, pas encore demandées : vignettes 3D vivantes dans les menus, animations d'attaque, particules.
+3. **Fait (2026-11-05), commité, pas poussé** : **particules** dans le combat 3D (étincelles et poussière aux impacts,
+   bouffées et pièces aux morts, poussière et paillettes dorées aux constructions, braises sur ce qui brûle, traînées
+   des tirs lumineux, pluie de lumière du pouvoir…) et **coups au corps à corps** (soldats, héros et ennemis bloqués
+   s'élancent vers leur adversaire). Voir `AGENTS.md` « Particles ». Tests complets + lint OK.
+   Idée restante, pas demandée : vignettes 3D vivantes dans les menus.
 4. Conseiller à l'utilisateur de **déplacer le projet hors de `%TEMP%`** (voir les pièges).
 
 ## Décisions de l'utilisateur (à respecter)
