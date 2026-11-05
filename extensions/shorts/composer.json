@@ -25,7 +25,7 @@
     "extra": {
         "jumphp": {
             "name": "Shorts",
-            "engine": "^0.5",
+            "engine": ">=0.5.9 <0.6",
             "services": [
                 "JumPHP\\Shorts\\Recorder"
             ],

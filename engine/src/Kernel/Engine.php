@@ -21,6 +21,7 @@ use JumPHP\Input\InputManager;
 use JumPHP\Loop\GameLoop;
 use JumPHP\Net\NetSession;
 use JumPHP\Renderer\BitmapFont;
+use JumPHP\Renderer\Renderer;
 use JumPHP\Renderer\Sdl;
 use JumPHP\Renderer\TextDrawer;
 use JumPHP\Save\Options;
@@ -216,12 +217,28 @@ class Engine extends EventEmitter
         }
         $renderer->beginFrame($this->config->get('background'));
         $this->scenes->render($renderer);
+        $this->drawCaptions($renderer);
         if ($this->debug) {
             $this->drawDebug();
         }
         $renderer->endFrame();
         $this->frame++;
         $this->emit('rendered');
+    }
+
+    private ?\JumPHP\Renderer\Captions $captions = null;
+    private bool $captionsRead = false;
+
+    /** JUMPHP_CAPTIONS=<json list>: timed captions over the whole game (a film of it: bin/jumphp video:replay --caption). */
+    private function drawCaptions(Renderer $renderer): void
+    {
+        if (!$this->captionsRead) {
+            $this->captionsRead = true;
+            $json = (string)Platform::setting('JUMPHP_CAPTIONS', '');
+            $list = $json !== '' ? json_decode($json, true) : null;
+            $this->captions = is_array($list) && $list ? \JumPHP\Renderer\Captions::fromList($list) : null;
+        }
+        $this->captions?->render($renderer, $this->font(), $this->time, $renderer->getWidth(), $renderer->getHeight());
     }
 
     /** Browser: one frame, then one turn of the event loop (the game's timers). */

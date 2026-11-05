@@ -4,7 +4,7 @@ namespace App\Extensions\Shorts;
 
 use JumPHP\Renderer\Renderer;
 use JumPHP\Scene\AbstractScene;
-use JumPHP\Shorts\Captions;
+use JumPHP\Renderer\Captions;
 use JumPHP\Shorts\Melody;
 use JumPHP\Shorts\Recorder;
 

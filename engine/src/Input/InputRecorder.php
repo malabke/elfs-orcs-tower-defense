@@ -6,7 +6,8 @@ namespace JumPHP\Input;
  * A played session as scripted input: JUMPHP_INPUT_RECORD=<file> makes the game write, as it is played, the actions that went
  * down and up: [[frame, "action", "hold"|"release"], ...], the very format of JUMPHP_INPUT. Played back with
  * `bin/jumphp video:replay <game> --input <file>` (a film of the session), or `JUMPHP_INPUT=$(cat <file>) bin/jumphp shot <game>`.
- * An action held and let go inside one frame is not seen (a frame is 1/60 s).
+ * An action pressed and let go inside one frame is recorded as a press: [frame, "action"]. Called from the engine's 'frame' event, before the
+ * frame's input is cleared (Application).
  */
 final class InputRecorder
 {
@@ -20,7 +21,7 @@ final class InputRecorder
     {
     }
 
-    /** After the frame $frame ran: what changed in the actions' held state is an event of that frame. */
+    /** In the frame $frame, after its update: what changed in the actions' held state is an event of that frame, a tap too. */
     public function observe(int $frame, ActionMap $actions): void
     {
         $changed = false;
@@ -29,6 +30,9 @@ final class InputRecorder
             if ($now !== ($this->held[$name] ?? false)) {
                 $this->held[$name] = $now;
                 $this->events[] = [$frame, $name, $now ? 'hold' : 'release'];
+                $changed = true;
+            } elseif (!$now && $actions->isPressed($name)) {
+                $this->events[] = [$frame, $name];             // down and up inside one frame: a tap
                 $changed = true;
             }
         }

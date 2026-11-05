@@ -58,6 +58,7 @@ final class Application
     private int $exitCode = 0;
     private array $script = [];
     private ?\JumPHP\Input\InputRecorder $recorder = null;
+    private bool $recorderBound = false;
 
     private function __construct(public readonly ContainerInterface $container, public readonly GameConfig $config)
     {
@@ -182,8 +183,13 @@ final class Application
                         : $this->engine->actions->hold((string)$step[1], $mode === 'hold');
                 }
             }
+            if ($this->recorder !== null && !$this->recorderBound) {
+                // in the frame's own event: before its input is cleared, so a tap shorter than a frame is seen too
+                $this->recorderBound = true;
+                $recorder = $this->recorder;
+                $this->engine->on('frame', fn () => $recorder->observe($this->engine->frameCount(), $this->engine->actions));
+            }
             $this->engine->tick();
-            $this->recorder?->observe($frame, $this->engine->actions);
             if (!$this->engine->isRunning()) {
                 $this->engine->gameLoop->stop();
                 return;

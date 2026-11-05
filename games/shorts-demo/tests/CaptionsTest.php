@@ -3,7 +3,7 @@
 namespace Tests;
 
 use App\Scene\ShortScene;
-use JumPHP\Shorts\Captions;
+use JumPHP\Renderer\Captions;
 use JumPHP\Testing\GameTestCase;
 
 final class CaptionsTest extends GameTestCase

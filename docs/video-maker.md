@@ -26,7 +26,7 @@ or `--captions captions.json`, or project.yaml `video: {captions: [...]}`:
 
 - `TEXT@FROM-TO[@place][@style]`: seconds (`10-` = to the end), place `top` / `middle` / `bottom` or a y in pixels.
 - styles: `plain` (shadow), `box` (a dark band that fades in and out), `pop` (grows in with a small overshoot), `type` (typed letter by letter).
-- long texts are cut into lines that fit. In your own scene: `Captions::fromList($params['captions'])`, then
+- long texts are cut into lines that fit. In your own scene: `Captions::fromList($params['captions'])` (`JumPHP\Renderer\Captions`; the extension's `JumPHP\Shorts\Captions` is the same class), then
   `$captions->render($r, $this->font(), $this->time, $this->width(), $this->height())` last in `render()`. The engine cannot fade text
   (no alpha on textures): only the box fades.
 
@@ -38,8 +38,11 @@ logged (`JUMPHP_AUDIO_LOG`: sound effects, generated sounds, music, with the gam
 `games/<game>/dist/video/<game>-replay.mp4` (1280 x 720 for a 320 x 180 game: the smallest side is brought to 720 at least,
 `--scale` to choose) and a `.png` cover. The seconds default to the last input + 3.
 
+Captions over any game: `--caption "TEXT@FROM-TO[@place][@style]"` (repeatable) or `--captions file.json`, the same as for video:make; the
+engine draws them (JUMPHP_CAPTIONS, `JumPHP\Renderer\Captions`, sized for the game's view) on the game's own clock.
+
 Film a real session: play with `JUMPHP_INPUT_RECORD=session.json bin/jumphp run <game>` (the actions held and let go are written as you
-play: a tap shorter than one frame is not seen), then `bin/jumphp video:replay <game> --input session.json`. The same file works for
+play, a tap shorter than one frame as a press), then `bin/jumphp video:replay <game> --input session.json`. The same file works for
 `JUMPHP_INPUT=$(cat session.json) bin/jumphp shot <game>` and for a game test. The game must be deterministic for the film to
 look like the session (a seeded random, the fixed step).
 

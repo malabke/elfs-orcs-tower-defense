@@ -28,4 +28,17 @@ final class InputRecorderTest extends TestCase
         self::assertSame([[10, 'jump', 'hold'], [20, 'right', 'hold'], [30, 'jump', 'release']], $recorder->events());
         self::assertSame($recorder->events(), json_decode((string)file_get_contents($file), true));
     }
+
+    public function testATapShorterThanAFrameIsARecordedPress(): void
+    {
+        $file = sys_get_temp_dir() . '/jumphp-input-' . bin2hex(random_bytes(4)) . '.json';
+        $actions = new ActionMap(new Keyboard(), new Gamepad(), new Touch(), new Mouse());
+        $actions->load(['fire' => ['Space']]);
+        $recorder = new InputRecorder($file);
+        $actions->press('fire');                        // pressed this frame, never held
+        $recorder->observe(7, $actions);
+        $actions->endFrame();
+        $recorder->observe(8, $actions);                // nothing the next frame
+        self::assertSame([[7, 'fire']], $recorder->events());
+    }
 }

@@ -11,7 +11,7 @@ use JumPHP\Physics2d\Wall;
 use JumPHP\Physics2d\World;
 use JumPHP\Renderer\Renderer;
 use JumPHP\Scene\AbstractScene;
-use JumPHP\Shorts\Captions;
+use JumPHP\Renderer\Captions;
 use JumPHP\Shorts\Draw;
 use JumPHP\Shorts\Melody;
 use JumPHP\Shorts\Recorder;

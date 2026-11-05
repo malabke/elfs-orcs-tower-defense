@@ -90,9 +90,11 @@ video_make_one() {
 # The size is the game's view x --scale (default: the smallest side at least 720 pixels). docs/video-maker.md.
 cmd_video_replay() {
   local game="${1:-}"; local dir; dir="$(project_dir "$game")"; shift || true
-  local input="" scene="" params="" seconds="" scale="" name="" keep=0
+  local input="" scene="" params="" seconds="" scale="" name="" keep=0 captions=() captions_file=""
   while [ $# -gt 0 ]; do
     case "$1" in
+      --caption) captions+=("$2"); shift ;;
+      --captions) captions_file="$2"; shift ;;
       --input) input="$2"; shift ;;
       --scene) scene="$2"; shift ;;
       --params) params="$2"; shift ;;
@@ -100,7 +102,7 @@ cmd_video_replay() {
       --scale) scale="$2"; shift ;;
       --name) name="$2"; shift ;;
       --keep-frames) keep=1 ;;
-      *) die "unknown option $1 (bin/jumphp video:replay <game> [--input <json|file>] [--scene CLASS] [--params JSON] [--seconds S] [--scale N] [--name N] [--keep-frames])" ;;
+      *) die "unknown option $1 (bin/jumphp video:replay <game> [--input <json|file>] [--scene CLASS] [--params JSON] [--seconds S] [--scale N] [--name N] [--caption \"TEXT@FROM-TO[@place[@style]]\"]... [--captions file.json] [--keep-frames])" ;;
     esac
     shift
   done
@@ -129,6 +131,17 @@ cmd_video_replay() {
     echo $secs, "\t", $w * $scale, "x", $h * $scale, "\t", preg_replace("/[^a-z0-9-]/", "-", strtolower($name));
   ' "$input" "$seconds" "$scale" "$name")" || die "cannot read the settings of $dir"
   IFS=$'\t' read -r secs size out_name <<<"$plan"
+  # captions over the whole game (JUMPHP_CAPTIONS, drawn by the engine): the file's, then the --caption specs
+  local captions_json=""
+  if [ -n "$captions_file" ] || [ ${#captions[@]} -gt 0 ]; then
+    captions_json="$(php_run "$dir" -- php -r '
+      require "vendor/autoload.php";
+      $list = [];
+      if ($argv[1] !== "") { $f = json_decode((string)@file_get_contents($argv[1]), true); if (!is_array($f)) { fwrite(STDERR, "cannot read captions from $argv[1]\n"); exit(1); } $list = array_values($f); }
+      foreach (array_slice($argv, 2) as $spec) { $list[] = JumPHP\Renderer\Captions::parseSpec($spec); }
+      echo json_encode($list);
+    ' "$captions_file" ${captions[@]+"${captions[@]}"})" || die "the captions could not be read (needs JumPHP 0.5.9)"
+  fi
   local frames run="var/video/$out_name"
   frames="$(awk -v s="$secs" 'BEGIN { printf "%d", s * 60 + 0.5 }')"
   rm -rf "${ROOT:?}/$dir/$run" && mkdir -p "$ROOT/$dir/$run/frames"
@@ -137,7 +150,7 @@ cmd_video_replay() {
   [ -n "$scene" ] && env_scene=(-e "JUMPHP_SCENE=$scene")
   [ -n "$params" ] && env_params=(-e "JUMPHP_SCENE_PARAMS=$params")
   php_run "$dir" -e "JUMPHP_SCREENSHOT=$run/frames/f.png" -e JUMPHP_SHOT_EVERY=1 -e "JUMPHP_MAX_FRAMES=$frames" \
-    -e "JUMPHP_INPUT=$input" -e "JUMPHP_AUDIO_LOG=$run/audio" ${env_scene[@]+"${env_scene[@]}"} ${env_params[@]+"${env_params[@]}"} -- php app.php \
+    -e "JUMPHP_INPUT=$input" -e "JUMPHP_AUDIO_LOG=$run/audio" ${captions_json:+-e "JUMPHP_CAPTIONS=$captions_json"} ${env_scene[@]+"${env_scene[@]}"} ${env_params[@]+"${env_params[@]}"} -- php app.php \
     || die "$out_name: the game stopped (see above)"
   rm -f "$ROOT/$dir/$run/frames/f.png"
   say "$out_name: the sound (what the game played, mixed)"
