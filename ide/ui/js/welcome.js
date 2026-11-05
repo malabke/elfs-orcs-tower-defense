@@ -94,6 +94,7 @@ export class Welcome {
         list.append(el('div.proj', { onclick: () => this.open(r.path), title: r.path },
           el('span.avatar-letter', {}, r.name[0].toUpperCase()), el('div.p-main', {}, el('div.p-name', {}, r.name), el('div.p-path', {}, r.path)),
           r.slug ? el('span.p-tag', {}, 'jumphp.net') : null, el('span.p-path', {}, r.opened ? timeAgo(r.opened) : ''),
+          el('button.icon-btn.trash', { title: 'Delete the project from this computer…', onclick: (e) => { e.stopPropagation(); this.deleteProject(r); } }, icon('trash')),
           el('button.icon-btn', { title: 'Remove from the list', onclick: async (e) => { e.stopPropagation(); await backend.invoke('projects.forget', { path: r.path }); this.show(); } }, icon('close'))));
       }
     }
@@ -236,6 +237,31 @@ export class Welcome {
     await backend.invoke('session.logout');
     this.remote = null;
     this.show();
+  }
+
+  /** The trash: the folder goes from this computer; the box (not checked) also deletes the GitHub repository and the jumphp.net project. */
+  deleteProject(project) {
+    const repo = el('input', { type: 'checkbox' });
+    const confirmation = el('input.input', { placeholder: project.name });
+    dialog({
+      title: 'Delete ' + project.name,
+      body: el('div', {},
+        el('p', { style: { color: 'var(--red)', fontWeight: '600' } }, `This deletes every file of the project on this computer, for good:`),
+        el('p', { style: { color: 'var(--red)' } }, project.path),
+        el('p.pub-faint', {}, 'Commits that were never pushed are lost with it.'),
+        project.slug ? el('label.checkbox', { style: { color: 'var(--red)' } }, repo, ' Also delete the repository (dangerous): the GitHub repository AND the project on jumphp.net, with its published game and files. No way back.') : null,
+        el('label.field', {}, el('span', {}, `Type the project's name to confirm`), confirmation)),
+      buttons: [{ label: 'Cancel' }, { label: 'Delete', danger: true, action: async () => {
+        if (confirmation.value.trim() !== project.name) { notify('Type the name of the project to confirm.', 'warning'); return false; }
+        try {
+          const r = await backend.invoke('projects.delete', { path: project.path, repository: repo.checked });
+          notify(r.message || (repo.checked && r.repository ? 'Deleted, with its GitHub repository and its jumphp.net project.' : 'Deleted from this computer.'), r.message ? 'warning' : 'success',
+            { title: 'Delete project', timeout: r.message ? 0 : undefined, actions: r.message && r.repositoryUrl ? [{ label: 'Open the repository settings', action: () => this.app.openUrl(r.repositoryUrl + '/settings') }] : [] });
+        } catch (e) { notify(e.message, 'error', { title: 'Delete project' }); return false; }
+        this.state = await backend.invoke('session.state');
+        this.show();
+      } }],
+    });
   }
 
   async open(path) {

@@ -107,6 +107,7 @@ a { color: var(--blue); }
 .tw-spacer { flex: 1; }
 .tw-actions { display: flex; gap: 2px; }
 .tw-actions button, .icon-btn { width: 26px; height: 26px; border: 0; background: none; border-radius: var(--radius); color: var(--text-2); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.icon-btn.trash:hover { color: var(--red); }
 .tw-actions button:hover, .icon-btn:hover { background: var(--hover); color: var(--text); }
 .tw-actions button:disabled { opacity: 0.35; }
 .tw-body { flex: 1; min-height: 0; overflow: auto; position: relative; }
@@ -138,6 +139,12 @@ a { color: var(--blue); }
 .editor-host > .view { position: absolute; inset: 0; }
 .mode-switch { position: absolute; bottom: 10px; right: 22px; box-shadow: var(--shadow); z-index: 6; display: flex; background: var(--panel); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 2px; gap: 2px; }
 .mode-switch button { border: 0; background: none; padding: 3px 10px; border-radius: 4px; cursor: pointer; color: var(--text-2); font-size: 12px; }
+.md-view { overflow: auto; }
+.md-body { max-width: 860px; margin: 0 auto; padding: 18px 28px 60px; line-height: 1.55; font-size: 14px; }
+.md-body h2, .md-body h3, .md-body h4, .md-body h5 { margin: 1.2em 0 .5em; }
+.md-body pre { overflow: auto; }
+.md-body table { border-collapse: collapse; }
+.md-body th, .md-body td { border: 1px solid var(--border-2); padding: 4px 10px; }
 .mode-switch button.on { background: var(--accent); color: #fff; }
 .split-view { display: flex; }
 .split-view > * { flex: 1; min-width: 0; position: relative; }

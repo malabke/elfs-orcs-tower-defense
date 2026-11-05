@@ -31,6 +31,7 @@ const ICONS = {
   find: '<circle cx="6.5" cy="6.5" r="4"/><path d="M9.5 9.5L13.5 13.5"/><path d="M4.5 6.5h4"/>',
   refresh: '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  trash: '<path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5"/>',
   plus: '<path d="M8 3v10M3 8h10"/>',
   minus: '<path d="M3 8h10"/>',
   collapse: '<path d="M4 6l4-3 4 3M4 13l4-3 4 3"/>',

@@ -278,6 +278,7 @@ final class Main implements AppMain
             $this->app->options->set('reopen', false);
             return true;
         };
+        $c['projects.delete'] = fn (array $p) => $this->deleteProject((string)($p['path'] ?? ''), !empty($p['repository']));
         $c['projects.forget'] = function (array $p) {
             $this->app->storage->writeJson('recent.json', array_values(array_filter($this->recent(), fn ($r) => $r['path'] !== ($p['path'] ?? null))));
             return true;
@@ -524,6 +525,34 @@ final class Main implements AppMain
                     }, fn (\Throwable $e) => ['repository' => $repo['full_name'], 'url' => $repo['html_url'], 'playground' => null,
                         'message' => 'The repository is made and pushed, but jumphp.net did not take the project: ' . $e->getMessage()]);
             });
+    }
+
+    /**
+     * The trash of the welcome screen: the project's folder is deleted from this computer; with $repository also its jumphp.net project and its
+     * GitHub repository (jumphp.net does it; GitHub may refuse: its settings page is then given). Only a project of the recent list.
+     *
+     * @return Deferred resolves with {deleted, repository, repositoryUrl, message}
+     */
+    private function deleteProject(string $path, bool $repository): Deferred
+    {
+        $real = realpath($path);
+        $known = array_filter($this->recent(), fn ($r) => realpath((string)$r['path']) === $real);
+        $home = realpath((string)(getenv('HOME') ?: getenv('USERPROFILE')));
+        if ($real === false || !$known || !is_dir($real) || $real === $home || strlen($real) < 8 || dirname($real) === $real
+            || (!is_dir("$real/.git") && !is_dir("$real/.jumphp") && !is_file("$real/bin/jumphp"))) {
+            return Deferred::rejected(new \RuntimeException('Only a project of the recent list can be deleted, and never a folder that is not a project.'));
+        }
+        $slug = $this->projectSettings($real)['slug'] ?? null;
+        $remote = $repository && $slug !== null
+            ? self::deferred($this->playground->request('DELETE', '/api/ide/projects/' . rawurlencode((string)$slug), ['repository' => true], 60.0))
+            : Deferred::resolved(['project' => false, 'repository' => false, 'repositoryUrl' => null, 'message' => $repository ? 'This project was never put on jumphp.net: no repository to delete.' : null]);
+        return $remote->then(function (array $r) use ($real) {
+            $kept = array_values(array_filter($this->recent(), fn ($x) => realpath((string)$x['path']) !== $real));   // before the folder is gone
+            Creator::removeTree($real);
+            $this->app->storage->writeJson('recent.json', $kept);
+            return ['deleted' => !file_exists($real), 'repository' => (bool)($r['repository'] ?? false), 'repositoryUrl' => $r['repositoryUrl'] ?? null, 'message' => $r['message'] ?? null]
+                + ($r['project'] ?? false ? ['jumphp' => true] : []);
+        });
     }
 
     /** @return list<array{path: string, name: string, opened: int, slug: ?string}> */

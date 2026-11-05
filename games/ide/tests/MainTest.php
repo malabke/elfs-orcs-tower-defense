@@ -105,6 +105,25 @@ final class MainTest extends AppTestCase
         self::assertDirectoryDoesNotExist($this->project . '/new/todo');
     }
 
+    public function testTheTrashDeletesAProjectOfTheRecentListOnly(): void
+    {
+        $other = sys_get_temp_dir() . '/jumphp-trash-' . bin2hex(random_bytes(4));
+        mkdir("$other/.git", 0777, true);
+        file_put_contents("$other/a.txt", 'x');
+        try {
+            $this->ide('projects.delete', ['path' => $other]);
+            self::fail('a folder that is not in the recent list was deleted');
+        } catch (\Throwable $e) {
+            self::assertStringContainsString('recent list', $e->getMessage());
+        }
+        self::assertFileExists("$other/a.txt");
+        $this->app->storage->writeJson('recent.json', [['path' => $other, 'name' => 'trash', 'opened' => time(), 'slug' => null]]);
+        $r = $this->ide('projects.delete', ['path' => $other]);
+        self::assertTrue($r['deleted']);
+        self::assertDirectoryDoesNotExist($other);
+        self::assertSame([], array_filter($this->ide('session.state')['recent'] ?? [], fn ($x) => $x['path'] === $other));
+    }
+
     public function testAProjectWithoutARepositoryOfItsOwnIsOfferedOne(): void
     {
         $project = $this->ide('session.state')['project'];

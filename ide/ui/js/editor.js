@@ -2,6 +2,7 @@
 // PHP language features answered by the IDE's PHP side (completion, definition, usages, rename, hover...).
 import { backend } from './backend.js';
 import { showLocalHistory } from './localhistory.js';
+import { renderMarkdown } from './markdown.js';
 import { aiAvailable } from './res-ai.js';
 import { el, clear, icon, colorIcon, basename, dirname, extension, fileIcon, notify, debounce, prefs, menu, kbd, copyText, pasteText } from './ui.js';
 
@@ -244,6 +245,7 @@ export class Editors {
     if (tab.kind === 'diff') return this.renderDiff(group, tab);
     if (tab.kind === 'text') {
       if (!group.textView.parentNode) host.append(group.textView);
+      if (/\.(md|markdown)$/i.test(tab.path) && file) return this.renderMarkdownFile(group, tab, file);
       if (languageOf(tab.path) === 'html' && file) return this.renderHtml(group, tab, file);
       if (/\.form\.ya?ml$/.test(tab.path) && file) return this.renderHtml(group, tab, file, 'form');
       if ((SOUND.test(tab.path) || TILED.test(tab.path)) && file) return this.renderSound(group, tab, file);
@@ -358,6 +360,40 @@ export class Editors {
     } catch (e) {
       view.append(el('div.placeholder', {}, 'The editor could not start: ' + e.message));
     }
+  }
+
+  /** .md files: read rendered by default (View), the source (Edit), or both side by side (Edit + View). */
+  renderMarkdownFile(group, tab, file) {
+    const mode = tab.mode || prefs.get('mdMode', 'view');
+    const host = group.host;
+    host.append(el('div.mode-switch', {}, ['view', 'code', 'split'].map((m) => el(`button${m === mode ? '.on' : ''}`, {
+      onclick: () => { tab.mode = m; prefs.set('mdMode', m); this.renderView(group, tab); },
+    }, { view: 'View', code: 'Edit', split: 'Edit + View' }[m]))));
+    group.textView.style.right = '';
+    group.textView.style.width = '';
+    if (mode === 'code') {
+      group.textView.style.display = '';
+      this.showModel(group, tab, file);
+      return;
+    }
+    const view = el('div.view.md-view');
+    const draw = () => {
+      const top = view.scrollTop;
+      clear(view).append(el('div.md-body', {}, ...renderMarkdown(file.model.getValue(), (url) => this.app.openUrl(url))));
+      view.scrollTop = top;
+    };
+    if (mode === 'split') {
+      group.textView.style.display = '';
+      group.textView.style.right = '50%';
+      group.textView.style.width = '50%';
+      view.style.left = '50%';
+      view.style.borderLeft = '1px solid var(--border-2)';
+      this.showModel(group, tab, file);
+    }
+    host.append(view);
+    draw();
+    const sub = file.model.onDidChangeContent(debounce(draw, 250));
+    group.designer = { destroy: () => { sub.dispose(); group.textView.style.right = ''; group.textView.style.width = ''; } };
   }
 
   /** .html files (and forms of graphic apps, *.form.yaml): Code, Design (visual editor) or both side by side. */

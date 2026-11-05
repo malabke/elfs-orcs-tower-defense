@@ -53,11 +53,18 @@ export function renderMarkdown(text, onLink) {
         items.push(el('li', {}, ...inline(item, onLink)));
       }
       nodes.push(el(ordered ? 'ol' : 'ul', {}, ...items));
+    } else if (/^\s*([-*_])\s*\1\s*\1[-*_\s]*$/.test(line)) {
+      nodes.push(el('hr'));
+      i++;
+    } else if (/^>\s?/.test(line)) {
+      const quote = [];
+      for (; i < lines.length && /^>\s?/.test(lines[i]); i++) quote.push(lines[i].replace(/^>\s?/, ''));
+      nodes.push(el('blockquote', {}, ...renderMarkdown(quote.join('\n'), onLink)));
     } else if (!line.trim()) {
       i++;
     } else {
       const para = [];
-      for (; i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|\s*([-*]|\d+\.)\s+|\s*\|)/.test(lines[i]); i++) para.push(lines[i].trim());
+      for (; i < lines.length && lines[i].trim() && !/^(```|>|#{1,4}\s|\s*([-*]|\d+\.)\s+|\s*\|)/.test(lines[i]); i++) para.push(lines[i].trim());
       nodes.push(el('p', {}, ...inline(para.join(' '), onLink)));
     }
   }

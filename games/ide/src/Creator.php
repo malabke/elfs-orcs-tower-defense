@@ -160,7 +160,7 @@ final class Creator
         }
     }
 
-    private static function removeTree(string $dir): void
+    public static function removeTree(string $dir): void
     {
         foreach (scandir($dir) ?: [] as $name) {
             if ($name !== '.' && $name !== '..') {
