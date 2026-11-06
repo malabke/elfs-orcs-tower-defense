@@ -143,9 +143,9 @@ Dernière mise à jour : 2026-11-05.
    **Pull requests ouvertes le 2026-11-05** (compte `malabke`, fork `github.com/malabke/jumPhp`, remote `fork` du
    projet ; `gh` installé dans `C:\Program Files\GitHub CLI\gh.exe`, connecté à `malabke`) :
    https://github.com/davidnurdin/jumPhp/pull/2 (HD), /3 (pad none), /4 (double-clic), /5 (textures), /6 (Git Bash).
-   Descriptions dans `C:\JUMPHP\contrib-patches\pr\`. Corriger une PR : committer sur la branche dans son worktree
-   puis `git push fork <branche>`. Ensuite, une fois acceptées et publiées : mettre le projet à
-   jour vers la version de JumPHP qui les contient (`bin/jumphp update`), sur une branche, tout retester. Le
+   Descriptions dans `C:\JUMPHP\contrib-patches\pr\`.
+   **Les 5 PR ont été fusionnées le soir du 2026-11-05 et publiées dans JumPHP 0.5.15** (tag `v0.5.15`, commit
+   `06b3187` « merged the contributions »). Mise à jour du projet vers 0.5.15 : branche `update-0.5.15`. Le
    playground construit peut-être la page du jeu avec son propre code : `double_click_fullscreen` et `touch` doivent
    y arriver (à vérifier dans `jumphp-playground`).
    Puis des
