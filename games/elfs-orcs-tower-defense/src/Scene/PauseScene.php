@@ -15,10 +15,17 @@ final class PauseScene extends GameMenuScene
     protected int $titlePixels = 16;
     /** the PlayScene's parameters, to restart the same map */
     private array $restart = [];
+    /** pushed over a battle (else over a screen of choice: only RESUME) */
+    private bool $inBattle = false;
 
     public function enter(array $params = []): void
     {
-        $this->restart = $params['restart'] ?? $this->restart;
+        // the scene under this one (already on the stack): a battle, or a screen of choice (the engine pushes the pause
+        // menu over any scene when the window loses the focus: game.yaml pause_scene)
+        $stack = $this->scenes()->stack();
+        $below = $stack[count($stack) - 2] ?? null;
+        $this->inBattle = $below instanceof PlayScene;
+        $this->restart = $params['restart'] ?? ($this->inBattle ? $this->restart : []);
         parent::enter($params);
     }
 
@@ -29,6 +36,10 @@ final class PauseScene extends GameMenuScene
 
     protected function items(): array
     {
+        if (!$this->inBattle) {
+            // over a screen of choice: nothing to restart
+            return [[Lang::t('RESUME'), null, fn () => $this->scenes()->pop()]];
+        }
         return [
             [Lang::t('RESUME'), null, fn () => $this->scenes()->pop()],
             [Lang::t('RESTART'), null, fn () => $this->scenes()->switchTo(PlayScene::class, $this->restart)],

@@ -40,6 +40,19 @@ final class MenusTest extends GameTestCase
         self::assertInstanceOf(PlayScene::class, $this->game->scene());
     }
 
+    public function testThePauseOverTheSideScreenOnlyOffersToResume(): void
+    {
+        // what the engine does when the window loses the focus (game.yaml pause_scene), here over a screen of choice
+        $this->game->start(\App\Scene\FactionSelectScene::class, ['faction' => 'elves']);
+        $this->game->engine->scenes->push(PauseScene::class);
+        $this->game->run(2);
+        $menu = $this->game->peek('menu', $this->game->scene());
+        self::assertCount(1, $menu->getItems());
+        $this->tapButton(0);   // RESUME
+        $this->game->run(2);
+        self::assertInstanceOf(\App\Scene\FactionSelectScene::class, $this->game->scene());
+    }
+
     public function testTheVictoryShowsItsStarsAndItsButtonsLeadOn(): void
     {
         $this->game->start(PlayScene::class, self::RESTART);

@@ -145,7 +145,17 @@ Dernière mise à jour : 2026-11-05.
    https://github.com/davidnurdin/jumPhp/pull/2 (HD), /3 (pad none), /4 (double-clic), /5 (textures), /6 (Git Bash).
    Descriptions dans `C:\JUMPHP\contrib-patches\pr\`.
    **Les 5 PR ont été fusionnées le soir du 2026-11-05 et publiées dans JumPHP 0.5.15** (tag `v0.5.15`, commit
-   `06b3187` « merged the contributions »). Mise à jour du projet vers 0.5.15 : branche `update-0.5.15`. Le
+   `06b3187` « merged the contributions »).
+   **Projet mis à jour vers 0.5.15 le 2026-11-06, branche `update-0.5.15` (pas encore fusionnée dans `main` ni
+   publiée)** : fusion du tag `v0.5.15` ; conflits du moteur pris côté amont ; comme à la création du projet
+   (`a8ae177`), seul notre jeu dans `games/` et aucun workflow GitHub. Perdu à la fusion et remis : les tests PHPUnit
+   d'un jeu OpenGL sous Xvfb (notre ajout `4749a96` à `bin/jumphp`, jamais proposé en amont : sans lui les tests 3D
+   sont sautés). Nouveau dans 0.5.15 : `bin/jumphp test <jeu> tests/X.php` (un fichier) au lieu de `--filter` ;
+   `config/project.yaml` (clé `project:`) remplace `config/game.yaml`, qui reste lu. Vérifié : moteur 140 tests +
+   phpstan, jeu 186 tests (aucun sauté) + smoke OpenGL + phpstan, lint, `build` + `webshot`, `build:remote` +
+   `JUMPHP_WEB=remote webshot` (police douce HD et vignettes 3D avec le moteur partagé 0.5.15). Corrigé au passage :
+   le menu de pause poussé par le moteur hors d'une partie (fenêtre qui perd le focus) n'offre plus que REPRENDRE.
+   Reste : fusionner dans `main` et pousser sur « pousse », puis `sync_project` → `engine: 0.5.15`, statut `ready`. Le
    playground construit peut-être la page du jeu avec son propre code : `double_click_fullscreen` et `touch` doivent
    y arriver (à vérifier dans `jumphp-playground`).
    Puis des
