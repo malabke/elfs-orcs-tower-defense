@@ -155,7 +155,10 @@ Dernière mise à jour : 2026-11-05.
    phpstan, jeu 186 tests (aucun sauté) + smoke OpenGL + phpstan, lint, `build` + `webshot`, `build:remote` +
    `JUMPHP_WEB=remote webshot` (police douce HD et vignettes 3D avec le moteur partagé 0.5.15). Corrigé au passage :
    le menu de pause poussé par le moteur hors d'une partie (fenêtre qui perd le focus) n'offre plus que REPRENDRE.
-   Reste : fusionner dans `main` et pousser sur « pousse », puis `sync_project` → `engine: 0.5.15`, statut `ready`. Le
+   **Publié le 2026-11-06** (« pousse ») : `update-0.5.15` fusionnée dans `main` (avance rapide), poussée,
+   `sync_project` → publié `2a1e2e8`, `engine: 0.5.15`, statut `ready`, ni erreur ni avertissement. Le playground a
+   maintenant l'interface HD, la police douce, la 3D par transparence, pas de croix tactile ni de plein écran au
+   double-clic. Le
    playground construit peut-être la page du jeu avec son propre code : `double_click_fullscreen` et `touch` doivent
    y arriver (à vérifier dans `jumphp-playground`).
    Puis des
