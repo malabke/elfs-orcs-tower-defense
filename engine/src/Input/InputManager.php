@@ -6,7 +6,7 @@ use Evenement\EventEmitter;
 use JumPHP\Renderer\Renderer;
 
 /**
- * Drains the SDL event queue once per frame and feeds keyboard, mouse, touch and gamepads.
+ * Drains the SDL event queue once per frame and feeds keyboard (keys, typed text), mouse (buttons, wheel), touch and gamepads.
  * Events: 'quit' (window closed), 'key' (int $sym, on key down), 'resize' (int $w, int $h),
  * 'window' (int SDL_WINDOWEVENT_*, int $data1, int $data2).
  */
@@ -87,6 +87,22 @@ class InputManager extends EventEmitter
                         $down ? $this->mouse->down($event->button->button) : $this->mouse->up($event->button->button);
                     } else {
                         $this->mouseFromState($renderer, $down);
+                    }
+                    break;
+                case \SDL_MOUSEWHEEL:
+                    $wheel = $event->wheel ?? null;
+                    if ($wheel !== null) {
+                        $this->mouse->wheel((float)($wheel->preciseX ?? $wheel->x), (float)($wheel->preciseY ?? $wheel->y));
+                    }
+                    break;
+                case \SDL_TEXTINPUT:
+                    if (($event->text ?? null) !== null) {
+                        $this->keyboard->addText((string)$event->text->text);
+                    }
+                    break;
+                case \SDL_TEXTEDITING:
+                    if (($event->edit ?? null) !== null) {
+                        $this->keyboard->setComposition((string)$event->edit->text);
                     }
                     break;
                 case \SDL_FINGERDOWN:

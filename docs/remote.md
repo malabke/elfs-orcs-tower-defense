@@ -43,7 +43,7 @@ Le moteur et la page doivent être sur la **même origine** (modules JavaScript,
   "base": "files/",
   "autoload": { "App\\": ["src/"] },
   "files": [
-    { "path": "config/game.yaml", "hash": "3fa2c9d1e0b4a7f2", "size": 412 },
+    { "path": "config/project.yaml", "hash": "3fa2c9d1e0b4a7f2", "size": 412 },
     { "path": "src/Scene/PlayScene.php", "hash": "9b0c...", "size": 5120, "url": "/drafts/abc/src/Scene/PlayScene.php" }
   ]
 }

@@ -16,6 +16,9 @@ class Mouse
     private array $pressed = [];
     /** @var array<int, bool> */
     private array $released = [];
+    /** the wheel this frame, in notches (fractions with touchpads): y > 0 = away from the user (up), x > 0 = right */
+    public float $wheelX = 0;
+    public float $wheelY = 0;
 
     public function move(float $x, float $y): void
     {
@@ -33,6 +36,12 @@ class Mouse
     {
         unset($this->held[$button]);
         $this->released[$button] = true;
+    }
+
+    public function wheel(float $x, float $y): void
+    {
+        $this->wheelX += $x;
+        $this->wheelY += $y;
     }
 
     public function isHeld(int $button = 1): bool
@@ -54,5 +63,7 @@ class Mouse
     {
         $this->pressed = [];
         $this->released = [];
+        $this->wheelX = 0;
+        $this->wheelY = 0;
     }
 }

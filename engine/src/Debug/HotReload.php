@@ -24,7 +24,7 @@ final class HotReload
     public const RESULT = '/tmp/jumphp-hot-result';
     private const IMAGE = '/\.(png|jpe?g|gif|bmp|webp)$/i';
     private const SOUND = '/\.(wav|ogg|mp3|flac|mod|xm|it|s3m)$/i';
-    private const RESTART = ['config/game.yaml', 'config/services.yaml', 'composer.json'];
+    private const RESTART = ['config/project.yaml', 'config/game.yaml', 'config/services.yaml', 'composer.json'];
     /** what the game does not read while it plays: its docs, tests, web site */
     private const IGNORED = '#(^|/)[^/]*\.(md|txt)$|^(tests|site|docs)/|(^|/)\.git#i';
 

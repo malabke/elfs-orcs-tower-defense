@@ -77,7 +77,7 @@ et `version.json` ne doivent pas être mis en cache longtemps.
 `bin/jumphp deploy <jeu>` : `rsync` de `dist/web/` vers `$JUMPHP_DEPLOY_TARGET/<jeu>/` (par exemple
 `user@serveur:/var/www/jeux`, avec votre agent SSH). Le relais en production : le dossier
 `server/` de php-wasm-network (Caddy en TLS + relais + coturn) ; les jeux utilisent alors
-`net_url: wss://votre-domaine/ws` dans `game.yaml` ou `?net=` dans l'URL.
+`net_url: wss://votre-domaine/ws` dans `project.yaml` ou `?net=` dans l'URL.
 
 `bin/jumphp pages [jeux...]` : construit les jeux (tous par défaut), génère une page d'accueil à partir de
 leurs `game.json` (`tools/pages-index.php`) et pousse le tout comme unique commit de la branche `gh-pages`

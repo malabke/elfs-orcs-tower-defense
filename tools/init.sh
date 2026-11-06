@@ -10,6 +10,8 @@
 # Options: --yes (every default, nothing installed: tests / CI), --deploy (only step 4: bin/jumphp deploy:setup),
 # --github (only step 5), --claude (only step 6). Texts in French when the system language is French.
 set -uo pipefail
+# config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -266,7 +268,7 @@ step_game() {
   if [ -n "$existing" ] && [ -d "games/$existing" ]; then
     if confirm "$(t "Le projet a déjà un jeu : games/$existing. Le garder ?" "The project already has a game: games/$existing. Keep it?")" y; then
       GAME_ID="$existing"
-      GAME_TITLE="$(sed -nE 's/^[[:space:]]*title:[[:space:]]*"?([^"]*)"?.*/\1/p' "games/$existing/config/game.yaml" | head -1)"
+      GAME_TITLE="$(sed -nE 's/^[[:space:]]*title:[[:space:]]*"?([^"]*)"?.*/\1/p' "$(project_yaml "games/$existing")" | head -1)"
       return 0
     fi
   fi
@@ -295,7 +297,7 @@ step_game() {
   info "$(t 'Image Docker du runtime (PHP + SDL + OpenGL, ~5 min la première fois)...' 'Docker image of the runtime (PHP + SDL + OpenGL, ~5 min the first time)...')"
   jp setup || { fail "bin/jumphp setup"; return 1; }
   jp new "$GAME_ID" "$GAME_TITLE" || return 1
-  local yaml="games/$GAME_ID/config/game.yaml" esc
+  local yaml; yaml="$(project_yaml "games/$GAME_ID")" esc
   esc="$(printf '%s' "$description" | sed -e 's/[\\"]/\\&/g' -e 's/[&|]/\\&/g')"
   sed -i.bak -E \
     -e "s|^([[:space:]]*description:).*|\\1 \"$esc\"|" \
@@ -442,6 +444,8 @@ step_github() {
     origin=""
   fi
   git remote get-url jumphp >/dev/null 2>&1 || git remote add jumphp "$UPSTREAM"
+  # the framework only gives updates: nothing of the project can be pushed there
+  git remote set-url --push jumphp no-push://the-jumphp-framework-only-gives-updates
   if [ -n "$origin" ]; then
     ok "$(t "le projet a déjà un dépôt : $origin" "the project already has a repository: $origin")"
   fi
@@ -478,7 +482,7 @@ step_claude() {
   step "6. Claude Code"
   local game; game="${GAME_ID:-$(env_get JUMPHP_GAME)}"
   [ -n "$game" ] && [ -d "games/$game" ] || { warn "$(t 'pas de jeu : bin/jumphp init' 'no game: bin/jumphp init')"; return 0; }
-  local title; title="$(sed -nE 's/^[[:space:]]*title:[[:space:]]*"?([^"]*)"?.*/\1/p' "games/$game/config/game.yaml" | head -1)"
+  local title; title="$(sed -nE 's/^[[:space:]]*title:[[:space:]]*"?([^"]*)"?.*/\1/p' "$(project_yaml "games/$game")" | head -1)"
   local brief="games/$game/BRIEF.md" wish="" line
   info "$(t "Claude Code va écrire le jeu. Le reste du prompt est prêt (règles JumPHP, tests, captures) :" \
             "Claude Code will write the game. The rest of the prompt is ready (JumPHP rules, tests, screenshots):")"

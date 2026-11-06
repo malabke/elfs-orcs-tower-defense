@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       game:
-        description: 'The game (a folder of games/)'
+        description: 'The game or app (a folder of games/ or apps/)'
         required: true
       bundle_id:
         description: 'The bundle identifier (io.github.me.my-game)'
@@ -32,7 +32,30 @@ permissions:
   contents: write
 
 jobs:
+  # a desktop app (ui: webview): its browser build (dist/web, Docker: not on GitHub's Macs), shown by the iOS app's WKWebView
+  web:
+    runs-on: ubuntu-latest
+    outputs:
+      webview: ${{ steps.kind.outputs.webview }}
+    env:
+      GAME: ${{ inputs.game || 'pong' }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: kind
+        run: |
+          d="games/$GAME"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
+          y="$d/config/project.yaml"; [ -f "$y" ] || y="$d/config/game.yaml"
+          if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$y"; then echo "webview=1" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.kind.outputs.webview == '1'
+        run: bin/jumphp engine:download && bin/jumphp build "$GAME"
+      - if: steps.kind.outputs.webview == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: ${{ env.GAME_DIR }}/dist/web/
+
   app:
+    needs: web
     runs-on: macos-15
     timeout-minutes: 150
     env:
@@ -52,6 +75,13 @@ jobs:
           tools: composer
           coverage: none
 
+      - name: Where the project is (games/<id>, else apps/<id>)
+        run: d="games/$GAME"; [ -d "$d" ] || d="apps/$GAME"; echo "GAME_DIR=$d" >> "$GITHUB_ENV"
+      - if: needs.web.outputs.webview == '1'
+        uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: ${{ env.GAME_DIR }}/dist/web/
       - name: Tools (autoconf for PHP's configure)
         run: brew list autoconf >/dev/null 2>&1 || brew install autoconf
 
@@ -63,7 +93,7 @@ jobs:
         run: |
           if gh release view "apple-private-$GAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release download "apple-private-$GAME" -R "$GITHUB_REPOSITORY" -p private.tar.gz -D "$RUNNER_TEMP"
-            tar -xzf "$RUNNER_TEMP/private.tar.gz" -C "games/$GAME"
+            tar -xzf "$RUNNER_TEMP/private.tar.gz" -C "$GAME_DIR"
             echo "private files in place: $(tar -tzf "$RUNNER_TEMP/private.tar.gz" | grep -vc '/$')"
             # the apps contain them: their release is a draft (its owner decides whether to publish it)
             echo "PRIVATE_FILES=1" >> "$GITHUB_ENV"
@@ -72,8 +102,8 @@ jobs:
 
       - name: The game's vendor/ (composer, the engine from engine/)
         run: |
-          test -d "games/$GAME" || { echo "no games/$GAME"; exit 1; }
-          composer install -d "games/$GAME" --no-dev --no-interaction --no-progress --ignore-platform-reqs
+          test -d "$GAME_DIR" || { echo "no $GAME_DIR"; exit 1; }
+          composer install -d "$GAME_DIR" --no-dev --no-interaction --no-progress --ignore-platform-reqs
 
       # PHP per target and the sources: kept between runs (a first build ~40 min, then ~10), even when a later step
       # fails (what was built is kept)
@@ -110,10 +140,10 @@ jobs:
         with:
           name: apple-${{ env.GAME }}-${{ env.VERSION }}
           path: |
-            games/${{ env.GAME }}/dist/apple/*.zip
-            games/${{ env.GAME }}/dist/apple/*.dmg
-            games/${{ env.GAME }}/dist/apple/*.ipa
-            games/${{ env.GAME }}/dist/apple/check/
+            ${{ env.GAME_DIR }}/dist/apple/*.zip
+            ${{ env.GAME_DIR }}/dist/apple/*.dmg
+            ${{ env.GAME_DIR }}/dist/apple/*.ipa
+            ${{ env.GAME_DIR }}/dist/apple/check/
           if-no-files-found: ignore
 
       - name: Release
@@ -123,7 +153,7 @@ jobs:
         run: |
           shopt -s nullglob
           tag="apple-$GAME-$VERSION-$BUILD"
-          cd "games/$GAME/dist/apple"
+          cd "$GAME_DIR/dist/apple"
           for f in check/*.png; do cp "$f" "$GAME-$VERSION-screenshot-$(basename "$f")"; done
           files=(./*.zip ./*.dmg ./*.ipa ./*-screenshot-*.png)
           draft=(); [ "${PRIVATE_FILES:-}" = 1 ] && draft=(--draft)

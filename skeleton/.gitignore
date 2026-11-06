@@ -4,3 +4,6 @@
 /dist/
 /.build/
 /cache/
+
+# what the AI assistants did (IDE history): private to this computer
+/IA/

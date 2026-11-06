@@ -13,7 +13,7 @@ die() { printf '\033[1;31m[x] %s\033[0m\n' "$*" >&2; exit 1; }
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 GAME="${1:?the game}"
 PLATFORMS="${2:-macos ios}"
-OUT="$ROOT/games/$GAME/dist/apple"
+OUT="$ROOT/games/$GAME/dist/apple"; [ -d "$ROOT/games/$GAME" ] || OUT="$ROOT/apps/$GAME/dist/apple"
 CHECK="$OUT/check"
 rm -rf "$CHECK" && mkdir -p "$CHECK"
 # macOS has no timeout(1)

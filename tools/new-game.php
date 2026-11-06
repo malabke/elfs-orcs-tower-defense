@@ -9,11 +9,11 @@ if (!$id || !preg_match('/^[a-z][a-z0-9-]*$/', $id)) {
 }
 $title = $title ?: strtoupper($id);
 
-$yaml = file_get_contents('config/game.yaml');
+$yaml = file_get_contents($yamlFile = (is_file('config/project.yaml') ? 'config/project.yaml' : 'config/game.yaml'));
 $yaml = preg_replace('/^(\s*id:\s*)\S+/m', '${1}' . $id, $yaml, 1);
 $yaml = preg_replace('/^(\s*title:\s*).*/m', '${1}"' . addcslashes($title, '"\\') . '"', $yaml, 1);
 $yaml = preg_replace('/^(\s*description:\s*).*/m', '${1}""', $yaml, 1);
-file_put_contents('config/game.yaml', $yaml);
+file_put_contents($yamlFile, $yaml);
 
 $composer = json_decode(file_get_contents('composer.json'), true);
 $composer['name'] = 'jumphp-games/' . $id;

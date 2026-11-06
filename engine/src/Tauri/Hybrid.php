@@ -31,6 +31,16 @@ final class Hybrid
             && !Platform::isPhoneApp();
     }
 
+    /**
+     * The game in the Tauri window (app.embed: true; JumPHP\Tauri\EmbeddedGame): only when it can (what wanted()
+     * asks, FFI, the runtime library), else it keeps its SDL window.
+     */
+    public static function embedded(GameConfig $config): bool
+    {
+        return self::wanted($config) && ($config->get('app', [])['embed'] ?? false) === true
+            && TauriRuntime::canLoad($config->root());
+    }
+
     /** @return int|null the exit code, or null when the game has to run as a plain game */
     public static function run(Application $game, ?NativeRuntime $runtime = null): ?int
     {
@@ -42,7 +52,9 @@ final class Hybrid
         }
         $app = new App($config, $runtime);
         $window = $config->get('app', [])['window'] ?? null;
-        if (is_array($window)) {
+        if ($game->engine->sdl->isEmbedded()) {
+            (new EmbeddedGame($app, $game->engine, $config))->start();
+        } elseif (is_array($window)) {
             $app->createWindow('main', $window + ['title' => $config->title()]);
         }
         $main = $config->get('main');

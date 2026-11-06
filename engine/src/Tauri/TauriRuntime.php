@@ -23,6 +23,7 @@ final class TauriRuntime implements NativeRuntime
         int jt_run(const char *config_json, void (*frame)(void));
         const char *jt_poll(void);
         void jt_send(const char *command_json);
+        void jt_frame(const char *data, size_t len);
         const char *jt_version(void);
         C;
 
@@ -37,11 +38,55 @@ final class TauriRuntime implements NativeRuntime
         $this->ffi = \FFI::cdef(self::HEADER, $library);
     }
 
-    /** A runtime when this PHP can run one (FFI + the library found), else null. */
-    public static function create(string $appRoot): ?self
+    /** @var array<string, bool> canLoad() per app root */
+    private static array $loadable = [];
+
+    /**
+     * A runtime when this PHP can run one (FFI + the library found and loadable), else null.
+     * $appTitle (a desktop app): when the library can not be loaded because the system's WebView is missing (Linux:
+     * WebKitGTK), the user is offered to install it (LinuxWebView), then it is loaded again; if it still can not
+     * be, an exception says why. Without it (hybrid games): null, the game runs without Tauri.
+     */
+    public static function create(string $appRoot, ?string $appTitle = null): ?self
     {
         $library = self::library($appRoot);
-        return $library !== null && extension_loaded('ffi') && !Platform::isWasm() ? new self($library) : null;
+        if ($library === null || !extension_loaded('ffi') || Platform::isWasm()) {
+            return null;
+        }
+        try {
+            return new self($library);
+        } catch (\FFI\Exception $e) {
+            if ($appTitle === null) {
+                fwrite(STDERR, "[jumphp] the Tauri runtime could not be loaded: {$e->getMessage()}\n");
+                return null;
+            }
+            if (PHP_OS_FAMILY === 'Linux' && LinuxWebView::offer($library, $appTitle)) {
+                return new self($library);
+            }
+            if (LinuxWebView::$said !== []) {
+                // the user was told what to install (declined, or it could not be done): nothing more to show
+                exit(1);
+            }
+            throw new \RuntimeException('The Tauri runtime could not be loaded: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
+    /** The runtime can be loaded here (the library and what it needs, e.g. WebKitGTK); remembered per app. */
+    public static function canLoad(string $appRoot): bool
+    {
+        if (!isset(self::$loadable[$appRoot])) {
+            $library = self::library($appRoot);
+            $ok = false;
+            if ($library !== null && extension_loaded('ffi') && !Platform::isWasm()) {
+                try {
+                    \FFI::cdef(self::HEADER, $library);
+                    $ok = true;
+                } catch (\FFI\Exception) {
+                }
+            }
+            self::$loadable[$appRoot] = $ok;
+        }
+        return self::$loadable[$appRoot];
     }
 
     public static function platform(): string
@@ -115,6 +160,11 @@ final class TauriRuntime implements NativeRuntime
     public function send(array $command): void
     {
         $this->ffi->jt_send(json_encode($command, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+    }
+
+    public function picture(string $bmp): void
+    {
+        $this->ffi->jt_frame($bmp, strlen($bmp));
     }
 
     public function version(): string

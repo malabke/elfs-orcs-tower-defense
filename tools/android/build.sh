@@ -8,6 +8,8 @@
 #   3. the app: SDL's Android project (tools/android/project) + jni/main.c (PHP embedded: unpacks the game,
 #      boots it) + the game as assets/game.tar; Gradle builds SDL, its add-ons, OpenAL and libmain.so, signs
 #   4. games/<game>/dist/android-native/<game>-<version>.aab (Google Play) and .apk (a phone)
+# A desktop app (ui: webview) instead: no native PHP, a WebView showing its browser build (dist/web, made before by
+# bin/jumphp build: PHP in WebAssembly, engine/web/jumphp-app.js) packed in the APK (tools/android/webview).
 # Environment: GAME, ABIS (default "arm64-v8a x86_64"), PACKAGE, VERSION_CODE, VERSION_NAME, the signing key
 # (KEYSTORE file, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD: without them, a debug-signed APK only).
 # /workspace: the project; /cache: downloads and builds; /opt/android-sdk: the SDK with its NDK.
@@ -91,6 +93,7 @@ php_tree() {
   # php-sdl: PHP 8.5 (zend_ce_exception), no SDLCALL before a call, its header in src/ (registry/src/Extension/sdl.php)
   sed -i 's/zend_exception_get_default()/zend_ce_exception/g; s/= SDLCALL SDL_/= SDL_/g' "$tree"/ext/sdl/src/*.[ch]
   printf '/* phpext_sdl_ptr */\n#include "src/php_sdl.h"\n' > "$tree/ext/sdl/php_sdl.h"
+  (cd "$tree/ext/sdl" && git apply -p1 /workspace/docker/ext/php-sdl-events.patch)
   # PHP-OpenGL: JumPHP's patch, then OpenGL (ES on Android) from SDL at run time (registry/functions.php)
   (cd "$tree/ext/opengl" && git apply -p1 /workspace/docker/ext/php-opengl.patch)
   php -r 'require $argv[1]; jumphp_gl_loader($argv[2], false);' "$REGISTRY/functions.php" "$tree/ext/opengl"
@@ -107,7 +110,7 @@ build_php() {
     *) die "unknown ABI $abi" ;;
   esac
   # the key: what makes PHP (versions, the extensions' config.m4, the functions php_tree and build_php themselves)
-  local key; key="$( { echo "$PHP_VERSION $NDK_VERSION $API $LIBPNG_VERSION $OPENSSL_VERSION"; cat "$HERE"/ext/*.m4 /workspace/docker/ext/php-opengl.patch \
+  local key; key="$( { echo "$PHP_VERSION $NDK_VERSION $API $LIBPNG_VERSION $OPENSSL_VERSION"; cat "$HERE"/ext/*.m4 /workspace/docker/ext/php-opengl.patch /workspace/docker/ext/php-sdl-events.patch \
     "$REGISTRY/functions.php"; declare -f php_tree build_php; } | sha256sum | cut -c1-12)"
   local out="/cache/php/$abi-$key"
   [ -f "$out/lib/libphp.a" ] && { ln -sfn "$(basename "$out")" "/cache/php/$abi"; return 0; }
@@ -168,8 +171,9 @@ build_php() {
 game_config() {
   php -r '
     require $argv[1] . "/vendor/autoload.php";
-    $c = Symfony\Component\Yaml\Yaml::parseFile($argv[1] . "/config/game.yaml");
-    $g = $c["game"] ?? $c;
+    $f = $argv[1] . "/config/project.yaml";
+    $c = Symfony\Component\Yaml\Yaml::parseFile(is_file($f) ? $f : $argv[1] . "/config/game.yaml");
+    $g = $c["project"] ?? $c["game"] ?? $c;
     $bg = $g["pwa"]["background_color"] ?? $g["background"] ?? [0, 0, 0];
     $bg = is_string($bg) ? $bg : vsprintf("#%02x%02x%02x", array_slice(array_map("intval", $bg), 0, 3));
     $name = $g["pwa"]["short_name"] ?? $g["title"] ?? $argv[2];
@@ -202,9 +206,9 @@ icons() {
 }
 
 app() {
-  local game_dir="/workspace/games/$GAME"
-  [ -d "$game_dir" ] || die "no games/$GAME"
-  local cfg; cfg="$(game_config "$game_dir")"
+  local project_dir="/workspace/games/$GAME"; [ -d "$project_dir" ] || project_dir="/workspace/apps/$GAME"
+  [ -d "$project_dir" ] || die "no games/$GAME nor apps/$GAME"
+  local cfg; cfg="$(game_config "$project_dir")"
   local get; get() { printf '%s' "$cfg" | php -r '$c = json_decode(stream_get_contents(STDIN), true); echo $c[$argv[1]];' "$1"; }
   local name width height bg id
   name="$(get name)"; width="$(get width)"; height="$(get height)"; bg="$(get background)"; id="$(get id)"
@@ -227,11 +231,11 @@ app() {
   local escaped; escaped="$(printf '%s' "$name" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e "s/'/\\\\'/g")"
   sed -i "s|@NAME@|$escaped|" "$project/app/src/main/res/values/strings.xml"
   sed -i "s|@ORIENTATION@|$orientation|" "$project/app/src/main/AndroidManifest.xml"
-  icons "$game_dir" "$project/app/src/main/res" "$bg" "$name"
+  icons "$project_dir" "$project/app/src/main/res" "$bg" "$name"
 
   # the game: assets/game.tar + game.id (its build)
   local stage=/tmp/stage/game build
-  build="$(bash /workspace/tools/stage-game.sh "$game_dir" "$stage")"
+  build="$(bash /workspace/tools/stage-game.sh "$project_dir" "$stage")"
   mkdir -p "$project/app/src/main/assets"
   tar --format=gnu -cf "$project/app/src/main/assets/game.tar" -C "$stage" .
   printf '%s' "$build" > "$project/app/src/main/assets/game.id"
@@ -249,7 +253,7 @@ app() {
     ./gradlew --no-daemon -q $tasks > /tmp/gradle.out 2>&1 || { grep -vE "^\s*at |^\s*$" /tmp/gradle.out | tail -60; die "Gradle failed"; }
   )
 
-  local out="$game_dir/dist/android-native" file="$GAME-$VERSION_NAME"
+  local out="$project_dir/dist/android-native" file="$GAME-$VERSION_NAME"
   mkdir -p "$out"
   cp "$project/app/build/outputs/apk/release/app-release.apk" "$out/$file.apk"
   echo "APK=$out/$file.apk"
@@ -259,6 +263,56 @@ app() {
   fi
 }
 
+# a desktop app (ui: webview): its browser build in a WebView (tools/android/webview), no PHP built here
+webview_app() {
+  local project_dir="/workspace/games/$GAME"; [ -d "$project_dir" ] || project_dir="/workspace/apps/$GAME"
+  [ -f "$project_dir/dist/web/index.html" ] || die "no browser build of $GAME: bin/jumphp build $GAME first"
+  fetch sdl2 "$(registry_url sdl2)"   # Gradle's wrapper, from SDL's Android project (as the games' apps)
+  local cfg; cfg="$(game_config "$project_dir")"
+  local get; get() { printf '%s' "$cfg" | php -r '$c = json_decode(stream_get_contents(STDIN), true); echo $c[$argv[1]];' "$1"; }
+  local name bg
+  name="$(get name)"; bg="$(get background)"
+  local project="/cache/webapp/$GAME"
+  say "the app: $name ($PACKAGE $VERSION_NAME, version $VERSION_CODE; a WebView on its browser build)"
+  rm -rf "$project" && mkdir -p "$project/gradle/wrapper"
+  cp -r "$HERE/webview/." "$project/"
+  cp "$SRC/sdl2/android-project/gradlew" "$project/" && chmod +x "$project/gradlew"
+  cp "$SRC/sdl2/android-project/gradle/wrapper/gradle-wrapper.jar" "$project/gradle/wrapper/"
+  printf 'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip\ndistributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' \
+    > "$project/gradle/wrapper/gradle-wrapper.properties"
+  printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$project/local.properties"
+  local escaped; escaped="$(printf '%s' "$name" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e "s/'/\\\\'/g")"
+  sed -i "s|@NAME@|$escaped|" "$project/app/src/main/res/values/strings.xml"
+  icons "$project_dir" "$project/app/src/main/res" "$bg" "$name"
+  mkdir -p "$project/app/src/main/assets/web"
+  cp -rL "$project_dir/dist/web/." "$project/app/src/main/assets/web/"
+
+  local tasks="assembleRelease"
+  [ -n "${KEYSTORE:-}" ] && tasks="assembleRelease bundleRelease"
+  (
+    cd "$project"
+    export GRADLE_USER_HOME=/cache/gradle ANDROID_USER_HOME=/cache/android-user JUMPHP_PACKAGE="$PACKAGE" JUMPHP_VERSION_CODE="$VERSION_CODE" \
+      JUMPHP_VERSION_NAME="$VERSION_NAME" JUMPHP_KEYSTORE="${KEYSTORE:-}" JUMPHP_KEYSTORE_PASSWORD="${KEYSTORE_PASSWORD:-}" \
+      JUMPHP_KEY_ALIAS="${KEY_ALIAS:-}" JUMPHP_KEY_PASSWORD="${KEY_PASSWORD:-}"
+    ./gradlew --no-daemon -q $tasks > /tmp/gradle.out 2>&1 || { grep -vE "^\s*at |^\s*$" /tmp/gradle.out | tail -60; die "Gradle failed"; }
+  )
+  local out="$project_dir/dist/android-native" file="$GAME-$VERSION_NAME"
+  mkdir -p "$out"
+  cp "$project/app/build/outputs/apk/release/app-release.apk" "$out/$file.apk"
+  echo "APK=$out/$file.apk"
+  if [ -n "${KEYSTORE:-}" ]; then
+    cp "$project/app/build/outputs/bundle/release/app-release.aab" "$out/$file.aab"
+    echo "AAB=$out/$file.aab"
+  fi
+}
+
+# a desktop app (project.yaml / game.yaml ui: webview)?
+is_webview() {
+  local d="/workspace/games/$GAME"; [ -d "$d" ] || d="/workspace/apps/$GAME"
+  local y="$d/config/project.yaml"; [ -f "$y" ] || y="$d/config/game.yaml"
+  grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$y" 2>/dev/null
+}
+
 PACKAGE="${PACKAGE:-net.jumphp.${GAME//-/_}}"
 VERSION_CODE="${VERSION_CODE:-1}"
 VERSION_NAME="${VERSION_NAME:-1.0}"
@@ -266,6 +320,6 @@ VERSION_NAME="${VERSION_NAME:-1.0}"
 case "${STAGE:-all}" in
   sources) sources ;;
   php) sources; for abi in $ABIS; do build_php "$abi"; done ;;
-  all) sources; for abi in $ABIS; do build_php "$abi"; done; app ;;
+  all) if is_webview; then webview_app; else sources; for abi in $ABIS; do build_php "$abi"; done; app; fi ;;
   *) die "STAGE: sources, php, all" ;;
 esac

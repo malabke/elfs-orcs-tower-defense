@@ -1,0 +1,706 @@
+<?php
+
+namespace JumPHP\Ide;
+
+use JumPHP\Ide\Agent\IdeAgent;
+use JumPHP\Ide\Ai\ResourceGenerator;
+use JumPHP\Ide\Config\ConfigCompletion;
+use JumPHP\Ide\Debug\Debugger;
+use JumPHP\Ide\Async\Deferred;
+use JumPHP\Ide\Async\Docker;
+use JumPHP\Ide\Async\Processes;
+use JumPHP\Ide\Claude\ClaudeCode;
+use JumPHP\Ide\Claude\ClaudeHistory;
+use JumPHP\Ide\History\LocalHistory;
+use JumPHP\Ide\Git\Git;
+use JumPHP\Ide\Gui\FormCode;
+use JumPHP\Ide\Gui\FormFile;
+use JumPHP\Ide\Php\Index;
+use JumPHP\Ide\Php\Intelligence;
+use JumPHP\Ide\Php\Source;
+use JumPHP\Ide\Plugin\PluginHost;
+use JumPHP\Ide\Project\JumphpUpdater;
+use JumPHP\Ide\Project\ProjectInfo;
+use JumPHP\Ide\Run\Runner;
+use JumPHP\Ide\Run\Terminals;
+use JumPHP\Ide\Search\Search;
+use JumPHP\Ide\Workspace\Paths;
+use JumPHP\Ide\Workspace\Workspace;
+use JumPHP\Ide\Workspace\WorkspaceException;
+
+/**
+ * The IDE's commands on one opened project, the same for every host: the desktop app calls them from its pages
+ * (jumphp.invoke), the playground from its web API. A command takes an array and returns a plain value or a
+ * Deferred (the host waits for it); an exception is the error the interface shows.
+ *
+ * Hosts add their own commands (sign-in, project list, the web IDE's drafts...) with register(). Events
+ * (index progress, run output) go to the host's emitter.
+ */
+final class Ide
+{
+    public readonly Index $index;
+    public readonly Intelligence $php;
+    public readonly Search $search;
+    public readonly ProjectInfo $project;
+    public readonly Processes $processes;
+    public ?Git $git = null;
+    public ?Runner $runner = null;
+
+    /** @var array<string, callable(array): mixed> */
+    private array $commands = [];
+
+    /** @var callable(string, array): void */
+    private $emit;
+
+    private bool $indexed = false;
+    private bool $librariesIndexed = false;
+    private int $libraryTicks = 0;
+
+    /** the Claude Code of this computer (desktop only) */
+    public ?ClaudeCode $claude = null;
+    /** The detailed logs (the Logs window): set by the desktop app, which owns them across projects */
+    public ?\JumPHP\Ide\Log\LogBuffer $log = null;
+
+    /** the IDE's tools for that Claude (an MCP server; the interface carries them out) */
+    public ?IdeAgent $agent = null;
+
+    /** Docker made ready in the background (a JumPHP project runs everything in it) */
+    public ?Docker $docker = null;
+
+    /** Xdebug's debugger: the IDE listens, the programs run with JUMPHP_XDEBUG connect to it */
+    public ?Debugger $debugger = null;
+
+    /** the IDE's plugins (PHP), when the host enables them (enablePlugins(): the desktop app) */
+    public ?PluginHost $plugins = null;
+
+    /** the Terminal tool window's shells, when the host enables them (enableTerminal(): the desktop app only) */
+    public ?Terminals $terminals = null;
+
+    /** @var array<string, mixed> capabilities a host sets (they win over the defaults of project.info) */
+    public array $capabilities = [];
+
+    /** @var list<string> folders outside the project whose PHP files may be opened (read only) */
+    private array $libraryDirs = [];
+
+    /**
+     * @param callable(string $event, array $payload): void|null $emit
+     * @param string|null $cacheDir where the index is kept between sessions
+     */
+    public function __construct(public readonly Workspace $workspace, ?string $cacheDir = null, ?callable $emit = null, ?Processes $processes = null)
+    {
+        $this->emit = $emit ?? fn () => null;
+        $this->index = new Index($workspace, $cacheDir !== null ? $cacheDir . '/index-' . substr(sha1((string)($workspace->localPath() ?? $workspace->name())), 0, 12) . '.json' : null);
+        $this->php = new Intelligence($this->index);
+        $this->search = new Search($workspace);
+        $this->project = new ProjectInfo($workspace);
+        $this->processes = $processes ?? new Processes();
+        $this->librariesSignature = $this->librariesSignature();
+        $root = $workspace->localPath();
+        if ($root !== null) {
+            // the extensions' functions (SDL, OpenGL, OpenAL...) from the engine's stubs, of the project or of a game's vendor/
+            $stubs = [];
+            foreach ([...(glob("$root/engine/stubs/*.php") ?: []), ...(glob("$root/games/*/vendor/jumphp/engine/stubs/*.php") ?: []), ...(glob("$root/apps/*/vendor/jumphp/engine/stubs/*.php") ?: []),
+                ...(glob("$root/vendor/jumphp/engine/stubs/*.php") ?: [])] as $file) {
+                $stubs[(string)realpath($file)] = true;
+            }
+            $this->index->addStubs(...array_keys($stubs));
+            $this->git = new Git($this->processes, $root);
+            $this->runner = new Runner($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+        }
+        $this->registerCore();
+        $this->registerForms();
+        if ($this->git !== null) {
+            $this->registerGit();
+        }
+        if ($this->runner !== null) {
+            $this->registerRun();
+        }
+        if ($root !== null && $workspace->exists('bin/jumphp')) {
+            $this->docker = new Docker($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+            $this->register('docker.ensure', fn () => $this->docker->ensure());
+            $this->register('docker.state', fn () => $this->docker->state());
+            if ($this->runner !== null) {
+                $this->runner->dockerVia = fn (): string => $this->docker?->via() ?? 'native';
+            }
+            // the project's JumPHP kept as new as the IDE's (bin/jumphp, engine, tools...; never games/)
+            $updater = new JumphpUpdater($this->processes, $root);
+            $this->register('jumphp.check', fn () => $updater->check());
+            $this->register('jumphp.update', fn (array $p) => $updater->update(!empty($p['force'])));
+            // whether the project's JumPHP knows a feature: its text in bin/jumphp, or in one of the tools/ files (tools/extension-commands.sh...)
+            $this->register('jumphp.supports', function (array $p) use ($root) {
+                $file = (string)($p['file'] ?? 'bin/jumphp');
+                $file = $file === 'bin/jumphp' || preg_match('#^tools/[A-Za-z0-9._-]+$#', $file) ? $file : 'bin/jumphp';
+                return ['ok' => str_contains((string)@file_get_contents("$root/$file"), (string)($p['feature'] ?? ''))];
+            });
+        }
+        if ($root !== null && $this->runner !== null) {
+            $this->registerDebug($root);
+        }
+        if ($root !== null) {
+            $this->agent = new IdeAgent(fn (string $event, array $payload) => ($this->emit)($event, $payload));
+            $this->register('agent.reply', fn (array $p) => $this->agent->reply((int)($p['call'] ?? 0), $p['result'] ?? null,
+                isset($p['error']) && $p['error'] !== '' ? (string)$p['error'] : null));
+            $this->claude = new ClaudeCode($this->processes, $root, function (string $event, array $payload): void {
+                // what ends badly is in the logs too (the conversation itself is in the Claude window)
+                if ($event === 'claude.exit' && !empty($payload['error'])) {
+                    $this->log?->add('error', 'claude', (string)$payload['error']);
+                }
+                ($this->emit)($event, $payload);
+            }, $this->agent);
+            $this->register('tool.install', fn (array $p) => (new \JumPHP\Ide\Run\ToolInstaller($this->processes, $root))->install((string)($p['tool'] ?? '')));
+            $this->register('claude.status', fn () => $this->claude->status());
+            $this->register('claude.send', fn (array $p) => $this->claude->send((string)($p['prompt'] ?? ''), isset($p['session']) ? (string)$p['session'] : null,
+                (string)($p['mode'] ?? 'acceptEdits'), isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
+                isset($p['effort']) && $p['effort'] !== '' ? (string)$p['effort'] : null, true, (string)($p['conv'] ?? 'main') ?: 'main',
+                ($p['agent'] ?? '') === 'opencode' ? 'opencode' : 'claude'));
+            $this->register('claude.stop', fn (array $p) => $this->claude->stop((int)($p['id'] ?? 0)));
+            // "Generate…" in the resource editors: Claude (claude -p), or a picture service with the user's key
+            $ai = new ResourceGenerator($this->processes, $root);
+            $this->register('ai.providers', fn () => $ai->providers());
+            $this->register('ai.generate', fn (array $p) => $ai->generate((string)($p['kind'] ?? ''), (string)($p['prompt'] ?? ''),
+                (array)($p['options'] ?? []), (string)($p['provider'] ?? 'claude') ?: 'claude', (string)($p['key'] ?? ''),
+                isset($p['model']) && $p['model'] !== '' ? (string)$p['model'] : null,
+                isset($p['baseUrl']) && $p['baseUrl'] !== '' ? (string)$p['baseUrl'] : null));
+            $this->register('ai.models', fn (array $p) => $ai->models((string)($p['provider'] ?? ''), isset($p['baseUrl']) ? (string)$p['baseUrl'] : null, (string)($p['key'] ?? '')));
+            $this->register('claude.close', function (array $p): bool {
+                $this->claude?->close((string)($p['conv'] ?? ''));
+                return true;
+            });
+            // every conversation, kept in the project (.jumphp/history/claude/, not in git): History lists, reads, reopens them
+            $history = new ClaudeHistory($workspace);
+            $this->register('claude.history.save', fn (array $p) => $history->save((array)($p['conversation'] ?? [])));
+            $this->register('claude.history.list', fn () => $history->list());
+            $this->register('claude.history.read', fn (array $p) => $history->read((string)($p['id'] ?? '')));
+            $this->register('claude.history.delete', fn (array $p) => $history->delete((string)($p['id'] ?? '')));
+            $this->register('claude.history.markdown', fn (array $p) => $history->markdown((string)($p['id'] ?? '')));
+        }
+    }
+
+    /**
+     * A library the project uses but does not hold (the web IDE: the engine is not in the published game):
+     * its classes resolve, go to definition opens them read only, its stubs declare the extensions' functions.
+     */
+    public function addLibrary(string $prefix, string $dir, ?string $stubsDir = null): void
+    {
+        $this->index->addLibrary($prefix, $dir);
+        $this->libraryDirs[] = (string)realpath($dir);
+        if ($stubsDir !== null && is_dir($stubsDir)) {
+            $this->index->addStubs(...(glob(rtrim($stubsDir, '/') . '/*.php') ?: []));
+            $this->libraryDirs[] = (string)realpath($stubsDir);
+        }
+    }
+
+    /**
+     * Loads the plugins: the user's ($userDir, where plugins.install puts them) and the project's own
+     * (.jumphp/plugins/). Only a host that runs on the user's computer does it: a plugin is PHP run by the IDE.
+     */
+    public function enablePlugins(?string $userDir): PluginHost
+    {
+        $this->plugins = new PluginHost($this, fn (string $event, array $payload) => ($this->emit)($event, $payload), $userDir);
+        $this->plugins->registerCommands();
+        $dirs = [];
+        if ($userDir !== null) {
+            $dirs[$userDir] = 'user';
+        }
+        $root = $this->workspace->localPath();
+        if ($root !== null) {
+            $dirs["$root/.jumphp/plugins"] = 'project';
+        }
+        $this->plugins->loadFrom($dirs);
+        // their tools for Claude, beside the IDE's own on its MCP server (jumphp-ide)
+        $plugins = $this->plugins;
+        $this->agent?->setExtraTools(fn () => $plugins->mcpTools(), fn (string $tool, array $args) => $plugins->callMcpTool($tool, $args));
+        return $this->plugins;
+    }
+
+    /**
+     * The Terminal tool window: shells in the project's folder. Only for a host that runs on the user's own computer
+     * (the desktop app): never on a server (the web IDE).
+     */
+    public function enableTerminal(): Terminals
+    {
+        $root = $this->workspace->localPath();
+        if ($root === null) {
+            throw new \LogicException('a terminal needs a project on this computer');
+        }
+        $this->terminals = $terminals = new Terminals($this->processes, $root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+        $this->capabilities['terminal'] = true;
+        $this->register('terminal.open', fn (array $p) => $terminals->open((int)($p['cols'] ?? 120), (int)($p['rows'] ?? 30), isset($p['shell']) ? (string)$p['shell'] : null));
+        $this->register('terminal.write', fn (array $p) => $terminals->write((int)$p['id'], (string)($p['data'] ?? '')));
+        $this->register('terminal.resize', fn (array $p) => $terminals->resize((int)$p['id'], (int)($p['cols'] ?? 80), (int)($p['rows'] ?? 24)));
+        $this->register('terminal.close', function (array $p) use ($terminals): bool {
+            $terminals->close((int)$p['id']);
+            return true;
+        });
+        return $terminals;
+    }
+
+    public function register(string $name, callable $handler): void
+    {
+        $this->commands[$name] = $handler;
+    }
+
+    public function has(string $name): bool
+    {
+        return isset($this->commands[$name]);
+    }
+
+    /** @return list<string> */
+    public function commands(): array
+    {
+        return array_keys($this->commands);
+    }
+
+    /** Runs a command: its result, or a Deferred of it. */
+    public function handle(string $name, mixed $payload): mixed
+    {
+        $handler = $this->commands[$name] ?? throw new \InvalidArgumentException("no command '$name'");
+        return $handler(is_array($payload) ? $payload : []);
+    }
+
+    public function emit(string $event, array $payload): void
+    {
+        ($this->emit)($event, $payload);
+    }
+
+    /** A slice of background work: indexing, processes. The desktop app calls it every frame. */
+    public function tick(float $budget = 0.008): void
+    {
+        // one part that fails never takes the IDE down: its error is shown (event ide.error), the rest goes on
+        $this->guard('processes', fn () => $this->processes->poll());
+        $this->guard('Terminal', fn () => $this->terminals?->poll());
+        $this->guard('Claude', fn () => $this->agent?->tick());
+        $this->guard('Claude', fn () => $this->claude?->tick());
+        $this->guard('Docker', fn () => $this->docker?->tick());
+        $this->guard('Debugger', fn () => $this->debugger?->tick(), fn () => $this->debugger?->close());
+        $this->guard('plugins', fn () => $this->plugins?->tick());
+        if (!$this->indexed) {
+            $done = $this->index->refresh($budget);
+            $this->emit('index.progress', $this->index->progress() + ['complete' => $done]);
+            $this->indexed = $done;
+        } elseif (!$this->librariesIndexed) {
+            // then the whole libraries, a slice per frame (the project's completion works meanwhile)
+            $this->guard('indexing', function () use ($budget): void {
+                $done = $this->index->indexLibraries($budget);
+                $this->libraryTicks = ($this->libraryTicks + 1) % 30;
+                if ($done || $this->libraryTicks === 0) {
+                    $this->emit('index.progress', $this->index->libraryProgress() + ['complete' => $done, 'libraries' => true]);
+                }
+                $this->librariesIndexed = $done;
+            }, function (): void {
+                $this->librariesIndexed = true;
+            });
+        }
+    }
+
+    private function guard(string $where, callable $work, ?callable $onError = null): void
+    {
+        try {
+            $work();
+        } catch (\Throwable $e) {
+            try {
+                $onError && $onError();
+            } catch (\Throwable) {
+            }
+            $this->log?->add('error', 'ide', "$where: {$e->getMessage()} (" . basename($e->getFile()) . ':' . $e->getLine() . ')');
+            ($this->emit)('ide.error', ['where' => $where, 'message' => $e->getMessage(), 'at' => basename($e->getFile()) . ':' . $e->getLine()]);
+        }
+    }
+
+    /** Files changed outside (git checkout, a run): index them again. */
+    public function filesChanged(): void
+    {
+        $this->plugins?->dispatch('files.changed');
+        $this->index->invalidate();
+        $this->indexed = false;
+        // a composer install changed vendor/ (even while the libraries were still being indexed): list them again
+        $signature = $this->librariesSignature();
+        if ($signature !== $this->librariesSignature) {
+            $this->librariesSignature = $signature;
+            $this->index->invalidateLibraries();
+            $this->librariesIndexed = false;
+        }
+    }
+
+    private string $librariesSignature = '';
+
+    /**
+     * What Composer installed: the autoloaders of the project's vendor/ folders (vendor/ is not in the listing, so a
+     * composer install shows only through them). Changes when one is made or written again.
+     */
+    public function librariesSignature(): string
+    {
+        $parts = [];
+        foreach (array_keys($this->workspace->files()) as $manifest) {
+            if (basename($manifest) !== 'composer.json' || substr_count($manifest, '/') > 3) {
+                continue;
+            }
+            $path = ltrim((dirname($manifest) === '.' ? '' : dirname($manifest) . '/') . 'vendor/composer/autoload_psr4.php', '/');
+            $parts[] = $path . '@' . ($this->workspace->exists($path) ? $this->workspace->mtime($path) : '-');
+        }
+        return implode('|', $parts);
+    }
+
+    /** The visual editor of forms (graphic PHP apps, JumPHP\Gui): form files <-> arrays, the code behind them. */
+    private function registerDebug(string $root): void
+    {
+        $this->debugger = $debugger = new Debugger($root, fn (string $event, array $payload) => ($this->emit)($event, $payload));
+        $session = fn (array $p) => (int)($p['session'] ?? 0);   // 0: the program that is stopped
+        $this->register('debug.listen', fn () => ['port' => $debugger->listen()]);
+        $this->register('debug.status', fn () => $debugger->status());
+        $this->register('debug.breakpoints', fn (array $p) => $debugger->setBreakpoints((string)($p['path'] ?? ''), (array)($p['lines'] ?? [])));
+        $this->register('debug.breakpoints.list', fn () => $debugger->breakpointList());
+        $this->register('debug.breakpoints.clear', fn () => $debugger->clearBreakpoints());
+        $this->register('debug.resume', fn (array $p) => $debugger->resume($session($p), (string)($p['how'] ?? 'run')));
+        $this->register('debug.variables', fn (array $p) => $debugger->variables($session($p), (int)($p['depth'] ?? 0), (int)($p['context'] ?? 0)));
+        $this->register('debug.children', fn (array $p) => $debugger->children($session($p), (string)($p['fullname'] ?? ''), (int)($p['depth'] ?? 0), (int)($p['page'] ?? 0)));
+        $this->register('debug.eval', fn (array $p) => $debugger->evaluate($session($p), (string)($p['expression'] ?? '')));
+        $this->register('debug.runTo', fn (array $p) => $debugger->runTo($session($p), (string)($p['path'] ?? ''), (int)($p['line'] ?? 0)));
+        $this->register('debug.set', fn (array $p) => $debugger->setValue($session($p), (string)($p['fullname'] ?? ''), (string)($p['expression'] ?? ''), (int)($p['depth'] ?? 0)));
+        $this->register('debug.exceptions', fn (array $p) => $debugger->setExceptionBreakpoints(array_map('strval', (array)($p['classes'] ?? []))));
+        $this->register('debug.close', function () use ($debugger) {
+            $debugger->close();
+            return true;
+        });
+    }
+
+    private function registerForms(): void
+    {
+        // the form also travels as a JSON string: the order of its keys is the file's (a host's JSON may sort objects' keys)
+        $this->register('gui.read', function (array $p) {
+            $parsed = FormFile::parse(isset($p['text']) ? (string)$p['text'] : $this->workspace->read(Paths::clean((string)($p['path'] ?? ''))));
+            return $parsed + ['json' => json_encode((object)$parsed['form'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION)];
+        });
+        $this->register('gui.dump', function (array $p) {
+            $form = isset($p['json']) ? json_decode((string)$p['json'], true, 64, JSON_THROW_ON_ERROR) : ($p['form'] ?? []);
+            return ['content' => FormFile::dump(is_array($form) ? $form : [], (string)($p['header'] ?? ''))];
+        });
+        // the form's class with a new event method and/or its @property lines: {path (the form file), wire?: {id, type, event,
+        // method?}, widgets?: {id: type}} -> {path, content, line, added, created} (the interface writes it: open editors follow)
+        $this->register('gui.code', function (array $p) {
+            [$path, $created] = $this->formClassFile(Paths::clean((string)($p['path'] ?? '')));
+            $content = $created ? FormCode::newClass(Templates::namespaceOf($path, $this->workspace), pathinfo($path, PATHINFO_FILENAME)) : $this->workspace->read($path);
+            $line = null;
+            $added = false;
+            if (isset($p['widgets']) && is_array($p['widgets'])) {
+                $widgets = [];
+                // [[id, type], ...] in the form's order (an object's keys may come sorted through a host's JSON)
+                foreach ($p['widgets'] as $id => $type) {
+                    if (is_array($type)) {
+                        [$id, $type] = array_values($type) + [null, 'container'];
+                    }
+                    if (preg_match('/^[A-Za-z_]\w*$/', (string)$id)) {
+                        $widgets[(string)$id] = FormCode::classOf((string)$type);
+                    }
+                }
+                $content = FormCode::properties($content, $widgets);
+            }
+            if (!empty($p['wire']) && is_array($p['wire'])) {
+                $w = $p['wire'];
+                $event = (string)($w['event'] ?? 'click');
+                $method = (string)($w['method'] ?? FormCode::handlerName((string)($w['id'] ?? 'form'), $event));
+                if (!preg_match('/^[A-Za-z_]\w*$/', $method)) {
+                    throw new \InvalidArgumentException("$method is not a method name");
+                }
+                ['content' => $content, 'line' => $line, 'added' => $added] = FormCode::wire($content, $method, FormCode::classOf((string)($w['type'] ?? '')), $event);
+            }
+            return ['path' => $path, 'content' => $content, 'line' => $line, 'added' => $added, 'created' => $created];
+        });
+    }
+
+    /**
+     * The class of a form file: games/x/forms/MainForm.form.yaml -> the file of class MainForm under games/x/src/
+     * (src/Form/MainForm.php when there is none yet).
+     *
+     * @return array{0: string, 1: bool} its path, whether it has to be created
+     */
+    private function formClassFile(string $form): array
+    {
+        $class = preg_replace('/\.form\.ya?ml$/', '', basename($form)) ?: 'MainForm';
+        $app = preg_match('#^(.*?)/?forms/#', $form, $m) ? $m[1] : dirname($form);
+        $src = ($app === '' || $app === '.' ? '' : "$app/") . 'src/';
+        foreach (array_keys($this->workspace->files()) as $file) {
+            if (str_starts_with($file, $src) && basename($file) === "$class.php") {
+                return [$file, false];
+            }
+        }
+        return ["{$src}Form/$class.php", true];
+    }
+
+    private function registerCore(): void
+    {
+        // the Logs window: the entries (history, then the new ones come as events), the sources seen, and where the file is
+        $this->register('log.list', fn (array $p) => $this->log === null ? ['entries' => [], 'sources' => [], 'file' => null] : [
+            'entries' => $this->log->list((int)($p['after'] ?? 0), (string)($p['level'] ?? 'debug'), (string)($p['source'] ?? ''), (string)($p['q'] ?? ''), (int)($p['limit'] ?? 500)),
+            'sources' => $this->log->sources(), 'file' => $this->log->file()]);
+        $this->register('log.clear', function (): bool {
+            $this->log?->clear();
+            return true;
+        });
+        // the extensions added to the project's games, their documentation and samples (extensions/<name>/extension.json)
+        $this->register('extensions.installed', fn () => (new \JumPHP\Ide\Extension\InstalledExtensions($this->workspace))->all());
+        $this->register('extension.docs', fn (array $p) => (new \JumPHP\Ide\Extension\InstalledExtensions($this->workspace))->docs((string)($p['package'] ?? ''), isset($p['game']) ? (string)$p['game'] : null)
+            ?? throw new \InvalidArgumentException('This extension is not in a game of this project (bin/jumphp extension:add <game> ' . ($p['package'] ?? '<package>') . ').'));
+        // the games that make videos (project.yaml video:), for Tools > Video Preview…
+        $this->register('video.settings', fn () => (new \JumPHP\Ide\Video\VideoSettings($this->workspace))->all($this->project->describe()['modules']));
+        $this->register('project.info', fn () => (fn (array $d) => ['run' => [...$d['run'], ...($this->plugins?->runConfigurations() ?? [])]] + $d)($this->project->describe()) + [
+            // what the interface shows; the web IDE's host answers its own (gitMode 'drafts', preview, tests)
+            'capabilities' => $this->capabilities + [
+                'git' => $this->git !== null && $this->git->isRepository(), 'gitMode' => 'local',
+                'branches' => true, 'log' => true, 'blame' => true, 'stage' => true,
+                'run' => $this->runner !== null, 'preview' => false, 'tests' => false,
+                'local' => $this->workspace->localPath() !== null,
+                'claude' => $this->claude !== null,
+                'logs' => $this->log !== null,
+                // Xdebug through bin/jumphp (JUMPHP_XDEBUG): a JumPHP project run on this computer
+                'debug' => $this->debugger !== null && $this->docker !== null,
+                'plugins' => $this->plugins !== null,
+                'localHistory' => $this->workspace->localPath() !== null,
+            ],
+            'root' => $this->workspace->localPath(),
+        ]);
+        $this->register('files.list', fn (array $p) => ['files' => $this->listing(!empty($p['all']))]);
+        // the files' local history (Show Local History): a version at each save, and when a file changed outside the IDE;
+        // on this computer only (the web IDE's files are drafts on jumphp.net)
+        $history = $this->workspace->localPath() !== null ? new LocalHistory($this->workspace) : null;
+        $this->register('file.read', function (array $p) use ($history) {
+            $file = $this->read((string)($p['path'] ?? ''));
+            if ($history !== null && isset($file['content']) && empty($file['readOnly']) && !str_starts_with((string)$file['path'], '/')) {
+                $history->opened((string)$file['path'], (string)$file['content']);
+            }
+            return $file;
+        });
+        if ($history !== null) {
+            $this->register('history.local.list', fn (array $p) => $history->versions((string)($p['path'] ?? '')));
+            $this->register('history.local.read', fn (array $p) => $history->read((string)($p['path'] ?? ''), (string)($p['id'] ?? '')));
+        }
+        $this->register('file.write', function (array $p) use ($history) {
+            $path = Paths::clean((string)($p['path'] ?? ''));
+            $history?->beforeWrite($path);
+            // base64: a binary file (a PNG, a WAV of the resource editors)
+            $content = isset($p['base64']) ? (string)base64_decode((string)$p['base64'], true) : (string)($p['content'] ?? '');
+            $this->workspace->write($path, $content);
+            if (!isset($p['base64'])) {
+                $history?->saved($path, $content);
+            }
+            if (Paths::extension($path) === 'php') {
+                $this->index->update($path);
+            }
+            $this->plugins?->dispatch('file.saved', $path);
+            return ['saved' => true, 'mtime' => $this->workspace->mtime($path)];
+        });
+        $this->register('file.create', function (array $p) {
+            $path = Paths::clean((string)($p['path'] ?? ''));
+            if ($this->workspace->exists($path)) {
+                throw new WorkspaceException("$path already exists");
+            }
+            $content = isset($p['base64']) ? (string)base64_decode((string)$p['base64'], true)
+                : (array_key_exists('content', $p) ? (string)$p['content'] : Templates::forFile($path, $this->workspace));
+            $this->workspace->write($path, $content);
+            if (Paths::extension($path) === 'php') {
+                $this->index->update($path);
+            }
+            return ['path' => $path];
+        });
+        $this->register('file.delete', function (array $p) {
+            $path = Paths::clean((string)($p['path'] ?? ''));
+            $this->workspace->delete($path);
+            $this->filesChanged();
+            return ['deleted' => $path];
+        });
+        $this->register('file.rename', function (array $p) {
+            $from = Paths::clean((string)($p['from'] ?? ''));
+            $to = Paths::clean((string)($p['to'] ?? ''));
+            $this->workspace->rename($from, $to);
+            $this->filesChanged();
+            return ['from' => $from, 'to' => $to];
+        });
+        $this->register('edits.apply', function (array $p) {
+            // rename edits for files that are not open in the editor: {path: [{line, col, length, text}]}
+            $changed = [];
+            foreach ((array)($p['edits'] ?? []) as $path => $edits) {
+                $path = Paths::clean((string)$path);
+                $text = $this->workspace->read($path);
+                $source = new Source($text);
+                $list = array_map(fn ($e) => ['start' => $source->offset((int)$e['line'], (int)$e['col'])] + $e, (array)$edits);
+                usort($list, fn ($a, $b) => $b['start'] <=> $a['start']);
+                foreach ($list as $edit) {
+                    $end = $source->offset((int)$edit['line'], (int)$edit['col'] + (int)$edit['length']);
+                    $text = substr($text, 0, $edit['start']) . $edit['text'] . substr($text, $end);
+                }
+                $this->workspace->write($path, $text);
+                if (Paths::extension($path) === 'php') {
+                    $this->index->update($path);
+                }
+                $changed[] = $path;
+            }
+            return ['files' => $changed];
+        });
+
+        $at = fn (array $p) => [(string)($p['path'] ?? ''), (string)($p['text'] ?? ''), (int)($p['line'] ?? 1), (int)($p['column'] ?? 1)];
+        $this->register('php.complete', fn (array $p) => $this->php->complete(...$at($p)));
+        $this->register('config.complete', fn (array $p) => (new ConfigCompletion($this->index))->complete(...$at($p)));
+        $this->register('php.definition', fn (array $p) => $this->php->definition(...$at($p)));
+        $this->register('php.references', fn (array $p) => $this->php->references(...[...$at($p), $p['declarations'] ?? true]));
+        $this->register('php.hierarchy', fn (array $p) => isset($p['class']) ? $this->php->hierarchyOf((string)$p['class'])
+            : $this->php->typeHierarchy(...$at($p)));
+        $this->register('libraries.list', fn () => $this->index->libraries());
+        $this->register('libraries.files', fn (array $p) => $this->index->libraryListing((string)($p['dir'] ?? '')));
+        $this->register('php.implementations', fn (array $p) => $this->php->implementations(...$at($p)));
+        $this->register('php.hover', fn (array $p) => $this->php->hover(...$at($p)));
+        $this->register('php.signature', fn (array $p) => $this->php->signatureHelp(...$at($p)));
+        $this->register('php.rename', fn (array $p) => $this->php->rename(...[...$at($p), (string)($p['newName'] ?? '')]));
+        $this->register('php.symbol', fn (array $p) => (fn ($s) => $s === null ? null : array_diff_key($s, ['function' => 1]))($this->php->symbolAt(...$at($p))));
+        $this->register('php.diagnostics', fn (array $p) => $this->php->diagnostics((string)($p['path'] ?? ''), (string)($p['text'] ?? '')));
+        $this->register('php.outline', fn (array $p) => $this->php->outline((string)($p['text'] ?? (isset($p['path']) ? $this->workspace->read((string)$p['path']) : ''))));
+        $this->register('php.symbols', fn (array $p) => $this->php->searchSymbols((string)($p['query'] ?? ''), (int)($p['limit'] ?? 60)));
+        $this->register('php.classes', fn (array $p) => array_slice($this->index->classNames((string)($p['query'] ?? '')), 0, (int)($p['limit'] ?? 60)));
+        $this->register('index.status', fn () => $this->index->progress() + ['complete' => $this->indexed]);
+        $this->register('index.rebuild', function () {
+            foreach (array_keys($this->index->files()) as $path) {
+                $this->index->forget($path);
+            }
+            $this->filesChanged();
+            return true;
+        });
+
+        $this->register('search.files', fn (array $p) => $this->search->files((string)($p['query'] ?? ''), (int)($p['limit'] ?? 50)));
+        $this->register('search.text', fn (array $p) => $this->search->find((string)($p['query'] ?? ''), (array)($p['options'] ?? [])));
+        $this->register('search.replace', function (array $p) {
+            $result = $this->search->replace((string)($p['query'] ?? ''), (string)($p['replacement'] ?? ''), (array)($p['options'] ?? []), isset($p['paths']) ? (array)$p['paths'] : null);
+            $this->filesChanged();
+            return $result;
+        });
+    }
+
+    /** @return list<array{path: string, size: int}> */
+    private function listing(bool $all): array
+    {
+        $out = [];
+        foreach ($this->workspace->files($all) as $path => $meta) {
+            $out[] = ['path' => $path, 'size' => $meta['size']];
+        }
+        return $out;
+    }
+
+    /** @return array<string, mixed> a text file's content, or what the editor needs to show another file */
+    private function read(string $path): array
+    {
+        if (str_starts_with($path, '/')) {
+            // a library file outside the project (go to definition into vendor/): read only, PHP only
+            $real = realpath($path);
+            // the libraries added, the engine of the repository, and the ones the index found outside the project
+            // (a game whose vendor/jumphp/engine links to the JumPHP checkout: External Libraries)
+            $found = array_map(fn (array $l) => (string)realpath($l['dir']), array_filter($this->index->libraries(), fn (array $l) => $l['external']));
+            $library = $real !== false && array_filter([...$this->libraryDirs, ...$found, ...(($root = $this->workspace->localPath()) !== null ? [(string)realpath("$root/engine")] : [])],
+                fn (string $dir) => $dir !== '' && str_starts_with($real, $dir . '/'));
+            if ($real === false || !str_ends_with($real, '.php') || (!str_contains($real, '/vendor/') && !$library)) {
+                throw new WorkspaceException("cannot open $path");
+            }
+            return ['path' => $path, 'text' => true, 'content' => (string)file_get_contents($real), 'readOnly' => true];
+        }
+        $path = Paths::clean($path);
+        $content = $this->workspace->read($path);
+        $ext = Paths::extension($path);
+        if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'], true)) {
+            return ['path' => $path, 'text' => false, 'image' => 'data:image/' . ($ext === 'jpg' ? 'jpeg' : ($ext === 'ico' ? 'x-icon' : $ext)) . ';base64,' . base64_encode($content), 'size' => strlen($content)];
+        }
+        if (in_array($ext, ['wav', 'ogg', 'mp3'], true)) {
+            return ['path' => $path, 'text' => false, 'audio' => 'data:audio/' . ($ext === 'mp3' ? 'mpeg' : $ext) . ';base64,' . base64_encode($content), 'size' => strlen($content)];
+        }
+        if (strlen($content) > 5_000_000 || !mb_check_encoding($content, 'UTF-8') || (str_contains($content, "\0") && !Paths::isText($path))) {
+            return ['path' => $path, 'text' => false, 'size' => strlen($content)];
+        }
+        return ['path' => $path, 'text' => true, 'content' => $content, 'readOnly' => str_contains($path, 'vendor/'), 'mtime' => $this->workspace->mtime($path)];
+    }
+
+    private function registerGit(): void
+    {
+        $git = $this->git;
+        $after = function (Deferred $d) {
+            return $d->then(function ($r) {
+                $this->filesChanged();
+                return $r;
+            });
+        };
+        $output = fn (string $chunk) => $this->emit('git.output', ['chunk' => $chunk]);
+        $this->register('git.status', fn () => $git->isRepository() ? $git->status() : null);
+        $this->register('git.original', fn (array $p) => $git->show((string)$p['path'], (string)($p['revision'] ?? 'HEAD'))->then(fn ($c) => ['content' => $c]));
+        $this->register('git.stage', fn (array $p) => $git->stage((array)$p['paths']));
+        $this->register('git.unstage', fn (array $p) => $git->unstage((array)$p['paths']));
+        $this->register('git.rollback', fn (array $p) => $after($git->rollback((array)$p['paths'])));
+        $this->register('git.commit', function (array $p) use ($git, $output) {
+            $commit = $git->commit((string)($p['message'] ?? ''), isset($p['paths']) ? (array)$p['paths'] : null, !empty($p['amend']));
+            return empty($p['push']) ? $commit->then(fn ($sha) => ['sha' => $sha])
+                : $commit->then(fn ($sha) => $git->push($output)->then(fn () => ['sha' => $sha, 'pushed' => true]));
+        });
+        $this->register('git.push', fn () => $git->push($output));
+        $this->register('git.pull', fn (array $p) => $after($git->pull($output, !empty($p['rebase']))));
+        $this->register('git.fetch', fn () => $git->fetch($output));
+        $this->register('git.branches', fn () => $git->branches());
+        $this->register('git.checkout', fn (array $p) => $after($git->checkout((string)$p['branch'], !empty($p['create']))));
+        $this->register('git.deleteBranch', fn (array $p) => $git->deleteBranch((string)$p['branch'], !empty($p['force'])));
+        $this->register('git.merge', fn (array $p) => $after($git->merge((string)$p['branch'])));
+        $this->register('git.resolve', fn (array $p) => $after($git->resolve((string)$p['path'], (string)$p['how'])));
+        $this->register('git.conflict', fn (array $p) => $git->conflictVersions((string)$p['path']));
+        $this->register('git.commitMerge', fn () => $git->commitMerge()->then(fn ($sha) => ['sha' => $sha]));
+        $this->register('git.abortMerge', fn () => $after($git->abortMerge()));
+        $this->register('git.isMerged', fn (array $p) => $git->isMerged((string)$p['branch']));
+        $this->register('git.log', fn (array $p) => $git->log(isset($p['path']) ? (string)$p['path'] : null, (int)($p['limit'] ?? 200)));
+        $this->register('git.commitFiles', fn (array $p) => $git->commitFiles((string)$p['sha']));
+        $this->register('git.blame', fn (array $p) => $git->blame((string)$p['path'], isset($p['content']) ? (string)$p['content'] : null));
+        $this->register('git.remotes', fn () => $git->remotes());
+        $this->register('git.stash', fn (array $p) => $after($git->stash($p['message'] ?? null)));
+        $this->register('git.stashPop', fn (array $p = []) => $after($git->stashPop((int)($p['index'] ?? 0))));
+        $this->register('git.stashes', fn () => $git->stashes());
+        $this->register('git.stashApply', fn (array $p) => $after($git->stashApply((int)$p['index'])));
+        $this->register('git.stashDrop', fn (array $p) => $git->stashDrop((int)$p['index']));
+        $this->register('git.remoteAdd', fn (array $p) => $git->addRemote((string)$p['name'], (string)$p['url']));
+        $this->register('git.remoteRemove', fn (array $p) => $git->removeRemote((string)$p['name']));
+        $this->register('git.remoteSetUrl', fn (array $p) => $git->setRemoteUrl((string)$p['name'], (string)$p['url']));
+        $this->register('git.hunks', fn (array $p) => $git->hunks((string)$p['path'], !empty($p['staged'])));
+        $this->register('git.stageHunk', fn (array $p) => $git->stageHunk((string)$p['path'], (int)$p['index'], !empty($p['unstage'])));
+        $this->register('git.submodules', fn () => $git->submodules());
+        $this->register('git.submodulesUpdate', fn () => $after($git->updateSubmodules($output)));
+        $this->register('git.submoduleAdd', fn (array $p) => $after($git->addSubmodule((string)$p['url'], (string)$p['path'], $output)));
+        $this->register('git.tags', fn () => $git->tags());
+        $this->register('git.tagCreate', fn (array $p) => $git->createTag((string)$p['name'], isset($p['revision']) ? (string)$p['revision'] : null, isset($p['message']) ? (string)$p['message'] : null));
+        $this->register('git.tagDelete', fn (array $p) => $git->deleteTag((string)$p['name'], !empty($p['remote'])));
+        $this->register('git.tagPush', fn (array $p) => $git->pushTag((string)$p['name']));
+        $this->register('git.reset', fn (array $p) => $after($git->resetTo((string)$p['sha'], (string)($p['mode'] ?? 'mixed'))));
+        $this->register('git.revert', fn (array $p) => $after($git->revert((string)$p['sha'])));
+        $this->register('git.cherryPick', fn (array $p) => $after($git->cherryPick((string)$p['sha'])));
+        $this->register('git.undoCommit', fn () => $after($git->undoLastCommit()));
+        $this->register('git.renameBranch', fn (array $p) => $git->renameBranch((string)$p['old'], (string)$p['new']));
+        $this->register('git.deleteRemoteBranch', fn (array $p) => $git->deleteRemoteBranch((string)$p['branch'], (string)($p['remote'] ?? 'origin'), $output));
+        $this->register('git.pushForce', fn () => $git->pushForce($output));
+    }
+
+    /** Where the IDE keeps its copy of JumPHP, for the games kept in their own repository (Runner::linkedCommand()). */
+    public function setToolkit(string $dir, ?string $repo = null): void
+    {
+        $this->runner?->setToolkit($dir, $repo);
+    }
+
+    private function registerRun(): void
+    {
+        $runner = $this->runner;
+        $this->register('run.start', function (array $p) use ($runner) {
+            $config = null;
+            foreach ([...$this->project->describe()['run'], ...($this->plugins?->runConfigurations() ?? [])] as $candidate) {
+                if ($candidate['id'] === ($p['id'] ?? null)) {
+                    $config = $candidate;
+                }
+            }
+            if ($config === null && isset($p['command']) && is_array($p['command'])) {
+                $config = ['id' => 'adhoc', 'label' => implode(' ', $p['command']), 'command' => array_map('strval', $p['command']), 'kind' => (string)($p['kind'] ?? 'tool')];
+            }
+            if ($config === null) {
+                throw new \InvalidArgumentException('unknown run configuration ' . ($p['id'] ?? ''));
+            }
+            return $runner->start($config, array_map('strval', (array)($p['env'] ?? [])));
+        });
+        $this->register('run.stop', fn (array $p) => $runner->stop((int)$p['id']));
+        $this->register('run.list', fn () => $runner->running());
+    }
+}

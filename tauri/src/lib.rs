@@ -33,7 +33,7 @@ use tauri_plugin_dialog::{DialogExt, FilePath, MessageDialogButtons, MessageDial
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -125,18 +125,55 @@ fn do_frame() {
 
 struct FolderAssets {
     root: PathBuf,
+    /// JumPHP's own pages (config "engine_pages"), served under /__jumphp/ (the embedded game's page)
+    engine: Option<PathBuf>,
 }
 
 impl FolderAssets {
     fn path(&self, key: &str) -> Option<PathBuf> {
-        let rel = Path::new(key.trim_start_matches('/'));
+        let key = key.trim_start_matches('/');
+        let (root, key) = match (key.strip_prefix("__jumphp/"), &self.engine) {
+            (Some(rest), Some(engine)) => (engine, rest),
+            _ => (&self.root, key),
+        };
+        let rel = Path::new(key);
         // never outside the folder
         if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
             return None;
         }
-        let path = self.root.join(rel);
+        let path = root.join(rel);
         path.is_file().then_some(path)
     }
+}
+
+// --- the embedded game's frames (ui: hybrid, app.embed): PHP hands each picture over, the page fetches it -----------
+
+static FRAME_NO: AtomicU64 = AtomicU64::new(0);
+
+fn frame_data() -> &'static Mutex<Vec<u8>> {
+    static DATA: OnceLock<Mutex<Vec<u8>>> = OnceLock::new();
+    DATA.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// jumphpframe://localhost/frame?after=<n> (Windows: http://jumphpframe.localhost/...): the newest picture (a BMP),
+/// 204 while it is still picture n.
+fn frame_response(request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    let current = FRAME_NO.load(Ordering::SeqCst);
+    let after = request
+        .uri()
+        .query()
+        .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("after=")))
+        .and_then(|v| v.parse::<u64>().ok());
+    let builder = tauri::http::Response::builder()
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Expose-Headers", "X-Frame")
+        .header("Cache-Control", "no-store")
+        .header("X-Frame", current.to_string());
+    if after == Some(current) || current == 0 {
+        return builder.status(204).body(Vec::new()).unwrap_or_default();
+    }
+    let body = frame_data().lock().map(|d| d.clone()).unwrap_or_default();
+    builder.status(200).header("Content-Type", "image/bmp").body(body).unwrap_or_default()
 }
 
 impl<R: Runtime> Assets<R> for FolderAssets {
@@ -200,6 +237,75 @@ fn path_string(p: FilePath) -> String {
         Ok(path) => path.to_string_lossy().into_owned(),
         Err(e) => format!("{e}"),
     }
+}
+
+// --- window / application menus ------------------------------------------------------------------------------
+// The items' ids are "\u{1e}<window>\u{1f}<item>" (window "*": the application's menu), so their clicks are told
+// apart from the tray's ("<tray>\u{1f}<item>") and PHP gets {type: menu, window, item, checked}.
+
+fn menu_items() -> &'static Mutex<HashMap<String, MenuItemKind<Wry>>> {
+    static ITEMS: OnceLock<Mutex<HashMap<String, MenuItemKind<Wry>>>> = OnceLock::new();
+    ITEMS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn build_menu_items(handle: &AppHandle<Wry>, prefix: &str, items: &[Value]) -> Result<Vec<MenuItemKind<Wry>>, String> {
+    let s = |e: tauri::Error| e.to_string();
+    let mut out = Vec::new();
+    for item in items {
+        let text = str_of(item, "text");
+        let enabled = bool_of(item, "enabled").unwrap_or(true);
+        let kind = if bool_of(item, "separator").unwrap_or(false) {
+            MenuItemKind::Predefined(PredefinedMenuItem::separator(handle).map_err(s)?)
+        } else if let Some(role) = str_of(item, "role") {
+            MenuItemKind::Predefined(
+                match role {
+                    "quit" => PredefinedMenuItem::quit(handle, text),
+                    "about" => PredefinedMenuItem::about(handle, text, None),
+                    "copy" => PredefinedMenuItem::copy(handle, text),
+                    "cut" => PredefinedMenuItem::cut(handle, text),
+                    "paste" => PredefinedMenuItem::paste(handle, text),
+                    "select_all" => PredefinedMenuItem::select_all(handle, text),
+                    "undo" => PredefinedMenuItem::undo(handle, text),
+                    "redo" => PredefinedMenuItem::redo(handle, text),
+                    "minimize" => PredefinedMenuItem::minimize(handle, text),
+                    "maximize" => PredefinedMenuItem::maximize(handle, text),
+                    "fullscreen" => PredefinedMenuItem::fullscreen(handle, text),
+                    "hide" => PredefinedMenuItem::hide(handle, text),
+                    "hide_others" => PredefinedMenuItem::hide_others(handle, text),
+                    "show_all" => PredefinedMenuItem::show_all(handle, text),
+                    "close_window" => PredefinedMenuItem::close_window(handle, text),
+                    "services" => PredefinedMenuItem::services(handle, text),
+                    other => return Err(format!("unknown menu role '{other}'")),
+                }
+                .map_err(s)?,
+            )
+        } else if let Some(children) = item.get("items").and_then(Value::as_array) {
+            let built = build_menu_items(handle, prefix, children)?;
+            let refs: Vec<&dyn IsMenuItem<Wry>> = built.iter().map(|k| k as &dyn IsMenuItem<Wry>).collect();
+            MenuItemKind::Submenu(Submenu::with_items(handle, text.unwrap_or(""), enabled, &refs).map_err(s)?)
+        } else {
+            let id = format!("{prefix}{}", str_of(item, "id").unwrap_or(""));
+            let label = text.or_else(|| str_of(item, "id")).unwrap_or("");
+            let accel = str_of(item, "accelerator");
+            let kind = match bool_of(item, "checked") {
+                Some(checked) => MenuItemKind::Check(CheckMenuItem::with_id(handle, id.clone(), label, enabled, checked, accel).map_err(s)?),
+                None => MenuItemKind::MenuItem(MenuItem::with_id(handle, id.clone(), label, enabled, accel).map_err(s)?),
+            };
+            if let Ok(mut map) = menu_items().lock() {
+                map.insert(id, kind.clone());
+            }
+            kind
+        };
+        out.push(kind);
+    }
+    Ok(out)
+}
+
+fn on_menu(id: &str) {
+    let Some(rest) = id.strip_prefix('\u{1e}') else { return };
+    let Some((window, item)) = rest.split_once('\u{1f}') else { return };
+    let checked = menu_items().lock().ok().and_then(|m| m.get(id).and_then(|k| k.as_check_menuitem().and_then(|c| c.is_checked().ok())));
+    push_event(json!({"type": "menu", "window": window, "item": item, "checked": checked}));
 }
 
 fn run_command(handle: &AppHandle<Wry>, name: &str, c: &Value) -> Result<(), String> {
@@ -376,6 +482,45 @@ fn run_command(handle: &AppHandle<Wry>, name: &str, c: &Value) -> Result<(), Str
             push_event(json!({"type": "result", "id": id, "result": text}));
             Ok(())
         }
+        "menu.set" => {
+            // window "*" (or none): the application's menu (macOS: the menu bar; elsewhere: every window's)
+            let target = str_of(c, "window").unwrap_or("*");
+            let prefix = format!("\u{1e}{target}\u{1f}");
+            if let Ok(mut map) = menu_items().lock() {
+                map.retain(|k, _| !k.starts_with(&prefix));
+            }
+            let items = c.get("menu").and_then(Value::as_array).cloned().unwrap_or_default();
+            let built = build_menu_items(handle, &prefix, &items)?;
+            let refs: Vec<&dyn IsMenuItem<Wry>> = built.iter().map(|k| k as &dyn IsMenuItem<Wry>).collect();
+            let menu = Menu::with_items(handle, &refs).map_err(|e| e.to_string())?;
+            if target == "*" || cfg!(target_os = "macos") {
+                handle.set_menu(menu).map(|_| ()).map_err(|e| e.to_string())
+            } else {
+                window(handle, c)?.set_menu(menu).map(|_| ()).map_err(|e| e.to_string())
+            }
+        }
+        "menu.remove" => {
+            let target = str_of(c, "window").unwrap_or("*");
+            if target == "*" || cfg!(target_os = "macos") {
+                handle.remove_menu().map(|_| ()).map_err(|e| e.to_string())
+            } else {
+                window(handle, c)?.remove_menu().map(|_| ()).map_err(|e| e.to_string())
+            }
+        }
+        "menu.set_item" => {
+            let full = format!("\u{1e}{}\u{1f}{}", str_of(c, "window").unwrap_or("*"), str_of(c, "item").unwrap_or(""));
+            let kind = menu_items().lock().ok().and_then(|m| m.get(&full).cloned()).ok_or("no such menu item")?;
+            let s = |e: tauri::Error| e.to_string();
+            if let Some(item) = kind.as_menuitem() {
+                if let Some(v) = bool_of(c, "enabled") { item.set_enabled(v).map_err(s)?; }
+                if let Some(v) = str_of(c, "text") { item.set_text(v).map_err(s)?; }
+            } else if let Some(item) = kind.as_check_menuitem() {
+                if let Some(v) = bool_of(c, "enabled") { item.set_enabled(v).map_err(s)?; }
+                if let Some(v) = str_of(c, "text") { item.set_text(v).map_err(s)?; }
+                if let Some(v) = bool_of(c, "checked") { item.set_checked(v).map_err(s)?; }
+            }
+            Ok(())
+        }
         "tray.create" => {
             let tray_id = str_of(c, "tray").unwrap_or("main").to_string();
             let _ = handle.remove_tray_by_id(&tray_id);
@@ -509,7 +654,8 @@ fn run(config: Value) -> Result<i32, String> {
         context.config_mut().version = Some(v.to_string());
         context.package_info_mut().version = v.parse().unwrap_or_else(|_| context.package_info().version.clone());
     }
-    context.set_assets(Box::new(FolderAssets { root }));
+    let engine = str_of(&config, "engine_pages").map(PathBuf::from);
+    context.set_assets(Box::new(FolderAssets { root, engine }));
     if let Some(hz) = f64_of(&config, "tick_hz") {
         TICK_US.store((1_000_000.0 / hz.clamp(1.0, 1000.0)) as u64, Ordering::SeqCst);
     }
@@ -528,6 +674,8 @@ fn run(config: Value) -> Result<i32, String> {
                 })
                 .build(),
         )
+        .on_menu_event(|_app, event| on_menu(event.id().as_ref()))
+        .register_uri_scheme_protocol("jumphpframe", |_ctx, request| frame_response(&request))
         .invoke_handler(tauri::generate_handler![jumphp_invoke, jumphp_emit])
         .setup(|app| {
             let _ = HANDLE.set(app.handle().clone());
@@ -591,6 +739,7 @@ pub extern "C" fn jt_run(config_json: *const c_char, frame: Option<FrameFn>) -> 
     let _ = FRAME.set(frame);
     #[cfg(windows)]
     {
+        webview2::ensure();
         common_controls::pin_module();
         common_controls::activate();
     }
@@ -640,9 +789,74 @@ pub extern "C" fn jt_send(command_json: *const c_char) {
     }
 }
 
+/// The embedded game's newest picture (a BMP): PHP calls it after each frame it draws.
+#[no_mangle]
+pub extern "C" fn jt_frame(data: *const u8, len: usize) {
+    if data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
+    if let Ok(mut d) = frame_data().lock() {
+        d.clear();
+        d.extend_from_slice(bytes);
+    }
+    FRAME_NO.fetch_add(1, Ordering::SeqCst);
+}
+
 #[no_mangle]
 pub extern "C" fn jt_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
+}
+
+/// Windows: the WebView every window needs (WebView2, Edge's). Windows 11 and an updated Windows 10 have it, a fresh Windows 10 does
+/// not: Microsoft's Evergreen bootstrapper (packed in this library, ~1.8 MB, redistribution allowed) installs it silently before the
+/// first window, as the apps' installers expect (no page to open, no link to follow). It asks Windows' permission (UAC) itself.
+#[cfg(windows)]
+mod webview2 {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    const SETUP: &[u8] = include_bytes!("../assets/MicrosoftEdgeWebview2Setup.exe");
+    const CLIENT: &str = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+    const NO_WINDOW: u32 = 0x0800_0000;
+
+    /// The runtime registers its version ("pv") under EdgeUpdate's clients; 0.0.0.0 = removed.
+    fn installed() -> bool {
+        let keys = [
+            format!(r"HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{CLIENT}"),
+            format!(r"HKLM\SOFTWARE\Microsoft\EdgeUpdate\Clients\{CLIENT}"),
+            format!(r"HKCU\Software\Microsoft\EdgeUpdate\Clients\{CLIENT}"),
+        ];
+        for key in keys {
+            let Ok(out) = Command::new("reg").args(["query", &key, "/v", "pv"]).creation_flags(NO_WINDOW).output() else { continue };
+            if !out.status.success() {
+                continue;
+            }
+            let text = String::from_utf8_lossy(&out.stdout).to_string();
+            let found = text.lines().any(|l| {
+                let mut words = l.split_whitespace();
+                words.next() == Some("pv") && words.last().map_or(false, |v| v != "0.0.0.0" && !v.is_empty())
+            });
+            if found {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn ensure() {
+        if installed() {
+            return;
+        }
+        let path = std::env::temp_dir().join("MicrosoftEdgeWebview2Setup.exe");
+        if std::fs::write(&path, SETUP).is_err() {
+            return;
+        }
+        eprintln!("[jumphp-tauri] WebView2 is missing: installing it (silent)");
+        // /silent /install: Microsoft's documented switches for the bootstrapper
+        let _ = Command::new(&path).args(["/silent", "/install"]).creation_flags(NO_WINDOW).status();
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 /// Windows: the native dialogs (TaskDialogIndirect) live in version 6 of comctl32, which Windows only gives a

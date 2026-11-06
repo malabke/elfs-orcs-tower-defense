@@ -13,7 +13,7 @@ bin/jumphp relay up      # ws://localhost:8090/ws  (logs : bin/jumphp relay logs
 
 Image `docker/relay` (le serveur `server/bin/server.php` du même commit que le moteur). En production :
 le dossier `server/` de php-wasm-network (Caddy TLS + relais + coturn pour WebRTC), puis `net_url:
-wss://domaine/ws` dans `game.yaml` ou `?net=wss://domaine/ws` dans l'URL du jeu. Une page en HTTPS exige
+wss://domaine/ws` dans `project.yaml` ou `?net=wss://domaine/ws` dans l'URL du jeu. Une page en HTTPS exige
 `wss://`.
 
 ## Côté jeu

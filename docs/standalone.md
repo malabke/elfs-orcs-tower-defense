@@ -27,6 +27,13 @@ HTTPS (`$engine->http()`, online play over `wss://`): PHP's openssl is inside; i
 system's (Debian / Ubuntu / Arch, Fedora / openSUSE), else the game's own `cacert.pem` (Windows, the others), through
 `SSL_CERT_FILE` (`tools/standalone-stub.php`).
 
+### The game's own php.ini settings
+
+`project.yaml` `php_ini: "my.setting=1\nother=2"` (one line, `\n` between settings) adds them to the executable's php.ini
+section: `get_cfg_var('my.setting')` reads them. A tool can rewrite that section of a copy of the executable later
+(jumphp2installer writes a server's address there); to keep every offset in place (Windows), rewrite it at the same
+size, from room reserved by such a setting.
+
 ## When the player runs it
 
 The first launch unpacks the game (its PHP, pictures, sounds, fonts: SDL reads real files) into the player's cache,
@@ -37,7 +44,7 @@ in a folder of its own version; later launches start at once. A new version of t
 | the game, unpacked | `~/.cache/jumphp/<id>-<build>` (`$XDG_CACHE_HOME`) | `%LOCALAPPDATA%\JumPHP\<id>-<build>` |
 | saves and options | `~/.local/share/<id>` (`$XDG_DATA_HOME`) | `%APPDATA%\<id>` |
 
-`<id>` is game.yaml's `id`, `<build>` a hash of the game's files. `JUMPHP_STANDALONE_DIR` unpacks elsewhere,
+`<id>` is project.yaml's `id`, `<build>` a hash of the game's files. `JUMPHP_STANDALONE_DIR` unpacks elsewhere,
 `JUMPHP_VAR` puts the saves elsewhere (`tools/standalone-stub.php`).
 
 ## The micro binaries

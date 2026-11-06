@@ -25,6 +25,7 @@ use JumPHP\Tile\TileMapRenderer;
 use JumPHP\Util\Lang;
 use React\EventLoop\Loop;
 use Symfony\Component\Config\FileLocator;
+use JumPHP\Extension\Extensions;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
@@ -44,6 +45,7 @@ use Symfony\Component\DependencyInjection\Reference;
  *   JUMPHP_LIVE=f         the current frame written to the PNG f every JUMPHP_LIVE_EVERY frames (default 10), replaced
  *                         at once (a viewer reads whole pictures only): what the Claude Code pane jumphp-live shows
  *   JUMPHP_INPUT=json     scripted input: [[frame, "action"], [frame, "action", "hold"|"release"], ...]
+ *   JUMPHP_INPUT_RECORD=file  writes the actions held / let go as the game is played, in that same format (InputRecorder)
  *   JUMPHP_SCENE=Class    first scene (JUMPHP_SCENE_PARAMS={"json":1})
  *   JUMPHP_REALTIME=1     headless frames paced in real time (network tests between two processes)
  */
@@ -55,6 +57,8 @@ final class Application
     private ?\Throwable $crash = null;
     private int $exitCode = 0;
     private array $script = [];
+    private ?\JumPHP\Input\InputRecorder $recorder = null;
+    private bool $recorderBound = false;
 
     private function __construct(public readonly ContainerInterface $container, public readonly GameConfig $config)
     {
@@ -86,6 +90,9 @@ final class Application
         $container = self::loadContainer($root, $config);
         $app = new self($container, $config);
         $app->engine = $container->get(Engine::class);
+        $extensions = $container->get(Extensions::class);
+        $app->engine->setExtensions($extensions);
+        $extensions->attach($app->engine);
         $app->engine->scenes->setResolver(static function (string $class) use ($container): Scene {
             if ($container->has($class)) {
                 return $container->get($class);
@@ -98,6 +105,8 @@ final class Application
         if (Platform::isHeadless()) {
             $app->engine->fixedDelta = 1 / 60;
             $app->script = json_decode((string)Platform::setting('JUMPHP_INPUT', '[]'), true) ?: [];
+            $record = (string)Platform::setting('JUMPHP_INPUT_RECORD', '');
+            $app->recorder = $record !== '' ? new \JumPHP\Input\InputRecorder($record) : null;
         }
         $app->engine->boot();
 
@@ -173,6 +182,12 @@ final class Application
                     $mode === 'press' ? $this->engine->actions->press((string)$step[1])
                         : $this->engine->actions->hold((string)$step[1], $mode === 'hold');
                 }
+            }
+            if ($this->recorder !== null && !$this->recorderBound) {
+                // in the frame's own event: before its input is cleared, so a tap shorter than a frame is seen too
+                $this->recorderBound = true;
+                $recorder = $this->recorder;
+                $this->engine->on('frame', fn () => $recorder->observe($this->engine->frameCount(), $this->engine->actions));
             }
             $this->engine->tick();
             if (!$this->engine->isRunning()) {
@@ -287,6 +302,8 @@ final class Application
         $c->autowire(EntityManager::class)->setShared(false)->setPublic(true);
         $c->autowire(Engine::class)->setPublic(true);
 
+        // the engine extensions the game requires (Composer type jumphp-extension), before its own services
+        Extensions::register($c, $root);
         if (is_file($root . '/config/services.yaml')) {
             (new YamlFileLoader($c, new FileLocator($root . '/config')))->load('services.yaml');
         }

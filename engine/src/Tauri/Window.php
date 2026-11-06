@@ -139,6 +139,26 @@ final class Window extends EventEmitter
         return $this->cmd('webview.emit', ['name' => $name, 'payload' => $payload]);
     }
 
+    /**
+     * This window's menu (Menu): clicks come as $window->on('menu', fn (string $item, ?bool $checked)) and
+     * $app->on('menu'). On macOS it becomes the application's menu bar.
+     */
+    public function setMenu(array $menu): self
+    {
+        return $this->cmd('menu.set', ['menu' => Menu::normalize($menu)]);
+    }
+
+    public function removeMenu(): self
+    {
+        return $this->cmd('menu.remove');
+    }
+
+    /** Changes one item of this window's menu: ['enabled' => bool, 'checked' => bool, 'text' => string]. */
+    public function setMenuItem(string $item, array $changes): self
+    {
+        return $this->cmd('menu.set_item', ['item' => $item] + array_intersect_key($changes, ['enabled' => 1, 'checked' => 1, 'text' => 1]));
+    }
+
     /** @internal App: an event of this window */
     public function dispatch(string $event, array $data): void
     {

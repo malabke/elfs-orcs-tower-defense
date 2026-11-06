@@ -62,7 +62,7 @@ les services du moteur.
 - Le trait `Sprite` n'a plus de constructeur : appelle `initSprite()` dans le constructeur de l'entité.
 - Les scènes sont réutilisées : tout l'état d'un niveau doit être réinitialisé dans `enter()`.
 - `CollisionSystem::move()` déplace l'entité : ne pas intégrer la vitesse une seconde fois.
-- Les anciennes constantes de taille (vue 840×426, zooms) : `game.yaml width/height` est la résolution
+- Les anciennes constantes de taille (vue 840×426, zooms) : `project.yaml width/height` est la résolution
   virtuelle ; `Renderer::resizeView()` permet toujours de la changer en cours de jeu.
 - Garder les entiers 32 bits en tête (`fmod(microtime(true), 86400.0)`, `-0x1000000`) : rien ne change
   par rapport à ce que tu faisais déjà.

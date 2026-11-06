@@ -301,6 +301,28 @@ class Renderer
         return [($px - $x) * $this->viewWidth / $w, ($py - $y) * $this->viewHeight / $h];
     }
 
+    /** The other way: a point of the view in window coordinates (logical pixels). */
+    public function viewToWindow(float $vx, float $vy): array
+    {
+        [$x, $y, $w, $h] = $this->letterbox;
+        if ($w === 0 || $h === 0 || $this->viewWidth === 0 || $this->viewHeight === 0) {
+            return [$vx, $vy];
+        }
+        $px = $x + $vx * $w / $this->viewWidth;
+        $py = $y + $vy * $h / $this->viewHeight;
+        if ($this->window !== null) {
+            $ww = 0;
+            $wh = 0;
+            \SDL_GetWindowSize($this->window, $ww, $wh);
+            [$ow, $oh] = $this->outputSize();
+            if ($ww > 0 && $wh > 0 && $ow > 0 && $oh > 0) {
+                $px *= $ww / $ow;
+                $py *= $wh / $oh;
+            }
+        }
+        return [$px, $py];
+    }
+
     private function computeLetterbox(): array
     {
         [$ow, $oh] = $this->outputSize();
@@ -331,8 +353,29 @@ class Renderer
         \SDL_RenderClear($this->renderer);
     }
 
+    /**
+     * Moves what is drawn next by (dx, dy) (cumulative; translate(-dx, -dy) to undo). The GUI draws a scrolled area into a
+     * texture of its own with it, its widgets keeping their coordinates in the view.
+     */
+    public function translate(float $dx, float $dy): void
+    {
+        $this->ox += $dx;
+        $this->oy += $dy;
+    }
+
+    /** @return array{0: float, 1: float} */
+    public function translation(): array
+    {
+        return [$this->ox, $this->oy];
+    }
+
+    private float $ox = 0;
+    private float $oy = 0;
+
     public function fillRect(float $x, float $y, float $w, float $h, Color|array|string $color): void
     {
+        $x += $this->ox;
+        $y += $this->oy;
         $c = Color::of($color);
         if ($c->a <= 0) {
             return;
@@ -370,10 +413,10 @@ class Renderer
         $c = Color::of($color);
         \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, 255);
         if ($this->hd > 1) {
-            \SDL_RenderDrawLineF($this->renderer, $x1, $y1, $x2, $y2);
+            \SDL_RenderDrawLineF($this->renderer, $x1 + $this->ox, $y1 + $this->oy, $x2 + $this->ox, $y2 + $this->oy);
             return;
         }
-        \SDL_RenderDrawLine($this->renderer, (int)round($x1), (int)round($y1), (int)round($x2), (int)round($y2));
+        \SDL_RenderDrawLine($this->renderer, (int)round($x1 + $this->ox), (int)round($y1 + $this->oy), (int)round($x2 + $this->ox), (int)round($y2 + $this->oy));
     }
 
     public function drawPoint(float $x, float $y, Color|array|string $color): void
@@ -381,10 +424,10 @@ class Renderer
         $c = Color::of($color);
         \SDL_SetRenderDrawColor($this->renderer, $c->r, $c->g, $c->b, 255);
         if ($this->hd > 1) {
-            \SDL_RenderDrawPointF($this->renderer, $x, $y);
+            \SDL_RenderDrawPointF($this->renderer, $x + $this->ox, $y + $this->oy);
             return;
         }
-        \SDL_RenderDrawPoint($this->renderer, (int)round($x), (int)round($y));
+        \SDL_RenderDrawPoint($this->renderer, (int)round($x + $this->ox), (int)round($y + $this->oy));
     }
 
     /** Filled circle (scanlines): balls, particles. In HD, one scanline per real pixel: a round edge. */
@@ -430,7 +473,7 @@ class Renderer
         }
         $flip = ($flipH ? \SDL_FLIP_HORIZONTAL : 0) | ($flipV ? \SDL_FLIP_VERTICAL : 0);
         if ($this->hd > 1) {
-            $dst = new \SDL_FRect($x, $y, $w, $h);
+            $dst = new \SDL_FRect($x + $this->ox, $y + $this->oy, $w, $h);
             if ($flip === 0 && $angle == 0.0) {
                 \SDL_RenderCopyF($this->renderer, $texture, $srcRect, $dst);
             } else {
@@ -438,7 +481,7 @@ class Renderer
             }
             return;
         }
-        $dst = new \SDL_Rect((int)round($x), (int)round($y), (int)round($w), (int)round($h));
+        $dst = new \SDL_Rect((int)round($x + $this->ox), (int)round($y + $this->oy), (int)round($w), (int)round($h));
         if ($flip === 0 && $angle == 0.0) {
             \SDL_RenderCopy($this->renderer, $texture, $srcRect, $dst);
             return;

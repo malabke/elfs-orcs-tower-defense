@@ -16,7 +16,7 @@ without reloading it. The JumPHP playground does it in its online editor and san
 | pictures, sounds | reloaded in place (textures, sfx, the music played again) | `assets` |
 | `config/lang.yaml`, `config/input.yaml` | translations, keys reloaded | `assets` |
 | another data file (a level, a `.json`...) | the playing scene entered again, same parameters | `scene` |
-| `*.php`, `game.yaml`, `services.yaml`, `composer.json` (namespaces) | PHP restarted in the same engine | `restart` |
+| `*.php`, `project.yaml`, `services.yaml`, `composer.json` (namespaces) | PHP restarted in the same engine | `restart` |
 
 4. It answers `{type: 'jumphp:hot-done', game, result, changed, message?}`; `result: 'error'` when the game
    did not start again (`message`: PHP's error first). The next `jumphp:hot` tries again.

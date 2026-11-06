@@ -11,8 +11,12 @@
 #   JUMPHP_STANDALONE_SPC         StaticPHP's work folder under /cache (default spc)
 #   JUMPHP_STANDALONE_BOOT        the class whose boot($root)->run() starts it (default JumPHP\Kernel\Application)
 #   JUMPHP_STANDALONE_NATIVE      a native library carried in the package, at native/<target>/<its name>
-#   JUMPHP_STANDALONE_INI         php.ini lines injected in the executable (StaticPHP's micro ini section)
+#   JUMPHP_STANDALONE_NATIVE_DIR  its folder instead of <target> (macOS: macos-universal, one library for both)
+#   JUMPHP_STANDALONE_INI         php.ini lines injected in the executable (StaticPHP's micro ini section), plus
+#                                 game.yaml php_ini: "a=1\nb=2" (the game's own settings)
 set -euo pipefail
+# config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
 
 say() { printf '\033[1;36m==> %s\033[0m\n' "$*" >&2; }
 die() { printf '\033[1;31m[x] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -22,12 +26,13 @@ PHP_VERSION="${JUMPHP_STANDALONE_PHP:-8.5}"
 EXTENSIONS="/workspace/${JUMPHP_STANDALONE_EXTENSIONS:-tools/standalone-extensions.txt}"
 SPC="/cache/${JUMPHP_STANDALONE_SPC:-spc}"
 BOOT="${JUMPHP_STANDALONE_BOOT:-JumPHP\\Kernel\\Application}"
-GAME_DIR="/workspace/games/$GAME"
+GAME_DIR="/workspace/games/$GAME"; [ -d "$GAME_DIR" ] || GAME_DIR="/workspace/apps/$GAME"
 OUT="$GAME_DIR/dist/standalone"
 case "$TARGET" in
   linux-x86_64) FILE="$GAME-$TARGET" ;;
   windows-x86_64) FILE="$GAME-$TARGET.exe" ;;
-  *) die "unknown target $TARGET (linux-x86_64, windows-x86_64)" ;;
+  macos-arm64|macos-x86_64) FILE="$GAME-$TARGET" ;;   # desktop apps: bin/jumphp app:export --macos puts both in an .app
+  *) die "unknown target $TARGET (linux-x86_64, windows-x86_64, macos-arm64, macos-x86_64)" ;;
 esac
 
 # 1. the micro (PHP + JumPHP's extensions) for this target: kept, else JumPHP's GitHub release of it, else built here
@@ -39,8 +44,14 @@ if [ ! -s "$micro" ] && [ -z "${JUMPHP_STANDALONE_BUILD:-}" ]; then
   say "PHP for $TARGET: $release"
   curl -fsSL -A jumphp-standalone -o "$micro.part" "$release" && mv "$micro.part" "$micro" || rm -f "$micro.part"
 fi
+if [ ! -s "$micro" ] && [ "$TARGET" = linux-x86_64 ]; then
+  # one StaticPHP build at a time in a work folder: two exports at once (the IDE and a terminal) would write the
+  # same php-src and break each other; the second one waits, then finds the micro the first one made
+  mkdir -p "$SPC" && exec 9>"$SPC.lock"
+  flock -n 9 || { say "another build of PHP is running in ~/.jumphp/standalone/${JUMPHP_STANDALONE_SPC:-spc}: waiting for it"; flock 9; }
+fi
 if [ ! -s "$micro" ]; then
-  [ "$TARGET" = linux-x86_64 ] || die "no PHP for $TARGET (standalone-$key) on JumPHP's GitHub releases: it is built on Windows by the workflow .github/workflows/standalone.yml (Actions > standalone > Run workflow), see docs/standalone.md"
+  [ "$TARGET" = linux-x86_64 ] || die "no PHP for $TARGET (standalone-$key) on JumPHP's GitHub releases: it is built on Windows / macOS by the workflow .github/workflows/standalone.yml (Actions > standalone > Run workflow), see docs/standalone.md"
   say "PHP $PHP_VERSION with $(cat "$EXTENSIONS"), built here (StaticPHP: ~15 min the first time, then kept)"
   for dir in downloads source buildroot pkgroot log; do mkdir -p "$SPC/$dir"; rm -rf "/opt/spc/$dir"; ln -s "$SPC/$dir" "/opt/spc/$dir"; done
   printf 'php-version: %s\nextensions: %s\nsapi:\n  - micro\n' "$PHP_VERSION" "$(cat "$EXTENSIONS")" > /opt/spc/craft.yml
@@ -53,14 +64,15 @@ fi
 # 2. the game, as the desktop runs it (tools/stage-game.sh)
 say "the game: $GAME"
 stage=/tmp/stage/game
-build="$(bash /workspace/tools/stage-game.sh "$GAME_DIR" "$stage")" || die "games/$GAME has no vendor/ (bin/jumphp install $GAME)"
+build="$(bash /workspace/tools/stage-game.sh "$GAME_DIR" "$stage")" || die "${GAME_DIR#/workspace/} has no vendor/ (bin/jumphp install $GAME)"
 if [ -n "${JUMPHP_STANDALONE_NATIVE:-}" ]; then
   # the native library of a desktop app (Tauri), unpacked with it: JumPHP\Tauri\TauriRuntime finds it there
-  mkdir -p "$stage/native/$TARGET"
-  cp "/workspace/$JUMPHP_STANDALONE_NATIVE" "$stage/native/$TARGET/"
+  native="$stage/native/${JUMPHP_STANDALONE_NATIVE_DIR:-$TARGET}"
+  mkdir -p "$native"
+  cp "/workspace/$JUMPHP_STANDALONE_NATIVE" "$native/"
   build="$(cd "$stage" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
 fi
-id="$(sed -nE 's/^ *id: *["'\'']?([a-z0-9-]+).*/\1/p' "$GAME_DIR/config/game.yaml" | head -1)"
+id="$(sed -nE 's/^ *id: *["'\'']?([a-z0-9-]+).*/\1/p' "$(project_yaml "$GAME_DIR")" | head -1)"
 id="${id:-$GAME}"
 
 php -d phar.readonly=0 -r '
@@ -81,11 +93,27 @@ php -d phar.readonly=0 -r '
 # 3. one file
 mkdir -p "$OUT"
 # php.ini lines for this executable: StaticPHP's micro reads them between itself and the PHAR (micro:combine's format)
+# + game.yaml `php_ini: "a=1\nb=2"` (one line, \n between settings): the game's own (get_cfg_var() reads them)
 ini=/tmp/stage/ini.part
 : > "$ini"
-if [ -n "${JUMPHP_STANDALONE_INI:-}" ]; then
-  php -r '$ini = getenv("JUMPHP_STANDALONE_INI") . "\n"; echo "\xfd\xf6\x69\xe6", pack("N", strlen($ini)), $ini;' > "$ini"
+INI_EXTRA="$(php -r 'if (preg_match("/^[ \t]*php_ini:[ \t]*\"((?:[^\"\\\\]|\\\\.)*)\"/m", (string)@file_get_contents($argv[1]), $m)) echo stripcslashes($m[1]);' "$(project_yaml "$GAME_DIR")")"
+INI="${JUMPHP_STANDALONE_INI:-}${INI_EXTRA:+${JUMPHP_STANDALONE_INI:+
+}$INI_EXTRA}"
+if [ -n "$INI" ]; then
+  INI="$INI" php -r '$ini = getenv("INI") . "\n"; echo "\xfd\xf6\x69\xe6", pack("N", strlen($ini)), $ini;' > "$ini"
 fi
 cat "$micro" "$ini" /tmp/stage/game.phar > "$OUT/$FILE"
 chmod 755 "$OUT/$FILE"
+# Windows: a GUI program (SUBSYSTEM:WINDOWS in its PE header, as editbin does), not a console one: no console window
+# beside the game / app / installer. The programs it starts get no window either (registry/src/Patch/WindowsGui.php).
+# Nothing moves in the file (two bytes). JUMPHP_STANDALONE_CONSOLE=1 keeps the console (a command-line tool).
+if [ "$TARGET" = windows-x86_64 ] && [ -z "${JUMPHP_STANDALONE_CONSOLE:-}" ]; then
+  php -r '
+    $f = fopen($argv[1], "r+b");
+    fseek($f, 0x3c); $pe = unpack("V", fread($f, 4))[1];
+    fseek($f, $pe); if (fread($f, 4) !== "PE\0\0") { fwrite(STDERR, "not a PE executable\n"); exit(1); }
+    fseek($f, $pe + 24 + 68); fwrite($f, pack("v", 2));    // optional header: Subsystem = IMAGE_SUBSYSTEM_WINDOWS_GUI
+    fclose($f);
+  ' "$OUT/$FILE" || die "could not make $FILE a GUI program"
+fi
 echo "OUT=$OUT/$FILE"

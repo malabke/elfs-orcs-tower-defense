@@ -22,6 +22,9 @@ class Sdl
     private ?Window $window = null;
     private ?Renderer $renderer = null;
     private $headlessSurface = null;
+    /** @var \SDL_Surface|null an embedded game's picture (JumPHP\Tauri\EmbeddedGame) */
+    private $embedSurface = null;
+    private string $embedFile = '';
     /** Headless with OpenGL (JUMPHP_HEADLESS_GL=1, under Xvfb): the last presented picture, RGBA rows bottom first */
     private ?string $glFrame = null;
 
@@ -40,6 +43,11 @@ class Sdl
     /** Opens the window and the renderer (Engine::boot() calls it with the game.yaml values). */
     public function initSDL(bool $fullscreen, string $title, int $width, int $height, bool $vsync = true, int $scale = 3): void
     {
+        $embedded = \JumPHP\Tauri\Hybrid::embedded($this->config);
+        if ($embedded) {
+            // the game is drawn into memory and shown by a Tauri window: no window of SDL's own
+            \SDL_SetHint('SDL_VIDEODRIVER', 'dummy');
+        }
         if (\SDL_Init(\SDL_INIT_VIDEO | \SDL_INIT_AUDIO | \SDL_INIT_JOYSTICK) < 0) {
             // no audio device or joystick subsystem: video alone is enough to play
             if (\SDL_Init(\SDL_INIT_VIDEO) < 0) {
@@ -66,6 +74,13 @@ class Sdl
             return;
         }
 
+        if ($embedded) {
+            $this->embedSurface = \SDL_CreateRGBSurface(0, $width, $height, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0);
+            $this->renderer = new Renderer(null, $width, $height, false, $this->embedSurface);
+            $shm = PHP_OS_FAMILY === 'Linux' && is_dir('/dev/shm') && is_writable('/dev/shm') ? '/dev/shm' : sys_get_temp_dir();
+            $this->embedFile = $shm . '/jumphp-embed-' . getmypid() . '.bmp';
+            return;
+        }
         if (Platform::isPhoneApp()) {
             // the game's shape (as the manifest's / Info.plist's): without it SDL lets a resizable window turn every way
             \SDL_SetHint('SDL_IOS_ORIENTATIONS', $width >= $height ? 'LandscapeLeft LandscapeRight' : 'Portrait PortraitUpsideDown');
@@ -87,6 +102,24 @@ class Sdl
     public function isReady(): bool
     {
         return $this->renderer !== null;
+    }
+
+    /** The game is drawn into memory for a Tauri window (Hybrid::embedded()), not into a window of its own. */
+    public function isEmbedded(): bool
+    {
+        return $this->embedSurface !== null;
+    }
+
+    /** An embedded game (Hybrid::embedded()): the picture last presented, as a BMP; null otherwise. */
+    public function embeddedPicture(): ?string
+    {
+        if ($this->embedSurface === null) {
+            return null;
+        }
+        // SDL writes a BMP only to files (a memory one is not safe in the binding): a RAM-backed one where there is
+        \SDL_SaveBMP($this->embedSurface, $this->embedFile);
+        $bmp = @file_get_contents($this->embedFile);
+        return $bmp === false || $bmp === '' ? null : $bmp;
     }
 
     /** Headless only: writes what was last presented to a PNG file. */

@@ -8,7 +8,13 @@ chdir('/game');
 require '/game/vendor/autoload.php';
 
 try {
-    $GLOBALS['app'] = \JumPHP\Kernel\Application::boot('/game');
+    if (\JumPHP\Kernel\GameConfig::load('/game')->get('ui') === 'webview') {
+        // a desktop app (docs/tauri.md "In the browser"): its pages in the page, its PHP here
+        $GLOBALS['app'] = \JumPHP\Tauri\App::boot('/game', new \JumPHP\Tauri\BrowserRuntime());
+        $GLOBALS['app']->start();
+    } else {
+        $GLOBALS['app'] = \JumPHP\Kernel\Application::boot('/game');
+    }
 } catch (\Throwable $e) {
     \JumPHP\Kernel\Application::stderr('[jumphp] BOOT FAILED: ' . get_class($e) . ': ' . $e->getMessage() . ' (' . $e->getFile() . ':' . $e->getLine() . ")\n"
         . $e->getTraceAsString() . "\n");

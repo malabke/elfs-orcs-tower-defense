@@ -165,7 +165,8 @@
 	}
 
 	function start() {
-		if (!matchMedia('(pointer: coarse)').matches) return;
+		// no game pad for a desktop app (ui: webview): its HTML pages take the touches themselves
+		if (!matchMedia('(pointer: coarse)').matches || (window.JUMPHP_GAME || {}).touch === false || (window.JUMPHP_GAME || {}).ui === 'webview') return;
 		const cfg = Object.assign({ a: 'Space', b: 'Escape', start: 'Return' }, (window.JUMPHP_GAME || {}).touch || {});
 		const labels = Object.assign({ a: 'A', b: 'B', start: 'START', select: 'SELECT' }, cfg.labels || {});
 		const game = window.JUMPHP_GAME || {};

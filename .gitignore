@@ -19,4 +19,14 @@ core
 core.[0-9]*
 /var/
 
+# the IDE package (ide/): its dev dependencies and vendored editor
+/ide/vendor/
+/ide/composer.lock
+/ide/.phpunit.cache/
+/ide/ui/vendor/
+
+# what the AI assistants did (IDE history): private to this computer
+/IA/
+
+# Claude Code's settings of this computer
 .claude/settings.local.json

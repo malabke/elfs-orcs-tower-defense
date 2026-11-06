@@ -22,6 +22,8 @@ use JumPHP\Native\Shell;
  *   await jumphp.invoke('native.openUrl', {url: 'https://jumphp.net'});
  *   await jumphp.invoke('native.copy', {text: 'hello'});
  *   const text = await jumphp.invoke('native.paste');
+ *   const s = await jumphp.invoke('native.autostart');               // {supported, enabled, atLogin}
+ *   await jumphp.invoke('native.autostart', {on: true});             // starts with the computer (an exported app)
  */
 final class NativeCommands
 {
@@ -38,5 +40,13 @@ final class NativeCommands
         $app->command('native.copy', static fn (mixed $p) => Clipboard::copy((string)($arr($p)['text'] ?? '')));
         $app->command('native.paste', static fn () => Clipboard::paste());
         $app->command('native.openUrl', static fn (mixed $p) => Shell::openUrl((string)($arr($p)['url'] ?? '')));
+        $app->command('native.autostart', static function (mixed $p) use ($app, $arr): array {
+            $start = $app->autostart();
+            if (array_key_exists('on', $arr($p))) {
+                $start->set((bool)$arr($p)['on']);
+                $app->options->set('autostart_set', true);
+            }
+            return ['supported' => $start->isSupported(), 'enabled' => $start->isEnabled(), 'atLogin' => $start->startedAtLogin()];
+        });
     }
 }

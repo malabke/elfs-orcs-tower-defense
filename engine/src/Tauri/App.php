@@ -10,6 +10,7 @@ use JumPHP\Http\Http;
 use JumPHP\Kernel\GameConfig;
 use JumPHP\Kernel\Platform;
 use JumPHP\Loop\GameLoop;
+use JumPHP\Native\Autostart;
 use JumPHP\Save\Options;
 use JumPHP\Save\Storage;
 use JumPHP\Util\Lang;
@@ -44,6 +45,7 @@ final class App extends EventEmitter
     public readonly GameLoop $gameLoop;
     public readonly Storage $storage;
     public readonly Options $options;
+    private ?Autostart $autostart = null;
     public readonly Lang $lang;
 
     /** @var array<string, Window> */
@@ -64,6 +66,8 @@ final class App extends EventEmitter
     private float $time = 0.0;
     private float $lastTime = 0.0;
     private ?\Throwable $crash = null;
+    private ?AppMain $main = null;
+    private ?Updater $updater = null;
     private ?Tasks $tasks = null;
     private ?Http $http = null;
     private ?JsBridge $bridge = null;
@@ -103,11 +107,30 @@ final class App extends EventEmitter
             });
         }
         $config = GameConfig::load($root);
-        $runtime ??= TauriRuntime::create($root) ?? throw new \RuntimeException(self::missingRuntime($root));
+        $main = $config->get('main');
+        // the command line first (AppCli): an exit code stops here, before any window or native library
+        if ($runtime === null && is_string($main) && is_subclass_of($main, AppCli::class)) {
+            $code = $main::cli(array_values(array_slice((array)($_SERVER['argv'] ?? []), 1)), $root);
+            if ($code !== null) {
+                exit($code);
+            }
+        }
+        $runtime ??= TauriRuntime::create($root, $config->title()) ?? throw new \RuntimeException(self::missingRuntime($root));
         $app = new self($config, $runtime);
         $window = (array)$app->option('window', []);
+        $start = $app->autostartPolicy();
+        if ($start['hidden'] && $app->autostart()->startedAtLogin()) {
+            $window['visible'] = false;      // started with the computer: in the tray until the user opens it
+        }
         $app->createWindow('main', $window + ['title' => $config->title()]);
-        $main = $config->get('main');
+        // game.yaml app.autostart: true: on by default, once (the first start of the exported app); the user decides then
+        // installed by an installer that asked the user (its "start with the computer" box): that choice stands
+        $exe = $app->updater()->executable();
+        $asked = $exe !== null && (is_file(dirname($exe) . '/.jumphp-autostart') || is_file(dirname($exe, 4) . '/.jumphp-autostart'));
+        if ($start['default'] && !$asked && $app->options->get('autostart_set') === null && $app->autostart()->isSupported()) {
+            $app->autostart()->enable();
+            $app->options->set('autostart_set', true);
+        }
         if ($main !== null) {
             if (!class_exists((string)$main)) {
                 throw new \RuntimeException("game.main: class '$main' not found (namespace / file name?)");
@@ -116,9 +139,16 @@ final class App extends EventEmitter
             if (!$object instanceof AppMain) {
                 throw new \RuntimeException("game.main: $main must implement " . AppMain::class);
             }
+            $app->main = $object;
             $object->boot($app);
         }
         return $app;
+    }
+
+    /** The object of game.yaml `main` (tests: its state), null without one. */
+    public function main(): ?AppMain
+    {
+        return $this->main;
     }
 
     /** The running app (for code that has no access to it: JumPHP\Native). */
@@ -140,18 +170,54 @@ final class App extends EventEmitter
     }
 
     /** Runs until the app quits. @return int exit code */
-    public function run(): int
+    /** The page's bridge (browser: the one BrowserRuntime reads, so HTTP answers and the app's events both arrive). */
+    private function bridge(): JsBridge
+    {
+        return $this->bridge ??= $this->runtime instanceof BrowserRuntime ? $this->runtime->bridge : new JsBridge();
+    }
+
+    /**
+     * In a web page (BrowserRuntime): starts the app without blocking; the page then calls frame() at each of
+     * its frames (engine/bootstrap/wasm.php). Desktop: run().
+     */
+    public function start(): void
     {
         $this->running = true;
         $this->lastTime = Time::now();
-        $config = [
+        $this->runtime->run($this->runtimeConfig(), fn () => $this->frame());
+    }
+
+    /** In a web page: the page's events between two frames (the tab hidden, the page closing). */
+    public function events(): void
+    {
+        try {
+            foreach ($this->runtime->poll() as $event) {
+                $this->dispatch($event);
+            }
+        } catch (\Throwable $e) {
+            $this->crashed($e);
+        }
+    }
+
+    /** @return array<string, mixed> what the native side starts with */
+    private function runtimeConfig(): array
+    {
+        return [
             'identifier' => (string)$this->option('identifier', 'net.jumphp.' . preg_replace('/[^a-z0-9]+/', '', strtolower($this->config->id()))),
             'product_name' => $this->config->title(),
             'version' => (string)$this->config->get('version', '0.1.0'),
             'root' => $this->pagesDir(),
             'tick_hz' => (float)$this->option('tick_hz', 60),
+            'engine_pages' => dirname(__DIR__, 2) . '/web/tauri',     // served as /__jumphp/ (the embedded game's page)
+            'title' => $this->config->title(),
         ];
-        $code = $this->runtime->run($config, fn () => $this->frame());
+    }
+
+    public function run(): int
+    {
+        $this->running = true;
+        $this->lastTime = Time::now();
+        $code = $this->runtime->run($this->runtimeConfig(), fn () => $this->frame());
         $this->running = false;
         $this->tasks?->shutdown();
         Loop::stop();   // no ReactPHP auto-run at the end of the script
@@ -254,6 +320,53 @@ final class App extends EventEmitter
      * Its events: 'menu' (string $itemId), 'click' (string $button: not sent on Linux, where the menu is the way).
      * Linux needs libayatana-appindicator3 (and a desktop that shows tray icons).
      */
+    /**
+     * The application's menu (Menu: items, roles, check items): on macOS the menu bar, elsewhere the menu of every
+     * window that has none of its own. Clicks: $app->on('menu', fn (string $item, string $window, ?bool $checked)).
+     */
+    public function setMenu(array $menu): self
+    {
+        $this->sendCommand(['cmd' => 'menu.set', 'window' => '*', 'menu' => Menu::normalize($menu)]);
+        return $this;
+    }
+
+    public function removeMenu(): self
+    {
+        $this->sendCommand(['cmd' => 'menu.remove', 'window' => '*']);
+        return $this;
+    }
+
+    /** Changes one item of the application's menu: ['enabled' => bool, 'checked' => bool, 'text' => string]. */
+    public function setMenuItem(string $item, array $changes): self
+    {
+        $this->sendCommand(['cmd' => 'menu.set_item', 'window' => '*', 'item' => $item] + array_intersect_key($changes, ['enabled' => 1, 'checked' => 1, 'text' => 1]));
+        return $this;
+    }
+
+    /**
+     * Starting with the computer (an exported app; docs/tauri.md "Starting with the computer"): isSupported(),
+     * isEnabled(), set($on), startedAtLogin().
+     */
+    public function autostart(): Autostart
+    {
+        return $this->autostart ??= new Autostart($this->config->id(), $this->config->title(), (string)$this->runtimeConfig()['identifier'],
+            $this->updater()->executable(), PHP_OS_FAMILY, null, array_values(array_map('strval', (array)($_SERVER['argv'] ?? []))));
+    }
+
+    /** @return array{default: bool, hidden: bool} game.yaml app.autostart: true, or {default: bool, hidden: bool} */
+    private function autostartPolicy(): array
+    {
+        $o = $this->option('autostart', false);
+        return is_array($o) ? ['default' => (bool)($o['default'] ?? false), 'hidden' => (bool)($o['hidden'] ?? false)]
+            : ['default' => (bool)$o, 'hidden' => false];
+    }
+
+    /** The app's updates (an exported app, game.yaml app.update.url; docs/tauri.md "Updates"). */
+    public function updater(): Updater
+    {
+        return $this->updater ??= new Updater($this);
+    }
+
     public function tray(string $id = 'main', array $options = []): Tray
     {
         $tray = $this->trays[$id] ??= new Tray($this, $id);
@@ -330,7 +443,7 @@ final class App extends EventEmitter
     /** Asynchronous HTTP (curl), as in games. */
     public function http(): Http
     {
-        return $this->http ??= new Http($this->bridge ??= new JsBridge());
+        return $this->http ??= new Http($this->bridge());
     }
 
     /** The folder of the pages (game.yaml app.pages, default ui/). */
@@ -428,6 +541,12 @@ final class App extends EventEmitter
                     $tray?->emit('click', [(string)($event['button'] ?? 'left')]);
                 }
                 break;
+            case 'menu':
+                $item = (string)($event['item'] ?? '');
+                $checked = isset($event['checked']) ? (bool)$event['checked'] : null;
+                $window?->emit('menu', [$item, $checked]);
+                $this->emit('menu', [$item, (string)($event['window'] ?? '*'), $checked]);
+                break;
             case 'shortcut':
                 $accel = (string)($event['accelerator'] ?? '');
                 $callback = $this->shortcuts[$accel] ?? null;
@@ -515,6 +634,11 @@ final class App extends EventEmitter
         $this->crash = $e;
         self::stderr("[jumphp] CRASH: " . get_class($e) . ': ' . $e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine()
             . "\n" . $e->getTraceAsString() . "\n");
+        // the app's last word (a crash report saved for its next start): nothing it does may hide the crash
+        try {
+            $this->emit('crash', [$e]);
+        } catch (\Throwable) {
+        }
         $this->quit(1);
     }
 

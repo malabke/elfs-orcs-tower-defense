@@ -1,7 +1,7 @@
 # The game on Google Play (Android app)
 
 `bin/jumphp twa <game> --url https://<where the game is online>` turns a game that is installable in the browser
-(a PWA: on the JumPHP playground every game is; on one's own server, game.yaml `pwa: true`) into an Android app
+(a PWA: on the JumPHP playground every game is; on one's own server, project.yaml `pwa: true`) into an Android app
 for Google Play: a **Trusted Web Activity**, the game's page in Chrome, full screen, no address bar, with its
 icon and name. The game itself stays on the web: an update of the game is in the app at once.
 
@@ -35,4 +35,6 @@ lists the app's package and the SHA-256 fingerprints of the keys that sign it, t
 
 The developer account and the Play Console are the user's: create the app with the same package, upload the
 `.aab` in internal testing, add Google's signing fingerprint to the site (above), then the store listing
-(screenshots: `bin/jumphp shot`) and production. The playground's guide: https://jumphp.net/docs/android
+(screenshots: `bin/jumphp shot`) and production. **The whole procedure, step by step (keys, phone checks, every
+Play Console declaration, review, next versions, pitfalls): [google-play.md](google-play.md).** The playground's
+guide: https://jumphp.net/docs/google-play

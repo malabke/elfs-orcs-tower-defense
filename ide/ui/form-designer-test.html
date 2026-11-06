@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Form designer test</title>
+  <link rel="stylesheet" href="css/designer.css">
+  <style>
+    html, body { height: 100%; margin: 0; background: #1e1f22; }
+    #designer { position: fixed; inset: 0; }
+  </style>
+</head>
+<body>
+  <!-- The form designer alone, outside the IDE: needs a server answering POST /invoke {name, payload} with the IDE core
+       ({ok: result} | {error}); it edits ?form=<path> (default forms/MainForm.form.yaml). Writes are logged, not saved. -->
+  <div id="designer"></div>
+  <script type="module">
+    import { FormDesigner } from './js/form-designer.js';
+    const backend = {
+      async invoke(name, payload = {}) {
+        const r = await (await fetch('/invoke', { method: 'POST', body: JSON.stringify({ name, payload }) })).json();
+        if (r.error) throw new Error(r.error);
+        return r.ok;
+      },
+    };
+    const path = new URLSearchParams(location.search).get('form') || 'forms/MainForm.form.yaml';
+    const file = await backend.invoke('file.read', { path });
+    window.written = [];
+    window.opened = [];
+    window.changes = [];
+    window.designer = new FormDesigner(document.getElementById('designer'), {
+      path, text: file.content, backend,
+      writeFile: async (p, content) => { window.written.push([p, content]); },
+      openFile: (p, line) => { window.opened.push([p, line]); },
+      onChange: (text) => { window.changes.push(text); },
+      run: () => console.log('run'),
+    });
+  </script>
+</body>
+</html>

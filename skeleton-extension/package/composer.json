@@ -1,0 +1,26 @@
+{
+    "name": "jumphp-extensions/skeleton-extension",
+    "description": "A JumPHP engine extension",
+    "type": "jumphp-extension",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": { "JumphpExtensions\\SkeletonExtension\\": "src/" }
+    },
+    "extra": {
+        "jumphp": {
+            "name": "Skeleton Extension",
+            "engine": "^0.5",
+            "services": ["JumphpExtensions\\SkeletonExtension\\Flash"],
+            "boot": "JumphpExtensions\\SkeletonExtension\\SkeletonExtension",
+            "config": {
+                "skeleton_extension": {
+                    "default": { "color": "#ffffff", "seconds": 0.3 },
+                    "doc": "The flash: its colour and how long it fades"
+                }
+            }
+        }
+    }
+}

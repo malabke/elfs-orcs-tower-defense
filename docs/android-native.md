@@ -4,6 +4,12 @@
 OpenGL ES and OpenAL run inside the app, as on the desktop; the on-screen controls (d-pad or joystick, A / B /
 START) are drawn by the engine. Phones (arm64-v8a) and emulators / Chromebooks (x86_64), Android 8.0 or newer.
 
+**A desktop app** (`ui: webview`, [tauri.md](tauri.md)): the same command makes an app of its browser build (`bin/jumphp
+build`, done by the command) shown by Android's WebView from `https://appassets.androidplatform.net/` (inside the app,
+no network), with a bridge for the system's save dialog, notifications, links, sharing and the clipboard
+(`tools/android/webview`); no NDK, a few minutes. Output: `dist/android-native/<app>-<version>.apk` / `.aab`, the same
+package, key and Google Play steps as a game. Tried in an emulator with `games/hello-desktop`.
+
 (The other way, `bin/jumphp twa`, puts the game's web page in Chrome: [docs/android.md](android.md). With the
 same package and key, the native app replaces the TWA on Google Play as a new version.)
 
@@ -39,19 +45,22 @@ On a phone: `adb install games/<game>/dist/android-native/<game>-1.0.apk` (or se
 | SDL2 (its Java activity, OpenGL ES, touch, sound), SDL2_image / _mixer / _ttf, OpenAL Soft (OpenSL ES) | SDL's Android project, `tools/android/project` (Gradle, CMake) |
 | `libmain.so`: unpacks the game on its first launch (each new version once, from the APK into the private storage), runs it | `tools/android/project/app/jni/src/main.c` |
 | the game: `assets/game.tar` (as `export:standalone` packs it: `tools/stage-game.sh`) | |
-| name, icon (the PWA's: `assets/icon.png`), orientation (the game's shape) | game.yaml |
+| name, icon (the PWA's: `assets/icon.png`), orientation (the game's shape) | project.yaml |
 
 The saves and options are in the app's private storage (`JUMPHP_VAR`), kept across updates. PHP's output and errors
 go to logcat: `adb logcat -s JumPHP`. Android's back button is Escape.
 
 The engine knows it is on a phone: `JUMPHP_MOBILE` (Platform::isMobile()), `JUMPHP_ANDROID`, and the on-screen
-controls are on (`JUMPHP_TOUCH_CONTROLS`; game.yaml `touch:` as in the browser: `pad: stick`, `a`, `b`, `start`,
+controls are on (`JUMPHP_TOUCH_CONTROLS`; project.yaml `touch:` as in the browser: `pad: stick`, `a`, `b`, `start`,
 `select`, `labels`). On the desktop, `JUMPHP_TOUCH_CONTROLS=1 bin/jumphp run <game>` shows them (with the mouse).
 
 HTTPS (`$engine->http()`, online play over `wss://`): PHP's openssl (OpenSSL 3, built with the NDK) with the game's CA
 certificates (`cacert.pem`, put in by `tools/stage-game.sh`; `openssl.cafile` set by main.c).
 
 ## On Google Play
+
+In short below; the whole procedure (keys, phone checks, every Play Console declaration, review, pitfalls) is in
+[google-play.md](google-play.md).
 
 1. **A developer account**: [play.google.com/console](https://play.google.com/console) (25 $ once, an identity
    check; a new personal account must have 12 testers for 14 days before going public).

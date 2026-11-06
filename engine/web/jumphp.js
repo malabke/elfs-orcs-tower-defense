@@ -280,7 +280,10 @@ function startTasks(FS, wasmBinary, remote) {
 
 const modules = {};
 async function loadModules() {
-	for (const [name, file] of [['device', 'jumphp-device.js'], ['http', 'jumphp-http.js'], ['pwa', 'jumphp-pwa.js'], ['gamepad', 'jumphp-gamepad.js']]) {
+	const list = [['device', 'jumphp-device.js'], ['http', 'jumphp-http.js'], ['pwa', 'jumphp-pwa.js'], ['gamepad', 'jumphp-gamepad.js']];
+	// a desktop app (game.yaml ui: webview): its pages and native side in HTML (JumPHP\Tauri\BrowserRuntime)
+	if (GAME.ui === 'webview') list.push(['app', 'jumphp-app.js']);
+	for (const [name, file] of list) {
 		try {
 			modules[name] = (await import('./' + versioned(file))).install(moduleApi) || {};
 		} catch (e) { console.error(`[${file}]`, e); }
@@ -383,6 +386,10 @@ async function main() {
 	window.JumPHPTouch?.start();
 	notifyParent({ type: 'jumphp:ready', game: GAME.id });
 
+	// a desktop app shows its pages at once (no sound to unlock, the pages take the focus themselves); an app of forms
+	// (view: window) too: it is used, not started
+	if (GAME.ui === 'webview') return;
+	if (GAME.view === 'window') { canvas.focus(); return; }
 	// browsers start audio and keyboard focus after a user gesture: one click / tap / key on the overlay
 	const overlay = $('overlay');
 	overlay.style.display = 'flex';
@@ -493,8 +500,10 @@ $('btn-full').addEventListener('click', () => {
 	fullscreenElement() ? exitFullscreen() : enterFullscreen();
 	canvas.focus();
 });
-// a double click goes fullscreen, unless the game is played by clicking fast (game.yaml `double_click_fullscreen: false`)
-canvas.addEventListener('dblclick', () => { if (GAME.double_click_fullscreen !== false) enterFullscreen(); });
+// a double click goes fullscreen, except in windowed forms (they use double clicks) and in games clicked fast
+// (game.yaml `double_click_fullscreen: false`: two quick clicks must not send the page fullscreen)
+canvas.addEventListener('dblclick', () => { if (GAME.view !== 'window' && GAME.double_click_fullscreen !== false) enterFullscreen(); });
+if (GAME.view === 'window') document.documentElement.classList.add('view-window');
 $('btn-sound').addEventListener('click', () => {
 	// SDL_mixer plays through emscripten's Web Audio context
 	const ctx = window.SDL2?.audioContext || window.Module?.SDL2?.audioContext;

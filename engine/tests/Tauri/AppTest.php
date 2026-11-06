@@ -12,7 +12,10 @@ use JumPHP\Native\NullProvider;
 use JumPHP\Native\Shell;
 use JumPHP\Native\UnsupportedFeature;
 use JumPHP\Tauri\App;
+use JumPHP\Tauri\EmbeddedGame;
+use JumPHP\Tauri\Updater;
 use JumPHP\Tauri\FakeRuntime;
+use JumPHP\Tauri\LinuxWebView;
 use JumPHP\Tauri\NativeEvent;
 use JumPHP\Tauri\TauriRuntime;
 use PHPUnit\Framework\TestCase;
@@ -239,6 +242,113 @@ final class AppTest extends TestCase
         $this->runtime->push(['type' => 'tray', 'tray' => 'main', 'event' => 'menu', 'item' => 'quit']);
         $this->runtime->frame();
         self::assertSame(['quit'], $picked);
+    }
+
+    public function testMenusAreSentAndTheirClicksComeBack(): void
+    {
+        $this->app->setMenu([['text' => 'File', 'items' => [['id' => 'open', 'accelerator' => 'CmdOrCtrl+O'], '-', ['role' => 'quit']]]]);
+        $cmd = $this->runtime->sentOf('menu.set')[0];
+        self::assertSame('*', $cmd['window']);
+        self::assertSame([['text' => 'File', 'items' => [['id' => 'open', 'accelerator' => 'CmdOrCtrl+O'], ['separator' => true], ['role' => 'quit']]]], $cmd['menu']);
+
+        $this->app->createWindow('tools');
+        $this->app->window('tools')->setMenu([['id' => 'grid', 'text' => 'Grid', 'checked' => false]]);
+        self::assertSame('tools', $this->runtime->sentOf('menu.set')[1]['window']);
+
+        $seen = [];
+        $this->app->on('menu', function (string $item, string $window, ?bool $checked) use (&$seen) {
+            $seen[] = [$item, $window, $checked];
+        });
+        $this->app->window('tools')->on('menu', function (string $item, ?bool $checked) use (&$seen) {
+            $seen[] = ['tools:' . $item, $checked];
+        });
+        $this->runtime->push(['type' => 'menu', 'window' => '*', 'item' => 'open', 'checked' => null]);
+        $this->runtime->push(['type' => 'menu', 'window' => 'tools', 'item' => 'grid', 'checked' => true]);
+        $this->runtime->frame();
+        self::assertSame([['open', '*', null], ['tools:grid', true], ['grid', 'tools', true]], $seen);
+
+        $this->app->window('tools')->setMenuItem('grid', ['checked' => false, 'bogus' => 1]);
+        self::assertSame(['cmd' => 'menu.set_item', 'window' => 'tools', 'item' => 'grid', 'checked' => false], $this->runtime->sentOf('menu.set_item')[0]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->app->setMenu([['text' => 'no id']]);
+    }
+
+    public function testUpdatesAreCheckedThenReplaceTheExecutable(): void
+    {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        self::assertNotFalse($key);
+        $public = (string)openssl_pkey_get_details($key)['key'];
+        $manifest = function (array $signed) use ($key): string {
+            $text = (string)json_encode($signed);
+            openssl_sign($text, $sig, $key, OPENSSL_ALGO_SHA256);
+            return (string)json_encode(['signed' => $text, 'signature' => base64_encode($sig)]);
+        };
+        $updater = $this->app->updater();
+        $id = $this->app->config->id();
+        $newer = ['id' => $id, 'version' => '99.0.0', 'notes' => 'Faster', 'platforms' => ['linux-x86_64' => ['url' => 'https://x/a', 'size' => 3, 'sha256' => hash('sha256', 'new')]]];
+
+        $update = $updater->parse($manifest($newer), $public, 'linux-x86_64');
+        self::assertNotNull($update);
+        self::assertSame(['99.0.0', 'Faster', 'https://x/a'], [$update->version, $update->notes, $update->url]);
+        self::assertNull($updater->parse($manifest($newer), $public, 'windows-x86_64'), 'nothing for this system');
+        self::assertNull($updater->parse($manifest(['version' => '0.0.1'] + $newer), $public, 'linux-x86_64'), 'not newer');
+
+        $forged = json_decode($manifest($newer), true);
+        $forged['signed'] = str_replace('99.0.0', '98.0.0', $forged['signed']);
+        try {
+            $updater->parse((string)json_encode($forged), $public, 'linux-x86_64');
+            self::fail('a changed update.json was accepted');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('wrong signature', $e->getMessage());
+        }
+        try {
+            $updater->parse($manifest(['id' => 'another'] + $newer), $public, 'linux-x86_64');
+            self::fail("another app's update was accepted");
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('another app', $e->getMessage());
+        }
+
+        $exe = sys_get_temp_dir() . '/jumphp-updater-' . getmypid();
+        file_put_contents($exe, 'old');
+        try {
+            Updater::replace($exe, 'new!', hash('sha256', 'new'));
+            self::fail('a download with a wrong SHA-256 was installed');
+        } catch (\RuntimeException $e) {
+            self::assertSame('old', file_get_contents($exe));
+        }
+        Updater::replace($exe, 'new', hash('sha256', 'new'));
+        self::assertSame('new', file_get_contents($exe));
+        self::assertTrue(is_executable($exe));
+        @unlink($exe);
+        self::assertFalse($updater->isInstallable(), 'php app.php is not an exported app');
+    }
+
+    public function testAnEmbeddedGameGetsThePagesKeysAsSdlKeys(): void
+    {
+        \SDL_Init(\SDL_INIT_VIDEO);
+        self::assertSame(\SDLK_LEFT, EmbeddedGame::sdlKey('ArrowLeft', 'ArrowLeft'));
+        self::assertSame(\SDLK_RETURN, EmbeddedGame::sdlKey('Enter', 'Enter'));
+        self::assertSame(\SDLK_SPACE, EmbeddedGame::sdlKey(' ', 'Space'));
+        self::assertSame(\SDLK_LSHIFT, EmbeddedGame::sdlKey('Shift', 'ShiftLeft'));
+        self::assertSame(\SDLK_F11, EmbeddedGame::sdlKey('F11', 'F11'));
+        self::assertSame(\SDLK_KP_8, EmbeddedGame::sdlKey('8', 'Numpad8'));
+        self::assertSame(ord('z'), EmbeddedGame::sdlKey('Z', 'KeyZ'));
+        self::assertSame(ord('5'), EmbeddedGame::sdlKey('5', 'Digit5'));
+        self::assertSame(0, EmbeddedGame::sdlKey('Unidentified', ''));
+    }
+
+    public function testTheWebViewPackageOfEachLinuxDistribution(): void
+    {
+        self::assertSame('apt-get update && apt-get install -y libwebkit2gtk-4.1-0', LinuxWebView::installCommand(['ID' => 'debian']));
+        self::assertSame('apt-get update && apt-get install -y libwebkit2gtk-4.1-0', LinuxWebView::installCommand(['ID' => 'linuxmint', 'ID_LIKE' => 'ubuntu debian']));
+        self::assertSame('dnf install -y webkit2gtk4.1', LinuxWebView::installCommand(['ID' => 'fedora']));
+        self::assertSame('dnf install -y webkit2gtk4.1', LinuxWebView::installCommand(['ID' => 'rocky', 'ID_LIKE' => 'rhel centos fedora']));
+        self::assertSame('pacman -S --needed --noconfirm webkit2gtk-4.1', LinuxWebView::installCommand(['ID' => 'manjaro', 'ID_LIKE' => 'arch']));
+        self::assertSame('zypper --non-interactive install libwebkit2gtk-4_1-0', LinuxWebView::installCommand(['ID' => 'opensuse-tumbleweed', 'ID_LIKE' => 'opensuse suse']));
+        self::assertSame('', LinuxWebView::installCommand(['ID' => 'gentoo']));
+        self::assertTrue(LinuxWebView::isWebViewMissing(['libwebkit2gtk-4.1.so.0', 'libsoup-3.0.so.0']));
+        self::assertFalse(LinuxWebView::isWebViewMissing(['libfoo.so.1']));
     }
 
     public function testAGlobalShortcutCallsBack(): void

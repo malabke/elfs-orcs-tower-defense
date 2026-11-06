@@ -22,11 +22,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN docker-php-ext-configure gd \
     && docker-php-ext-install -j"$(nproc)" gd bcmath pcntl zip
 
+# docker/ext (named build context "ext"): the JumPHP patch of php-sdl (wheel, text input events)
+COPY --from=ext php-sdl-events.patch /usr/src/php-sdl-events.patch
 # fetch <repo> <ref> <dir>: one pinned commit, no history
 RUN set -eux; \
     fetch() { mkdir -p "$3" && cd "$3" && git init -q && git remote add origin "https://github.com/$1.git" \
               && git fetch -q --depth 1 origin "$2" && git checkout -q FETCH_HEAD; }; \
     fetch davidnurdin/php-sdl   "$PHP_SDL_REF"   /usr/src/ext-sdl; \
+    (cd /usr/src/ext-sdl && git apply /usr/src/php-sdl-events.patch); \
     sed -i 's/zend_exception_get_default()/zend_ce_exception/g' /usr/src/ext-sdl/src/*.c /usr/src/ext-sdl/src/*.h; \
     fetch kea/php-sdl-image     "$SDL_IMAGE_REF" /usr/src/ext-sdl_image; \
     fetch kea/php-sdl-mixer     "$SDL_MIXER_REF" /usr/src/ext-sdl_mixer; \
@@ -37,7 +40,7 @@ RUN set -eux; \
     build /usr/src/ext-sdl_mixer --with-sdl_mixer; \
     build /usr/src/ext-sdl_ttf   --enable-sdl_ttf; \
     docker-php-ext-enable sdl sdl_image sdl_mixer sdl_ttf; \
-    rm -rf /usr/src/ext-*; \
+    rm -rf /usr/src/ext-* /usr/src/php-sdl-events.patch; \
     php -m | grep -iE '^(sdl|sdl_image|sdl_mixer|sdl_ttf|gd)$'
 
 # docker/ext (named build context "ext"): the JumPHP patch of PHP-OpenGL

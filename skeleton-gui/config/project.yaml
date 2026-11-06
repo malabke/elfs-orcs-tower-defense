@@ -1,0 +1,21 @@
+# A graphic PHP app (forms drawn by JumPHP\Gui, no HTML). Every key is optional (defaults: JumPHP\Kernel\GameConfig).
+project:
+  id: skeleton-gui              # lower case, unique: also the app's data folder
+  title: "JumPHP Forms"
+  version: 0.1.0
+  description: "A graphic PHP app: forms made in the IDE's visual editor, the code behind them in PHP."
+  descriptions: {}
+  kind: gui                     # the IDE opens its forms/*.form.yaml in the visual editor
+  view: window                  # the view is the window, pixel for pixel: the forms lay themselves out in it
+  width: 1024                   # the window's first size (dp)
+  height: 700
+  scale: 1
+  background: '#f3f4f7'
+  start_scene: App\Form\MainForm
+  lang: en
+  touch: false                  # no game pad on phones: the forms are touched directly
+  pause_on_blur: false
+  mute_when_hidden: true
+  smoke:
+    scene: App\Form\MainForm
+    params: { demo: true }

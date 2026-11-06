@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Designer test</title>
+  <link rel="stylesheet" href="css/designer.css">
+  <style>
+    html, body { height: 100%; margin: 0; background: #1e1f22; }
+    #designer { position: fixed; inset: 0; }
+  </style>
+</head>
+<body>
+  <!-- The designer alone, outside the IDE: served from the repository's root (ide/ui/designer-test.html),
+       it edits ?page=<project path> (default games/hello-desktop/ui/index.html); saves are logged, not written. -->
+  <div id="designer"></div>
+  <script type="module">
+    import { Designer } from './js/designer.js';
+    const page = new URLSearchParams(location.search).get('page') || 'games/hello-desktop/ui/index.html';
+    const readFile = async (path) => {
+      const response = await fetch('/' + path);
+      if (!response.ok) throw new Error(`no file ${path}`);
+      if (/\.(png|jpe?g|gif|webp|svg|ico)$/i.test(path)) {
+        const blob = await response.blob();
+        const image = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob); });
+        return { path, text: false, image };
+      }
+      return { path, text: true, content: await response.text() };
+    };
+    const html = (await readFile(page)).content;
+    window.saved = [];
+    window.changes = 0;
+    window.designer = new Designer(document.getElementById('designer'), {
+      path: page,
+      html,
+      readFile,
+      writeFile: async (path, content) => { window.saved.push([path, content]); console.log('save', path, content.length); },
+      onChange: (text) => { window.changes++; window.lastHtml = text; },
+    });
+    window.source = html;
+  </script>
+</body>
+</html>

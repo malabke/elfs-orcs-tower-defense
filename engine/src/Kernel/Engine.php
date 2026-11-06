@@ -12,6 +12,7 @@ use JumPHP\Device\Device;
 use JumPHP\Device\Lifecycle;
 use JumPHP\Device\Pwa;
 use JumPHP\Audio\Audio3d;
+use JumPHP\Extension\Extensions;
 use JumPHP\Gl\OpenGl;
 use JumPHP\Gl\WebGl;
 use JumPHP\Http\Http;
@@ -20,6 +21,7 @@ use JumPHP\Input\InputManager;
 use JumPHP\Loop\GameLoop;
 use JumPHP\Net\NetSession;
 use JumPHP\Renderer\BitmapFont;
+use JumPHP\Renderer\Renderer;
 use JumPHP\Renderer\Sdl;
 use JumPHP\Renderer\TextDrawer;
 use JumPHP\Save\Options;
@@ -48,6 +50,7 @@ class Engine extends EventEmitter
     private bool $running = false;
     private bool $debug = false;
     private ?TextDrawer $font = null;
+    private ?Extensions $extensions = null;
     private ?NetSession $net = null;
     private ?Tasks $tasks = null;
     private ?Http $http = null;
@@ -78,6 +81,18 @@ class Engine extends EventEmitter
         public readonly FpsCounter $fps,
     ) {
         self::$instance = $this;
+    }
+
+    /** The engine extensions the game requires (Composer type jumphp-extension): all(), has(), load($file). */
+    public function extensions(): Extensions
+    {
+        return $this->extensions ??= new Extensions();
+    }
+
+    /** @internal Application sets it at boot */
+    public function setExtensions(Extensions $extensions): void
+    {
+        $this->extensions = $extensions;
     }
 
     /** The running engine, for code that has no access to it (entities created with new). */
@@ -112,7 +127,8 @@ class Engine extends EventEmitter
         $this->actions->load($c->file('input.yaml')['actions'] ?? []);
         $this->input->on('quit', fn () => $this->quit());
         $this->input->on('key', fn (int $key) => $this->globalKey($key));
-        if (!Platform::isWasm() && Platform::setting('JUMPHP_TOUCH_CONTROLS')) {
+        if (!Platform::isWasm() && Platform::setting('JUMPHP_TOUCH_CONTROLS') && $c->get('touch') !== false) {
+            // (touch: false: an app of forms, JumPHP\Gui, touched directly)
             // the native Android / iOS app: the on-screen controls of the browser version (engine/web/touch.js), drawn here
             $controls = new \JumPHP\Input\TouchControls($this->input->getKeyboard(), $this->input->getMouse(), $this->input,
                 (array)$c->get('touch', []), $this->font());
@@ -135,7 +151,7 @@ class Engine extends EventEmitter
         $hot = HotReload::pending();
         [$scene, $params] = $hot ?? $this->startScene();
         if ($scene === null) {
-            throw new \RuntimeException('No first scene: set game.start_scene in config/game.yaml');
+            throw new \RuntimeException('No first scene: set start_scene in config/project.yaml (or config/game.yaml)');
         }
         $this->scenes->switchTo($scene, $params, false);
         if ($hot !== null) {
@@ -185,6 +201,13 @@ class Engine extends EventEmitter
         $renderer = $this->sdl->getRenderer();
         $this->bridge->poll();
         $this->input->poll($renderer);
+        if ($this->config->get('view') === 'window') {
+            // apps (JumPHP\Gui): the view is the window, pixel for pixel, whatever its size
+            [$ow, $oh] = $renderer->outputSize();
+            if ($ow > 0 && $oh > 0 && ($ow !== $renderer->getWidth() || $oh !== $renderer->getHeight())) {
+                $renderer->resizeView($ow, $oh);
+            }
+        }
         if ($this->net !== null && $this->net->isActive()) {
             $this->net->poll();
         }
@@ -201,11 +224,28 @@ class Engine extends EventEmitter
         }
         $renderer->beginFrame($this->config->get('background'));
         $this->scenes->render($renderer);
+        $this->drawCaptions($renderer);
         if ($this->debug) {
             $this->drawDebug();
         }
         $renderer->endFrame();
         $this->frame++;
+        $this->emit('rendered');
+    }
+
+    private ?\JumPHP\Renderer\Captions $captions = null;
+    private bool $captionsRead = false;
+
+    /** JUMPHP_CAPTIONS=<json list>: timed captions over the whole game (a film of it: bin/jumphp video:replay --caption). */
+    private function drawCaptions(Renderer $renderer): void
+    {
+        if (!$this->captionsRead) {
+            $this->captionsRead = true;
+            $json = (string)Platform::setting('JUMPHP_CAPTIONS', '');
+            $list = $json !== '' ? json_decode($json, true) : null;
+            $this->captions = is_array($list) && $list ? \JumPHP\Renderer\Captions::fromList($list) : null;
+        }
+        $this->captions?->render($renderer, $this->font(), $this->time, $renderer->getWidth(), $renderer->getHeight());
     }
 
     /** Browser: one frame, then one turn of the event loop (the game's timers). */
@@ -346,6 +386,9 @@ class Engine extends EventEmitter
         if ($window !== null) {
             $window->toggleFullscreen();
             $this->options->set('fullscreen', $window->isFullscreen());
+        } else {
+            // no SDL window (a game embedded in a Tauri window: JumPHP\Tauri\EmbeddedGame): whoever shows it
+            $this->emit('fullscreen-request');
         }
     }
 

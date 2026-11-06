@@ -1,0 +1,21 @@
+# A desktop app (ui: webview). Every key is optional (docs/tauri.md).
+project:
+  id: skeleton-app              # lower case, unique: also the app's identifier and its data folder
+  title: "JumPHP App"
+  version: 0.1.0
+  description: "A JumPHP desktop app: HTML / CSS pages, PHP behind them."
+  lang: en
+  ui: webview                   # a desktop app (Tauri), not an SDL game: bin/jumphp app:* commands
+  main: App\Main                # its boot(App $app) registers the commands the pages call
+  app:
+    pages: ui                   # the folder of the HTML / CSS / JS pages (served as tauri://localhost/)
+    tick_hz: 60                 # frames a second when nothing happens (timers, HTTP, tasks)
+    native_commands: true       # pages may call jumphp.invoke('native.open' / 'native.message' / ...)
+    window:                     # the main window
+      url: index.html
+      width: 960
+      height: 640
+      min_width: 480
+      min_height: 320
+      resizable: true
+      devtools: false           # true: the WebView inspector opens with the window

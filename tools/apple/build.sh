@@ -13,6 +13,9 @@
 #      iPad: to sign with an Apple developer account), <game>-<version>-ios-simulator.zip (Xcode's simulator)
 # Without an Apple signing identity the apps are signed "ad hoc": the macOS app opens after a right click > Open (or
 # xattr -dr com.apple.quarantine), the .ipa is signed for a device with an Apple account (docs/apple.md).
+# A desktop app (ui: webview, AGENTS.md §16) is not built this way: its iPhone / iPad app is a WKWebView on its browser
+# build (dist/web, made by bin/jumphp build before), tools/apple/webview/main.m; no PHP to build (PHP is the
+# WebAssembly of the page). Its Mac app is Tauri's (bin/jumphp app:export --macos).
 # Environment: GAME, PLATFORMS (default "macos ios"), BUNDLE_ID (default io.github.jumphp.<game>), VERSION (1.0),
 # BUILD (1), JUMPHP_APPLE_CACHE (default ~/.jumphp/apple). Needs: Xcode, cmake, autoconf, php (8.2+, with gd) on PATH.
 set -euo pipefail
@@ -122,6 +125,7 @@ php_tree() {
   # php-sdl: PHP 8.5 (zend_ce_exception), no SDLCALL before a call, its header in src/ (registry/src/Extension/sdl.php)
   perl -pi -e 's/zend_exception_get_default\(\)/zend_ce_exception/g; s/= SDLCALL SDL_/= SDL_/g' "$tree"/ext/sdl/src/*.[ch]
   printf '/* phpext_sdl_ptr */\n#include "src/php_sdl.h"\n' > "$tree/ext/sdl/php_sdl.h"
+  (cd "$tree/ext/sdl" && git apply -p1 "$ROOT/docker/ext/php-sdl-events.patch")
   # PHP-OpenGL: JumPHP's patch, then OpenGL (ES on iOS) from SDL at run time (registry/functions.php)
   (cd "$tree/ext/opengl" && git apply -p1 "$ROOT/docker/ext/php-opengl.patch")
   php -r 'require $argv[1]; jumphp_gl_loader($argv[2], false);' "$REGISTRY/functions.php" "$tree/ext/opengl"
@@ -147,7 +151,7 @@ build_php() {
   target "$t"
   # the key: what makes PHP (versions, the extensions' config.m4, the functions php_tree, target and build_php)
   local key; key="$( { echo "$PHP_VERSION $LIBPNG_VERSION $OPENSSL_VERSION $MESA_VERSION $(xcrun --sdk "$SDK" --show-sdk-version)";
-    cat "$ROOT"/tools/android/ext/*.m4 "$ROOT/docker/ext/php-opengl.patch" "$REGISTRY/functions.php";
+    cat "$ROOT"/tools/android/ext/*.m4 "$ROOT/docker/ext/php-opengl.patch" "$ROOT/docker/ext/php-sdl-events.patch" "$REGISTRY/functions.php";
     declare -f php_tree target build_php; if [ "${SDK#iphone}" != "$SDK" ]; then declare -f ios_configure ios_config_h; fi; } | sha | cut -c1-12)"
   local out="$CACHE/php/$t-$key"
   [ -f "$out/lib/libphp.a" ] && { ln -sfn "$(basename "$out")" "$CACHE/php/$t"; return 0; }
@@ -200,8 +204,9 @@ build_php() {
 game_config() {
   php -r '
     require $argv[1] . "/vendor/autoload.php";
-    $c = Symfony\Component\Yaml\Yaml::parseFile($argv[1] . "/config/game.yaml");
-    $g = $c["game"] ?? $c;
+    $f = $argv[1] . "/config/project.yaml";
+    $c = Symfony\Component\Yaml\Yaml::parseFile(is_file($f) ? $f : $argv[1] . "/config/game.yaml");
+    $g = $c["project"] ?? $c["game"] ?? $c;
     $bg = $g["pwa"]["background_color"] ?? $g["background"] ?? [0, 0, 0];
     $bg = is_string($bg) ? $bg : vsprintf("#%02x%02x%02x", array_slice(array_map("intval", $bg), 0, 3));
     $name = $g["pwa"]["short_name"] ?? $g["title"] ?? $argv[2];
@@ -363,10 +368,80 @@ ios_apps() {
   echo "IOS_SIMULATOR_APP=$IOS_APP"
 }
 
-[ -n "${GAME:-}" ] || die "GAME: a folder of games/"
-GAME_DIR="$ROOT/games/$GAME"
-[ -d "$GAME_DIR" ] || die "no games/$GAME"
-[ -f "$GAME_DIR/vendor/autoload.php" ] || die "games/$GAME has no vendor/ (composer install)"
+# webview_bundle <target> <folder>: a desktop app (ui: webview) on an iPhone / iPad (or the simulator):
+# tools/apple/webview/main.m (a WKWebView) and the app's browser build in <id>.app/web/
+webview_bundle() {
+  local t="$1" dest="$2" platform
+  target "$t"
+  platform=iPhoneOS; [ "$SDK" = iphonesimulator ] && platform=iPhoneSimulator
+  local app="$dest/$ID.app"
+  say "the app for $t (a WKWebView on dist/web)"
+  rm -rf "${dest:?}" && mkdir -p "$app"
+  xcrun --sdk "$SDK" clang -fobjc-arc -O2 -target "$TRIPLE" -isysroot "$(xcrun --sdk "$SDK" --show-sdk-path)" \
+    -framework UIKit -framework WebKit -framework UserNotifications -framework Foundation -framework CoreGraphics \
+    "$HERE/webview/main.m" -o "$app/$ID" || die "the WebView app failed to build for $t"
+  cp -R "$GAME_DIR/dist/web" "$app/web"
+  cat > "$app/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleExecutable</key><string>$ID</string>
+  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>$(xml "$NAME")</string>
+  <key>CFBundleDisplayName</key><string>$(xml "$NAME")</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
+  <key>CFBundleSupportedPlatforms</key><array><string>$platform</string></array>
+  <key>DTPlatformName</key><string>$SDK</string>
+  <key>DTSDKName</key><string>$SDK$(xcrun --sdk "$SDK" --show-sdk-version)</string>
+  <key>MinimumOSVersion</key><string>$IOS_MIN</string>
+  <key>LSRequiresIPhoneOS</key><true/>
+  <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+  <key>UILaunchScreen</key><dict/>
+  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+  <key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+  <key>ITSAppUsesNonExemptEncryption</key><false/>
+</dict>
+</plist>
+EOF
+  local assets="$CACHE/app/$GAME/Assets-$t.xcassets"
+  rm -rf "${assets:?}" && mkdir -p "$assets/AppIcon.appiconset"
+  php "$HERE/icon.php" "$GAME_DIR" "$BG" "$NAME" 1024 "$assets/AppIcon.appiconset/icon-1024.png"
+  printf '{"info":{"author":"xcode","version":1}}\n' > "$assets/Contents.json"
+  printf '{"images":[{"filename":"icon-1024.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}\n' \
+    > "$assets/AppIcon.appiconset/Contents.json"
+  xcrun actool "$assets" --compile "$app" --platform "$SDK" --minimum-deployment-target "$IOS_MIN" --app-icon AppIcon \
+    --target-device iphone --target-device ipad --output-partial-info-plist "$CACHE/app/$GAME/partial-$t.plist" \
+    --output-format human-readable-text > "$CACHE/app/$GAME/actool-$t.out" 2>&1 || { cat "$CACHE/app/$GAME/actool-$t.out"; die "actool failed"; }
+  /usr/libexec/PlistBuddy -c "Merge $CACHE/app/$GAME/partial-$t.plist" "$app/Info.plist" >/dev/null
+  printf 'APPL????' > "$app/PkgInfo"
+  codesign --force --sign - --timestamp=none "$app" >/dev/null
+  IOS_APP="$app"
+}
+
+# webview_ios: the .ipa and the simulator's app of a desktop app, as ios_apps does for a game
+webview_ios() {
+  [ -f "$GAME_DIR/dist/web/index.html" ] || die "no $GAME_DIR/dist/web: bin/jumphp build $GAME first (the app's browser build)"
+  mkdir -p "$CACHE/app/$GAME"
+  webview_bundle ios-arm64 "$OUT/ios"
+  rm -rf "${OUT:?}/ios/Payload" && mkdir -p "$OUT/ios/Payload" && cp -R "$IOS_APP" "$OUT/ios/Payload/"
+  rm -f "${OUT:?}/${GAME:?}-${VERSION:?}-ios.ipa"
+  (cd "$OUT/ios" && zip -qry "../$GAME-$VERSION-ios.ipa" Payload) && rm -rf "${OUT:?}/ios/Payload"
+  echo "IOS_APP=$IOS_APP"
+  webview_bundle iossim-arm64 "$OUT/ios-simulator"
+  rm -f "${OUT:?}/${GAME:?}-${VERSION:?}-ios-simulator.zip"
+  ditto -c -k --keepParent "$IOS_APP" "$OUT/$GAME-$VERSION-ios-simulator.zip"
+  echo "IOS_SIMULATOR_APP=$IOS_APP"
+}
+
+[ -n "${GAME:-}" ] || die "GAME: a folder of games/ or apps/"
+GAME_DIR="$ROOT/games/$GAME"; [ -d "$GAME_DIR" ] || GAME_DIR="$ROOT/apps/$GAME"
+[ -d "$GAME_DIR" ] || die "no games/$GAME nor apps/$GAME"
+[ -f "$GAME_DIR/vendor/autoload.php" ] || die "$GAME_DIR has no vendor/ (composer install)"
 PLATFORMS="${PLATFORMS:-macos ios}"
 BUNDLE_ID="${BUNDLE_ID:-io.github.jumphp.$GAME}"
 VERSION="${VERSION:-1.0}"
@@ -378,6 +453,20 @@ HEIGHT="$(game_config "$GAME_DIR" height)"
 BG="$(game_config "$GAME_DIR" background)"
 OUT="$GAME_DIR/dist/apple"
 mkdir -p "$OUT"
+
+# a desktop app (ui: webview): the WKWebView app, nothing else to build
+yaml="$GAME_DIR/config/project.yaml"; [ -f "$yaml" ] || yaml="$GAME_DIR/config/game.yaml"
+if grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$yaml"; then
+  for p in $PLATFORMS; do
+    case "$p" in
+      ios) say "$NAME ($BUNDLE_ID $VERSION, build $BUILD): a desktop app on iOS"; webview_ios ;;
+      macos) say "macOS: a desktop app's Mac app is Tauri's: bin/jumphp app:export $GAME --macos" ;;
+      *) die "PLATFORMS: macos, ios" ;;
+    esac
+  done
+  say "done: $(cd "$OUT" && ls -1 ./*.zip ./*.ipa 2>/dev/null | tr '\n' ' ')"
+  exit 0
+fi
 
 sources
 case "${STAGE:-all}" in

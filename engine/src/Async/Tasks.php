@@ -42,7 +42,8 @@ final class Tasks
     /** 'threads' (TrueAsync), 'workers' (browser Web Workers) or 'frames' (main thread, between frames). */
     public static function backend(): string
     {
-        if (PHP_ZTS && function_exists('Async\spawn_thread')) {
+        // under Xdebug (step debugging) TrueAsync's threads crash PHP: the jobs run between frames, where breakpoints work
+        if (PHP_ZTS && function_exists('Async\spawn_thread') && !extension_loaded('xdebug') && !extension_loaded('php_debugger')) {
             return 'threads';
         }
         return WebWorkers::available() > 0 ? 'workers' : 'frames';

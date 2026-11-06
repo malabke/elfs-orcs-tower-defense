@@ -8,6 +8,7 @@ use Package\Target\php;
 use StaticPHP\Attribute\Package\BeforeStage;
 use StaticPHP\Attribute\Package\Extension;
 use StaticPHP\Attribute\PatchDescription;
+use StaticPHP\Exception\BuildFailureException;
 use StaticPHP\Package\PhpExtensionPackage;
 
 /** php-sdl: zend_exception_get_default() is gone since PHP 8.5 (as in docker/desktop and docker/engine-wasm). */
@@ -30,6 +31,21 @@ class sdl extends PhpExtensionPackage
         // PHP's list of built-in extensions includes the ext/<name>/*.h that name phpext_ (build/print_include.awk):
         // php-sdl's is in src/
         file_put_contents("{$this->getSourceDir()}/php_sdl.h", "/* phpext_sdl_ptr */\n#include \"src/php_sdl.h\"\n");
+        $this->patchEvents();
+    }
+
+    /** JumPHP's events (wheel, text input): docker/ext/php-sdl-events.patch, as the desktop runtime has it. */
+    private function patchEvents(): void
+    {
+        $dir = $this->getSourceDir();
+        if (str_contains((string)file_get_contents("$dir/src/event.c"), 'SDL_TEXTEDITING:')) {
+            return;
+        }
+        $patch = dirname(__DIR__, 4) . '/ext/php-sdl-events.patch';
+        exec('cd ' . escapeshellarg($dir) . ' && git apply -p1 ' . escapeshellarg($patch) . ' 2>&1', $out, $code);
+        if ($code !== 0) {
+            throw new BuildFailureException("php-sdl-events.patch does not apply:\n" . implode("\n", $out));
+        }
     }
 
     #[BeforeStage('php', [php::class, 'buildconfForWindows'], 'ext-sdl')]

@@ -1,28 +1,64 @@
 # TODO
 
+**Later (on hold): [TODO-AFTER.md](TODO-AFTER.md)** (signing).
+
+**Urgent first: [TODO-URGENT.md](TODO-URGENT.md)** (what is left of the repository / publishing fixes), then [TODO-FIRST.md](TODO-FIRST.md).
+
 ## Desktop apps (Tauri): the next targets
 
-Done: Linux, Windows, macOS runtime (workflow `tauri`), clipboard, tray, global shortcuts, hybrid games, Linux and
-Windows one-file export (docs/tauri.md).
+Done: Linux, Windows, macOS runtime (workflow `tauri`), clipboard, tray, global shortcuts, menus, hybrid games (two
+windows, or the game inside the Tauri window: `app.embed`), one-file export for Linux and Windows, an `.app` for
+macOS (workflow `app-export` opens it on two Macs), updates (`app:release`, `JumPHP\Tauri\Updater`), the same app
+in the browser and on phones (`bin/jumphp build <app>`, `JumPHP\Tauri\BrowserRuntime`). docs/tauri.md.
 
-- macOS export: an .app / .dmg with PHP + the universal library (reuse `bin/jumphp apple`'s pipeline)
-- Android / iOS: Tauri's mobile loop is driven by the activity / UIKit; a Tauri mobile project embedding the PHP
-  build of `docker/android-native` / the Apple apps, calling PHP's frame from there (`run_return` does not exist on iOS)
-- SDL inside a WebView window (one window for hybrid games)
-- auto-update (tauri-plugin-updater: signing keys, an update endpoint), window menus
+- Android / iOS as native apps for DESKTOP (HTML) apps, `ui: webview`: done 2026-11-04 (not committed yet): the app's
+  browser build in the phone's WebView + a bridge (save, notify, open, share, clipboard) used by jumphp-app.js;
+  `bin/jumphp android <app>` (tools/android/webview; tried in an emulator with hello-desktop: PHP answers, Save as opens
+  the system dialog) and `bin/jumphp ios <app>` (tools/apple/webview/main.m, a WKWebView; NOT tried yet: run the
+  apple workflow once on a webview app and fix). docs/tauri.md, android-native.md, apple.md.
+- done (2026-11-04, not released): the installers offer a "start with the computer" box (project.yaml app.autostart;
+  jumphp2installer's `autostart` step, needs its 0.2.9 release: bin/jumphp only shows the box when the base installers have it)
+- services / daemons in PHP: done 2026-11-04 (JumPHP 0.5.6): project.yaml `service:`, `JumPHP\Service\Daemon`,
+  `bin/jumphp service:install / uninstall / status / logs / start / stop / print` (tools/service.sh: systemd user or
+  system units, launchd plists, WinSW on Windows), docs/services.md. Tried on Linux in a systemd container (user and
+  system units, restart after kill -9, clean stop, logs, uninstall). Left: try macOS (launchd) and Windows (WinSW) for
+  real, the installers' step `service`
 
-## Apple apps: signing, TestFlight, the App Store (needs the Apple developer account)
+## Engine extensions (Composer packages that extend JumPHP, mostly for games)
 
-`bin/jumphp apple <game>` (docs/apple.md) builds the macOS app (.dmg, Apple silicon + Intel), the iPhone / iPad
-app (.ipa) and the simulator's app on GitHub's Macs, and tries them there; they are signed ad hoc. With the account
-(99 $ a year):
+Done (2026-11-04, JumPHP 0.5.6): the contract (`type: jumphp-extension`, `extra.jumphp`: services, services_file, boot,
+loaders, config defaults; found from installed.json at boot, in the browser build too), `bin/jumphp extension:new`
+(skeleton-extension/) and `extension:add`, extensions/particles (+ games/particles-demo), extensions/physics and
+extensions/shorts with `bin/jumphp video:make` (the TikTok / Shorts video maker, games/shorts-demo), published games on
+jumphp.net getting their extensions (also for run_tests), the directory https://jumphp.net/extensions; docs/extensions.md,
+docs/video-maker.md, AGENTS.md §20.
 
-- macOS: Developer ID certificate in the repository's secrets, `codesign --options runtime` + `notarytool` +
-  `stapler` in the workflow: opens without the right click
-- iOS: distribution certificate + provisioning profile (or automatic signing with an App Store Connect API key),
-  the .ipa signed, uploaded to TestFlight (`xcrun altool --upload-app` / the App Store Connect API), then the store
-  listing (screenshots: the simulator's, as check.sh takes them)
-- a playground "Apple" section (bundle id, as the Android one) when the App Store is reached
+Left:
+- the other extensions: a 3D engine (meshes, cameras, lights on
+  OpenGL / WebGL), the tiles extension's level editor is the IDE's existing Tiled editor: `Level::toTiledJson()` writes a generated level as a .tmj to finish by hand (done 2026-11-05); a particle editor with a live preview.
+  Done (2026-11-05): the dialogue / quest extension, `jumphp/dialogue` (JSON dialogues with conditions, variables, a quest log, a typewriter
+  text box); the collision extension, `jumphp/collision` (circles, boxes, convex polygons, SAT with the minimum translation, rays, spatial
+  hash, a CollisionWorld service); and the SDL effects extension, `jumphp/effects` (transitions, flash, vignette, easing; docs and samples), made with
+  `extension:new`. Published (2026-11-05): `davidnurdin/jumphp-effects`, `-collision`, `-dialogue` and `-tiles` created on GitHub and submitted on Packagist, tag v0.5.11 pushed by the split
+- JumPHP's own extensions on Packagist: done (2026-11-04): jumphp/particles, physics, shorts submitted on packagist.org (repos
+  davidnurdin/jumphp-<id>, tag v0.5.6; Packagist account = "Log in with GitHub"). Left: the secret EXTENSIONS_SPLIT_TOKEN (fine-grained
+  token, Contents read/write on the 3 repos; David creates it) so extensions-split.yml pushes each new tag (Packagist's own hook is on: the 3
+  packages say "auto-updated")
+- an extension shipping its IDE plugin (its files in a tool window / editor tab, completion of its config keys)
+- "JumPHP extension" as a project kind in the IDE's New Project; extension:new tested in CI (desktop + webshot)
+- done (2026-11-04): the video maker: timed captions (Captions: plain / box / pop / type), `video:replay` (a film of any game from scripted or
+  recorded input, `JUMPHP_INPUT_RECORD`, its sound logged by `JUMPHP_AUDIO_LOG` and mixed offline), Tools > Video Preview… in the IDE (live frames).
+  Also done (0.5.9): captions over ANY game in video:replay (JUMPHP_CAPTIONS, engine-drawn), the input recorder sees taps shorter than a frame.
+  Left: the preview with sound, a film of a network game
+
+## CLI apps on jumphp.net: what is left
+
+Done (2026-11-04, JumPHP 0.5.6): questions, hidden answers, Ctrl+C and full-screen symfony/tui screens in the web terminal
+(PHP in a Web Worker waiting on a SharedArrayBuffer).
+- browsers without Document-Isolation-Policy (Firefox, Safari): inside the playground's frame they get a link to a tab of
+  its own; try them for real
+- fibers in the WebAssembly engine (PHP's ucontext fallback: `getcontext` is missing) would let Revolt's own drivers run
+- an app making its own `new SymfonyStyle` / `new QuestionHelper` still shows hidden answers (no signal from Symfony)
 
 ## Without PHP at run time: illegalstudio (to study)
 
@@ -50,10 +86,36 @@ What blocks or needs work:
 First step: Pong or hello-world compiled by elephc on Linux, to see what passes and the speed gained. PHP stays
 the default (Windows, Android).
 
+### Tried (2026-11-01, elephc 0.27.6 built from its sources, Linux x86_64, in Docker)
+
+- **Speed**, same script, compiled vs PHP 8.5 (JIT off): 100 balls x 100 000 steps of physics (objects, floats)
+  **0.63 s vs 1.69 s (2.7x faster)**; but 10 000 x 1 000 additions over an integer array **1.84 s vs 0.19 s
+  (10x slower)**: its arrays are slower than PHP's. Executable: 0.9 MB, static.
+- **SDL through `extern`** works: SDL2 declared in PHP (`extern "SDL2" { function SDL_Init(...)... }`), a software
+  renderer, 600 frames, events polled, pixels read back right. The engine's SDL calls could be declared this way.
+- **Engine classes**: `Util\Math` and `Physics\Aabb` compile unchanged and print exactly PHP's results;
+  `Util\Color` stops at `public static function of(...): self` ("expects Color, got self").
+- **Language**: namespaces, interfaces, traits, abstract classes, enums, generators, closures with `use`,
+  `new $class()`, `match`, `$fn()` / `$obj->$m()` / `call_user_func`, `json_encode`, `sprintf`: pass.
+  Refused: references (`&$a['x']`), `pack()` / `unpack()` (JumPHP's network messages), `spl_object_id()`, a closure
+  `fn (string $c): Scene => new $c()` (return type "mixed"), `: self`; regex needs its native package (pcre2);
+  `$this->listeners[$ev] ?? []` warns "Undefined array key" where PHP does not.
+- Not tried: Symfony DependencyInjection, ReactPHP, a whole game.
+
+**Verdict**: not yet for whole games: the engine relies on what is refused (references, pack, `self`, DI,
+ReactPHP), and array-heavy code (tile maps, collisions) would be slower. Worth following: plain classes compile
+as they are, and objects / floats run ~3x faster. Next step when elephc grows: a "native" build of the engine's
+pure parts (physics, tile collisions) as a PHP extension (`--emit phpext`), PHP keeping the rest.
+
 ## Full native apps in PHP: every system's APIs, an optional HTML / JS / CSS layer, an IDE (likely, by David)
 
 Beyond games: any kind of app written in PHP, with the same packaging (`bin/jumphp android`, `export:standalone`,
-later iOS).
+`bin/jumphp apple`).
+
+Done already: the HTML / JS / CSS layer on the desktop and in the browser (desktop apps, Tauri: WebKitGTK, WebView2,
+WKWebView; §16), apps drawn natively without HTML (JumPHP\Gui, §17), CLI apps (§18), services, and the IDE itself
+(JumPHP IDE, a JumPHP app with Claude inside). Left: the systems' own APIs through FFI, and the HTML layer on phones
+(Android WebView / WKWebView: the "native Tauri apps" item above).
 
 - every system's APIs reachable from PHP through FFI: Android (JNI / NDK: sensors, camera, notifications, files,
   sharing...), Windows (Win32, WinRT), Linux (D-Bus, GTK...), macOS / iOS (Objective-C runtime, UIKit / AppKit),
@@ -64,7 +126,157 @@ later iOS).
 - in the long run: an IDE (a software, itself a JumPHP app) to develop every kind of app: the project, the code,
   run / test / package for each system, Claude inside
 
-## Cleaning
+## JumPHP IDE: the next features
 
-- the GitHub pre-release `standalone-1460857eb89286a9`: its Linux micro needs AVX-512 (built for GitHub's
-  processor, before docker/standalone/spc-target); no key points to it any more
+- to look into (David, 2026-11-05, not urgent): on his new PC `bin/jumphp run <game>` prints `amdgpu: unknown (family_id, chip_external_rev): (150, 193)`,
+  `libGL error: glx: failed to create dri3 screen` / `dri2 screen`, `failed to load driver: radeonsi`. Guess: the desktop Docker image's Mesa is too old for this
+  new AMD GPU (family 150), so GLX cannot make a hardware screen and SDL falls back to software (does the game still run, and how fast?). Ideas: a newer Mesa in
+  docker/desktop (backports / a newer base image), or when /dev/dri is passed and the driver fails, set `LIBGL_ALWAYS_SOFTWARE=1` (and `SDL_RENDER_DRIVER`) so the
+  messages and the failed attempts go away; check with `glxinfo -B` inside the container; find out whether the window really draws on the GPU or the CPU.
+- done (2026-11-05, IDE 0.1.43), problems reported by David and a colleague on Windows: "Commit All and Push…" (header button, Ctrl+Alt+K); the
+  Claude window's instructions say to commit at once; a tool returning a non-zero code is muted yellow (robocopy 1 = copied, not an error);
+  a project's clone is asked where to go (the default is the user's home, no longer the Temp folder, which Windows empties); the GitHub
+  account of a repository is pinned in its config (`credential.https://github.com.username`) so the terminal, Claude and the credential
+  manager of Windows use it when two accounts are signed in; "N↑" not pushed in the status bar; an update installed whose restart still
+  shows the older version is explained once (installed X, runs Y from <path>) instead of looping "update / Restart now". Permission requests
+  no longer close on an outside click since 0.1.32 (the colleague had an older IDE). Not reproduced (no Windows here): the update loop, whose
+  true cause may be a second copy of the IDE; the "sign in to jumphp.net again" after moving a project folder.
+- done (2026-11-05, IDE 0.1.47): the Claude window no longer goes back to the top of the conversation (reopening the IDE, a permission asked): it stays at the end (a ResizeObserver keeps it there while the window is shown / laid out again; someone who scrolled up is left where they are). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.56, 0.1.57): the language of the news, also at the bottom of the welcome screen beside the account, always visible (`uiLang()`: the one chosen in Settings or on the News tab, else `navigator.language`'s two letters; jumphp.net's 14 languages). The IDE's own texts are still English only: translating them all (a lang file per language, like the site) is a big job, not started.
+- done (2026-11-05, IDE 0.1.58): the welcome screen is translated and changes language AT ONCE when the selector (bottom of the screen, News tab, Settings) is used: `t('English text', {vars})` +
+  `loadLanguage()` in ide/ui/js/ui.js, one dictionary per language in ide/ui/js/i18n/<code>.js (the 13 languages besides English, 55 texts, a missing key shows the English text). Left: the rest of the
+  IDE (editor, menus, tool windows, dialogs, Settings...) is still English: wrap each text in `t()` and add it to the 13 files (a missing key shows English, so it can be done window by window);
+  the kinds' long descriptions in New Project. Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.55): a "News" tab on the welcome screen: the last news (whatsnew.get) and the IDE's update card (version, Check for updates, Download and install, Restart now; live through update.state). Left: a badge on the tab when an update is waiting, the JumPHP of the open project in the same card. Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.54): bugs David met in a project made on the server (JumPHP 0.5.8, no `.jumphp/jumphp.json`): the Play / ▶ of a sample failed ("unknown run configuration
+  run:<game>:<Scene>": the gutter's scene run is now an ad hoc run of the game), its "Source" button opened a path without the game folder (games/<id>/src/Extensions/...),
+  and the project's JumPHP was never updated (no record: now known by its VERSION file's tag, so only the user's own changes are asked about; "Later" lasts a day, not for
+  ever; installing an extension updates an old JumPHP first, `jumphp.supports` reads tools/ files). Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.53): what Claude must do for a user's engine extension (AGENTS.md section 20, skeleton-extension/package/AGENTS.md, the IDE's instructions to Claude):
+  code + tests, doc/index.md, ONE doc/samples/*.php per feature (LABEL, runnable alone), SamplesTest (in the skeleton's example game), README, extra.jumphp filled; publishing is the
+  user's click (Publish extension). The new extension's example game gets the SamplesTest from the skeleton.
+- done (2026-11-05, IDE 0.1.52, JumPHP 0.5.13): the samples of the engine extensions moved to `doc/samples/` (still read from `samples/`), three new ones (effects
+  EasingSample, collision WorldSample, dialogue QuestSample), `games/physics-demo`, a SamplesTest in every demo game (each sample 90 frames), the demo games autoload
+  and autowire `extensions/<id>/doc/samples/` (written by `extension:new` too); in the IDE a ▶ on the `class` line of a scene runs that scene only (JUMPHP_SCENE;
+  for an extension project's samples through `<id>-demo`), with Debug. Not tried in the GUI. Left: the same ▶ in the Run window's list of scenes.
+- done (2026-11-05, IDE 0.1.51): the settings (session.json, accounts, options, git credentials, Packagist token, recent projects) are copied into `~/.jumphp/ide-backup/`
+  (0600, every 5 minutes) and put back at start when the data folder lacks them (a reinstall by the installer, a cleaned cache); the Logs show where the settings
+  live and whether they were found. Cause of David's loss not found (no Windows here): a data folder of another user (an installer run elevated, whose "run the app"
+  step starts it with another profile's APPDATA) is the best guess: if the copy is in another profile's home it does not help: check "Settings folder:" in Logs
+  after a reinstall. The Logs window has its own icon (`logfile`), distinct from the Git log's.
+- done (2026-11-05, IDE 0.1.50): Publish extension submits / updates the package on Packagist itself (the user's Packagist user name + API token, kept in the IDE's
+  storage; Authorization header) and asks jumphp.net to refresh its directory (`POST /api/ide/extensions/refresh`, at most once a minute); jumphp.net: an extension has its
+  own page content (table extension_page: summary, features, demo, screenshots written by its author in the studio, "Modifier la page") and a views counter, shown with the
+  reviews' stars in "Mes extensions". Git client: the log's branch graph, Stage by Change (hunks, git apply --cached), conflicts by block, submodules (list / update / add),
+  SSH keys (list, generate, test). Escape no longer refuses a Claude permission request. Not done: extensions as a full jumphp.net project type (the same entity as games:
+  that would touch the publisher, the studio lists and the sitemap), staging by line (hunks only), a three-way conflict editor, passphrase-protected key generation,
+  ssh-agent management. Not tried in the GUI nor against Packagist / GitHub.
+- done (2026-11-05, IDE 0.1.49): an engine extension is created like a game (local, one commit, in the IDE's own PHP, no account); `Publish extension`
+  (the Publish button on such a project) puts the package in `<login>/jumphp-<id>` (made the first time, composer name `<login>/<id>`, tag v<version>, version asked,
+  next patch proposed) and opens Packagist's submit page; the welcome list tags it "extension"; jumphp.net's studio has "Mes extensions" (the directory's entries whose
+  vendor is the login). Left: submitting on Packagist from the IDE (needs the user's Packagist API token), a refresh of jumphp.net's directory right after a publish,
+  extensions as a real jumphp.net project type (reviews, stats, edit page). Not tried in the GUI nor against GitHub.
+- done (2026-11-05, IDE 0.1.48): the integrated Git client's missing parts, after an audit of what existed (status, stage / unstage, commit + amend, push, pull +
+  rebase, fetch --prune, branches, merge with conflict resolution, stash / pop, log, file history, blame, clone, per-project GitHub account): the commit
+  menu in the log (new branch, tag, cherry-pick, revert, reset), remotes, tags, stash list / apply / drop, branch rename, delete on the server,
+  force with lease, credentials for any https host (git-credentials.json in the IDE's storage), an explanation when git cannot sign in. Left: a graph of
+  the log, staging by hunk, SSH key management, a conflict editor beyond take ours / theirs / both, submodules. Not tried in the GUI.
+- done (2026-11-05, IDE 0.1.45): .md files open rendered (View / Edit / Edit + View, a small safe renderer: headings, lists, tables, code, quotes, links;
+  no images yet); the welcome screen's trash deletes a project's folder (red warning, type the name) and, with an unchecked box, its jumphp.net project
+  and GitHub repository (jumphp.net `DELETE /api/ide/projects/<slug>`; GitHub refuses without the delete_repo scope the sign-in does not ask for: the
+  repository's settings page is then offered; asking for that scope, with a second confirmation, is still to do). Not tried in the GUI.
+- done (2026-11-05, not released): a slug already taken on jumphp.net at import: the IDE retries with `<id>-<login>`, then `<id>-2` (the publisher finds the game folder itself).
+- done (2026-11-05, IDE 0.1.46): several GitHub accounts: sign in again from the account menu ("Add another GitHub account…": jumphp.net `/ide/connect?switch=1`
+  leaves the browser's session and GitHub asks which account), accounts kept in the IDE's storage (accounts.json), one assigned to each project
+  (`account` in .jumphp/ide.json, "Use <login> for this project"), switching changes the token git and jumphp.net use; the trash's repository
+  box asks GitHub's delete_repo right first (`/connect/github?extra=delete_repo`, `me.canDeleteRepo`), nothing is deleted before; pictures in .md
+  (relative to the file, none from the internet). Not tried in the GUI nor with two real accounts. Left: an integrated Git client.
+- done (IDE 0.1.39): Xdebug on a TUI app (the Debug of a CLI app runs in the Terminal, so its screens get a terminal under Xdebug) and Run / Debug icons
+  on a CLI app's commands, with remembered arguments (the two items below are the same work)
+- done (2026-11-05, not released): the Logs window (View > Logs, Alt+F11): the IDE's own events, the programs it runs (bin/jumphp, Docker, git,
+  Claude, OpenCode), filters (level, source, text), Pause / follow, Copy, a rotating file ide.log for bug reports (docs/ide.md "Logs").
+  Left: the game / app run's own output as a source, the plugins' errors with their plugin name, an "open the folder" button
+- "What's new": a section in the IDE linked to the site (and a page on jumphp.net), filled at each new feature (a
+  changelog entry written with the feature: title, short text, picture or GIF, the version), shown once after an
+  update, then reachable from Help; the site's page in the 14 languages. Make it part of the definition of done
+- an IDE for phones: a light version (maybe a "soft" one) that drives Claude, either on the phone itself (not sure it
+  can) or a computer's Claude through Remote Control (`/rc`): to study
+- TUI project under Xdebug not stopping: found (2026-11-04): `bin/jumphp run <cli app>` under JUMPHP_XDEBUG stops at a breakpoint (real DBGp
+  session, games/ and apps/, plain command and full-screen `ui` in a pty), but the IDE's Debug sent the run to the Run window (pipes: no terminal,
+  the app prints plain text, the screen's code never runs) because ide/ui/js/run.js only used the Terminal when no env was given. Fixed:
+  the env goes in front of the command line in the Terminal. NOT tried in the IDE itself yet: Debug a CLI app, break in src/Ui
+- Run / Debug icons on the line: done (2026-11-04, not tried in the IDE yet): ide/ui/js/gutter-run.js puts a ▶ in the gutter on every
+  `#[AsCommand(name: ...)]` line of a CLI app (menu: Run, Debug, Arguments… remembered per command, run in the Terminal). Left: the same on test
+  methods and on a game's / app's entry point
+
+- the debugger, what is left (done in IDE 0.1.13 and 0.1.31: Xdebug, breakpoints with conditions, the Debug window,
+  steps, watches, Run to Cursor, a variable's new value, stop at exceptions, Claude's debug_* tools in the IDE and in a
+  terminal through `bin/jumphp debug`; 2026-11-04: the async runtime (`jumphp/desktop-async-xdebug`, Xdebug's
+  development branch at a fixed commit: the 3.5 releases stop below PHP 8.6; TrueAsync's threads crash under Xdebug,
+  so `Tasks` runs the jobs between frames there, where breakpoints work) and desktop apps (`jumphp/tauri-xdebug`:
+  app:run / app:test), both tried with a real DBGp session): games in the browser / jumphp.net/ide (no Xdebug in
+  WebAssembly: a step debugger of its own?); try it on Windows / macOS (host.docker.internal), and
+  `bin/jumphp debug` there too (only tried on Linux: there its container listens on 0.0.0.0 with the port published)
+- plugins, what is left (done in IDE 0.1.24-0.1.27: the PHP plugin API, docs/ide-plugins.md, plugin:new / plugin:pack,
+  PluginTestCase, Tools > Plugins…, jumphp.net/ide-plugins: publish, install, update, plugins' tools for Claude on the
+  IDE's MCP server, updates: checked every 6 hours,
+  installed automatically if wanted; IDE 0.1.29: a plugin's own settings page): plugins in the web IDE: done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38), run in the visitor's
+  browser on the WebAssembly PHP (a Web Worker), writes through the web IDE's commands; MCP tools stay desktop only
+- done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): the IDE's resource editors: sprites (PNG), sound effects (.sfx.json -> .wav), music
+  (piano roll -> .wav), tilesets (.tsj with collisions) and levels (.tmj: layers, objects). Left: animated / flipped tiles
+- done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): AI generation in the resource editors ("Generate…": Claude through the local
+  `claude -p` for sprites, sounds, music and levels; OpenAI Images with the user's key for sprites)
+- done (2026-11-04, not released): "Generate…" also with OpenCode, online chat models with the user's key (OpenAI, Mistral, Groq,
+  OpenRouter, Gemini) and LOCAL ones (Ollama, LM Studio, llama.cpp, any OpenAI-compatible server: nothing leaves the computer), model
+  lists from the server, one retry with the refusal; Tools > OpenCode / Ask OpenCode… as a code assistant in the Terminal (docs/ide.md "AI").
+- done (2026-11-04, not released): OpenCode as the assistant of the Claude window (assistant selector, its events told as Claude's);
+  tileset generation (sheet + collisions, text models and picture services); real sounds and music from ElevenLabs (mp3 saved in the
+  project; only tried against fake answers, no key here). Left: other sound services (Stability Audio, a local AudioCraft server), a
+  text-to-sound model run locally, picture models run locally (Stable Diffusion servers), animated tiles in generated tilesets
+- done (2026-11-04, JumPHP 0.5.6 / IDE 0.1.38): Claude's usage in the IDE's Claude pane: the open conversation's context, the 5-hour
+  and the weekly limits with when they start again (from claude's rate_limit_event and its usage)
+
+## Windows: Docker through WSL, and a composer install that seemed to loop
+
+- done (2026-11-04, not tried on a real Windows yet): Docker inside WSL without Docker Desktop (tools/wsl.sh, the IDE's
+  Docker state `wsl`, docs/windows-wsl.md; the ide-windows workflow runs its tests). Before:
+  Docker inside WSL without Docker Desktop (Docker Engine installed in a WSL distribution: no Docker Desktop licence, often
+  faster): when `docker info` does not answer on Windows but `wsl -e docker info` does, run bin/jumphp inside WSL
+  (`wsl -e bash -lc 'cd "$(wslpath ...)" && bin/jumphp ...'`), from the IDE (JumPHP\Ide\Async\Docker: a "wsl" state,
+  the Runner wraps the commands) and from bin/jumphp itself. To try on a real Windows: the project on C:\ seen as /mnt/c
+  is slow in WSL (volumes in Docker even more): maybe offer to keep projects in the WSL file system (\\wsl$\...),
+  Docker Desktop staying the default (it runs on WSL 2 already).
+- Reported on Windows (2026-11-02): `composer install` of a new project seemed to run forever. Found (2026-11-03, on
+  GitHub's Windows, workflow ide-windows): the IDE could not start bin/jumphp at all on Windows (a bash script: nothing
+  ran it), and before that it waited for Docker (up to 4 min while Docker Desktop starts). Fixed in IDE 0.1.30: bin/jumphp
+  and `sh -c` go through Git for Windows' bash, a stopped run ends its whole tree. Left: try it on a real PC with
+  Docker Desktop (GitHub's Windows has no Linux containers): the first `composer install` of a new project, Run, Test.
+
+## Release follow-ups (2026-11-04)
+
+- iOS app of a desktop (HTML) app: done (2026-11-04): the link needed `-framework CoreGraphics` (tools/apple/build.sh); run 41907004407 on
+  hello-desktop passes and the simulator shot shows the app with PHP answering. Left: the HTML menu bar sits under the notch / status bar
+  (use `env(safe-area-inset-top)` in jumphp-app.js's bar on phones), try the .ipa on a real iPhone (needs the Apple account)
+- jumphp2installer 0.2.9: released (2026-11-04, the workflow re-run): the "start with the computer" box should show now; check it in an installer
+
+## jumphp.net: big downloads, to watch
+
+Seen 2026-11-02: two downloads of the installers out of six stopped half way through Cloudflare, ~0.4-3 MB/s.
+Tried again the same evening: three downloads whole (Linux 5.4 MB/s, macOS 1 MB/s, Windows 0.4 MB/s). Likely
+transient (David). The executables stay behind Cloudflare. If it comes back: a cache rule on /installers/download/
+(the download counted another way), FrankenPHP's file server instead of PHP streaming them, Range requests.
+
+## Projects: progress, branches, sharing
+
+- done (2026-11-04, jumphp.net, deployed): the Studio list: badges clickable in AJAX (published -> not published with a warning popup, the
+  directory, the stage in turn dev / beta / done), the thumbnail in the list (click: its settings; 📷: upload one, cut to 16:9; the
+  project page has a Vignette panel with a reset), an unpublished project stays offline (project.suspended: the push webhook and the
+  IDE's sync leave it alone until the owner publishes again). Left: the same badges on the project page itself, a "published" filter,
+  unpublishing in the IDE / MCP (update_project), the old published files of an unpublished project are not deleted
+- done (2026-11-03, JumPHP 0.5.6 / IDE 0.1.38): a project's progress set by its owner (`stage`: dev / beta / done; jumphp.net
+  Studio, `update_project stage`, the IDE's Publish > Settings); "ready" is now shown as "published"
+- done (2026-11-03, JumPHP 0.5.6 / IDE 0.1.38): `/rc` (or `/remote-control`) in the IDE's Claude pane: the conversation goes on
+  in the Terminal as `claude --remote-control --resume <session>`
+- done (2026-11-04, IDE 0.1.38): the IDE: branches and merges (create, switch, merge, conflicts: ours / theirs / both)
+- done (2026-11-04, JumPHP 0.5.6): a project shared with several users, each with read or read + write rights
+  (jumphp.net Studio, web IDE read only, MCP, the IDE). Left: try it with the real GitHub sign-in

@@ -1,9 +1,11 @@
 #!/bin/sh
 # Browser build, step 1 (runs in the desktop image, called by bin/jumphp build): a clean copy of the game in
-# .build/<game> with production dependencies (engine copied, not symlinked), the precompiled service
+# .build/<game> (without the films of assets/videos/: their pictures are there) with production dependencies (engine copied, not symlinked), the precompiled service
 # container, and the web page (index.html, game.json) in .build/<game>.web.
 # Step 2 is tools/package-web.sh (emscripten image).
 set -eu
+# config/project.yaml, else the older config/game.yaml (both read)
+project_yaml() { if [ -f "$1/config/project.yaml" ]; then echo "$1/config/project.yaml"; else echo "$1/config/game.yaml"; fi; }
 GAME_DIR="$1"                       # /workspace/games/<game>
 GAME_ID="$(basename "$GAME_DIR")"
 STAGE="/workspace/.build/$GAME_ID"  # two levels under /workspace, like games/<game>: ../../engine still resolves
@@ -13,7 +15,8 @@ rm -rf "$STAGE" "$WEB"
 mkdir -p "$STAGE" "$WEB"
 tar -C "$GAME_DIR" \
     --exclude=./vendor --exclude=./dist --exclude=./.build --exclude=./var --exclude=./cache \
-    --exclude=./tests --exclude=./site --exclude=./phpstan.neon --exclude='./core' --exclude='./core.[0-9]*' --exclude='./.git*' -cf - . | tar -C "$STAGE" -xf -
+    --exclude=./tests --exclude=./site --exclude=./phpstan.neon --exclude='./core' --exclude='./core.[0-9]*' --exclude='./.git*' \
+    --exclude='./assets/videos/*.mp4' --exclude='./assets/videos/*.webm' --exclude='./assets/videos/*.mov' --exclude='./assets/videos/*.mkv' --exclude='./assets/videos/*.avi' --exclude='./assets/videos/*.m4v' -cf - . | tar -C "$STAGE" -xf -
 mkdir -p "$STAGE/var"
 
 cd "$STAGE"
@@ -25,6 +28,7 @@ COMPOSER_MIRROR_PATH_REPOS=1 composer install --no-dev --optimize-autoloader --c
 rm -rf vendor/jumphp/engine/vendor vendor/jumphp/engine/tests vendor/jumphp/engine/web vendor/jumphp/engine/stubs \
        vendor/jumphp/engine/composer.lock vendor/jumphp/engine/phpstan.neon vendor/jumphp/engine/phpunit.xml*
 
-php /workspace/tools/dump-container.php "$STAGE"
+# desktop apps (ui: webview) have no service container
+grep -qE '^[[:space:]]*ui:[[:space:]]*["'"'"']?webview' "$(project_yaml "$STAGE")" || php /workspace/tools/dump-container.php "$STAGE"
 php /workspace/tools/render-web.php "$STAGE" "$WEB" /workspace/engine/web /workspace/build/engine
 echo "staged: $STAGE"

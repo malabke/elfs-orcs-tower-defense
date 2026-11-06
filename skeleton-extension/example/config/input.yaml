@@ -1,0 +1,2 @@
+actions:
+  flash: [Space, Return, pad0:a, touch:tap, mouse:1]

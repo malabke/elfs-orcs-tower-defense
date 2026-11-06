@@ -1,0 +1,432 @@
+<?php
+
+namespace JumPHP\Ide\Debug;
+
+use JumPHP\Ide\Async\Deferred;
+
+/**
+ * Step debugging with Xdebug (DBGp): the IDE listens on a port of this computer (127.0.0.1), the PHP runs started with
+ * JUMPHP_XDEBUG=<port> (bin/jumphp: the desktop image with Xdebug) connect to it. Breakpoints are kept here and given
+ * to every program that connects; a program stops at one (or after a step): event debug.paused with where and the
+ * stack, then the interface (or Claude's tools) asks the variables, evaluates, steps, resumes.
+ *
+ * Paths: Xdebug says file:///workspace/<path in the project> (bin/jumphp mounts the project at /workspace); a program
+ * run outside Docker says its real path: both are mapped to paths of the project.
+ *
+ * Events: debug.state {listening, port, sessions}, debug.paused {session, path, line, stack}, debug.running {session},
+ * debug.ended {session}, debug.output {session, text}.
+ */
+final class Debugger
+{
+    public const CONTAINER_ROOT = '/workspace';
+
+    /** @var resource|null */
+    private $server = null;
+    private int $port = 0;
+
+    /** @var array<int, Session> */
+    private array $sessions = [];
+    private int $nextSession = 1;
+
+    /** @var array<string, array<int, array{line: int, condition: ?string}>> path => line => breakpoint */
+    private array $breakpoints = [];
+
+    /** @var array<int, array<string, array{path: string, line: int}>> session => Xdebug breakpoint id => where */
+    private array $ids = [];
+
+    /** @var array<int, array<string, mixed>> session => where it stopped (path, line, stack) */
+    private array $paused = [];
+
+    /** @var array<int, string> session => the project's folder as that program sees it (/workspace in Docker) */
+    private array $roots = [];
+
+    /** @var list<string> exception classes that stop the program when thrown ('*': all of them) */
+    private array $exceptions = [];
+
+    /** @var array<int, array<string, string>> per session: exception class => its breakpoint id */
+    private array $exceptionIds = [];
+
+    /** @param callable(string $event, array $payload): void $emit */
+    public function __construct(private string $root, private $emit)
+    {
+        $this->root = rtrim(str_replace('\\', '/', $root), '/');
+    }
+
+    /**
+     * Starts listening (once); the port to give to JUMPHP_XDEBUG. $host 0.0.0.0: in a container whose port is published
+     * (bin/jumphp debug on macOS / Windows); $port first, else the usual ones.
+     */
+    public function listen(string $host = '127.0.0.1', ?int $port = null): int
+    {
+        if ($this->server !== null) {
+            return $this->port;
+        }
+        foreach (array_unique([...($port !== null ? [$port] : []), 9003, 9013, 9023, 0]) as $port) {
+            $server = @stream_socket_server("tcp://$host:$port", $code, $message);
+            if ($server !== false) {
+                stream_set_blocking($server, false);
+                $this->server = $server;
+                $name = (string)stream_socket_get_name($server, false);
+                $this->port = (int)substr($name, strrpos($name, ':') + 1);
+                $this->state();
+                return $this->port;
+            }
+        }
+        throw new \RuntimeException('the debugger cannot listen on this computer (no free port on 127.0.0.1)');
+    }
+
+    public function close(): void
+    {
+        foreach ($this->sessions as $session) {
+            $session->close();
+        }
+        $this->sessions = [];
+        if ($this->server !== null) {
+            @fclose($this->server);
+        }
+        $this->server = null;
+        $this->port = 0;
+        $this->state();
+    }
+
+    /** @return array<string, mixed> */
+    public function status(): array
+    {
+        return [
+            'listening' => $this->server !== null, 'port' => $this->port,
+            'sessions' => array_map(fn (Session $s) => ['id' => $s->id, 'status' => $s->status, 'paused' => $this->paused[$s->id] ?? null],
+                array_values($this->sessions)),
+            'breakpoints' => $this->breakpointList(),
+            'exceptions' => $this->exceptions,
+        ];
+    }
+
+    // breakpoints -----------------------------------------------------------------------------------------------
+
+    /**
+     * The breakpoints of a file (all of them: those not listed are removed), given at once to the running programs.
+     *
+     * @param list<array{line?: int, condition?: ?string}|int> $lines
+     */
+    public function setBreakpoints(string $path, array $lines): array
+    {
+        $path = $this->projectPath($path);
+        $new = [];
+        foreach ($lines as $line) {
+            $entry = is_array($line) ? $line : ['line' => $line];
+            $n = (int)($entry['line'] ?? 0);
+            if ($n > 0) {
+                $condition = trim((string)($entry['condition'] ?? ''));
+                $new[$n] = ['line' => $n, 'condition' => $condition !== '' ? $condition : null];
+            }
+        }
+        $old = $this->breakpoints[$path] ?? [];
+        if ($new) {
+            $this->breakpoints[$path] = $new;
+        } else {
+            unset($this->breakpoints[$path]);
+        }
+        foreach ($this->sessions as $session) {
+            foreach ($this->ids[$session->id] ?? [] as $id => $where) {
+                if ($where['path'] === $path && (!isset($new[$where['line']]) || $new[$where['line']] != ($old[$where['line']] ?? null))) {
+                    $session->command('breakpoint_remove', ['d' => $id]);
+                    unset($this->ids[$session->id][$id]);
+                }
+            }
+            foreach ($new as $n => $bp) {
+                if (!isset($old[$n]) || $old[$n] != $bp) {
+                    $this->sendBreakpoint($session, $path, $bp);
+                }
+            }
+        }
+        return $this->breakpointList();
+    }
+
+    /**
+     * Stop where an exception is thrown (caught or not): '*' every exception, or class names (Error, TypeError,
+     * App\\GameOver...). [] stops at none. Given at once to the running programs.
+     *
+     * @param list<string> $classes
+     * @return list<string>
+     */
+    public function setExceptionBreakpoints(array $classes): array
+    {
+        $this->exceptions = array_values(array_unique(array_filter(array_map(fn ($c) => ltrim(trim((string)$c), '\\'), $classes), fn ($c) => $c !== '')));
+        foreach ($this->sessions as $session) {
+            foreach ($this->exceptionIds[$session->id] ?? [] as $class => $bid) {
+                if (!in_array($class, $this->exceptions, true)) {
+                    $session->command('breakpoint_remove', ['d' => $bid]);
+                    unset($this->exceptionIds[$session->id][$class]);
+                }
+            }
+            $this->sendExceptions($session);
+        }
+        $this->state();
+        return $this->exceptions;
+    }
+
+    private function sendExceptions(Session $session): void
+    {
+        foreach ($this->exceptions as $class) {
+            if (isset($this->exceptionIds[$session->id][$class])) {
+                continue;
+            }
+            $this->exceptionIds[$session->id][$class] = '';
+            $session->command('breakpoint_set', ['t' => 'exception', 'x' => $class])->then(function (XmlNode $r) use ($session, $class): void {
+                $this->exceptionIds[$session->id][$class] = (string)$r->attr('id');
+            }, fn () => null);
+        }
+    }
+
+    public function clearBreakpoints(): array
+    {
+        foreach (array_keys($this->breakpoints) as $path) {
+            $this->setBreakpoints($path, []);
+        }
+        return [];
+    }
+
+    /** @return list<array{path: string, line: int, condition: ?string}> */
+    public function breakpointList(): array
+    {
+        $out = [];
+        foreach ($this->breakpoints as $path => $lines) {
+            foreach ($lines as $bp) {
+                $out[] = ['path' => $path, 'line' => $bp['line'], 'condition' => $bp['condition']];
+            }
+        }
+        return $out;
+    }
+
+    // the programs ------------------------------------------------------------------------------------------------
+
+    /** Accepts the programs that connect, reads what they said. The IDE calls it every frame. */
+    public function tick(): void
+    {
+        if ($this->server !== null) {
+            while (($socket = @stream_socket_accept($this->server, 0)) !== false) {
+                $session = new Session($this->nextSession++, $socket);
+                $this->sessions[$session->id] = $session;
+                $this->state();
+            }
+        }
+        foreach ($this->sessions as $id => $session) {
+            $messages = $session->poll();
+            foreach ($messages === false ? [] : $messages as $message) {
+                if ($message->localName() === 'init') {
+                    $this->started($session);
+                } elseif ($message->localName() === 'stream') {
+                    ($this->emit)('debug.output', ['session' => $id, 'text' => base64_decode($message->text)]);
+                }
+            }
+            if ($messages === false || !$session->isOpen()) {
+                $this->ended($session);
+            }
+        }
+    }
+
+    /** A program connected: the breakpoints, its output copied to the IDE, then it runs. */
+    private function started(Session $session): void
+    {
+        // in Docker (bin/jumphp) the project is /workspace; a program run on this computer sees its real folder
+        $script = str_replace('\\', '/', rawurldecode((string)preg_replace('#^file://#', '', (string)$session->init?->attr('fileuri', ''))));
+        $this->roots[$session->id] = str_starts_with($script, self::CONTAINER_ROOT . '/') ? self::CONTAINER_ROOT : $this->root;
+        $session->command('feature_set', ['n' => 'max_depth', 'v' => 1]);
+        $session->command('feature_set', ['n' => 'max_children', 'v' => 200]);
+        $session->command('feature_set', ['n' => 'max_data', 'v' => 4096]);
+        $session->command('feature_set', ['n' => 'resolved_breakpoints', 'v' => 1]);
+        foreach ($this->breakpoints as $path => $lines) {
+            foreach ($lines as $bp) {
+                $this->sendBreakpoint($session, $path, $bp);
+            }
+        }
+        $this->sendExceptions($session);
+        $this->resume($session->id, 'run');
+    }
+
+    private function sendBreakpoint(Session $session, string $path, array $bp): void
+    {
+        $args = ['t' => $bp['condition'] !== null ? 'conditional' : 'line', 'f' => $this->fileUri($path, $this->roots[$session->id] ?? self::CONTAINER_ROOT), 'n' => $bp['line']];
+        $session->command('breakpoint_set', $args, $bp['condition'])->then(function (XmlNode $r) use ($session, $path, $bp): void {
+            $this->ids[$session->id][(string)$r->attr('id')] = ['path' => $path, 'line' => $bp['line']];
+        }, fn () => null);
+    }
+
+    private function ended(Session $session): void
+    {
+        $session->close();
+        unset($this->sessions[$session->id], $this->ids[$session->id], $this->paused[$session->id], $this->roots[$session->id], $this->exceptionIds[$session->id]);
+        ($this->emit)('debug.ended', ['session' => $session->id]);
+        $this->state();
+    }
+
+    /**
+     * Resumes a stopped program: run (to the next breakpoint), step_over, step_into, step_out, or stop (ends it).
+     * Resolves once it stops again (with where), or ends.
+     */
+    public function resume(int $id, string $how = 'run'): Deferred
+    {
+        $session = $this->session($id);
+        if (!in_array($how, ['run', 'step_over', 'step_into', 'step_out', 'stop', 'detach'], true)) {
+            throw new \InvalidArgumentException("unknown step $how (run, step_over, step_into, step_out, stop)");
+        }
+        unset($this->paused[$id]);
+        $session->status = 'running';
+        ($this->emit)('debug.running', ['session' => $id]);
+        return $session->command($how)->then(function (XmlNode $r) use ($session, $how) {
+            $status = (string)$r->attr('status');
+            if ($status === 'break') {
+                // stopped by an exception: Xdebug says which, and its message
+                $message = $r->child('message');
+                $exception = $message !== null && $message->attr('exception') !== null
+                    ? ['class' => (string)$message->attr('exception'), 'message' => trim($message->text)] : null;
+                return $this->pausedAt($session, $exception);
+            }
+            if ($status === 'stopping' && $how !== 'stop' && $how !== 'detach') {
+                // the script ended: let it finish (its output, its exit)
+                $session->command('run');
+            }
+            return ['session' => $session->id, 'status' => $status];
+        }, function (\Throwable $e) use ($session) {
+            return ['session' => $session->id, 'status' => 'stopped'];
+        });
+    }
+
+    /**
+     * Runs to a line (Run to Cursor): a breakpoint used once, then run. It stops earlier at a breakpoint met on the way.
+     */
+    public function runTo(int $id, string $path, int $line): Deferred
+    {
+        $session = $this->session($id);
+        $path = $this->projectPath($path);
+        $session->command('breakpoint_set', ['t' => 'line', 'f' => $this->fileUri($path, $this->roots[$session->id] ?? self::CONTAINER_ROOT), 'n' => $line, 'r' => 1]);
+        return $this->resume($session->id, 'run');
+    }
+
+    /**
+     * Gives a variable of the stopped frame a new value: a PHP expression ($hero->lives = 9, "Ada", [1, 2], null...),
+     * evaluated there. Resolves with the variable as it is now.
+     */
+    public function setValue(int $id, string $fullname, string $expression, int $depth = 0): Deferred
+    {
+        $session = $this->session($id);
+        return $session->command('property_set', ['n' => $fullname, 'd' => $depth], $expression)->then(function (XmlNode $r) use ($session, $fullname, $expression, $depth) {
+            if ($r->attr('success') !== '1') {
+                throw new \RuntimeException("$fullname cannot be set to $expression");
+            }
+            return $session->command('property_get', ['n' => $fullname, 'd' => $depth])
+                ->then(fn (XmlNode $p) => ($c = $p->child('property')) !== null ? $this->property($c, true) : null);
+        });
+    }
+
+    /** @param array{class: string, message: string}|null $exception */
+    private function pausedAt(Session $session, ?array $exception = null): Deferred
+    {
+        return $session->command('stack_get')->then(function (XmlNode $r) use ($session, $exception) {
+            $stack = [];
+            foreach ($r->children('stack') as $frame) {
+                $stack[] = ['level' => (int)$frame->attr('level'), 'where' => (string)$frame->attr('where'),
+                    'path' => $this->fromUri((string)$frame->attr('filename')), 'line' => (int)$frame->attr('lineno')];
+            }
+            $top = $stack[0] ?? ['path' => null, 'line' => 0];
+            $paused = ['session' => $session->id, 'status' => 'break', 'path' => $top['path'], 'line' => $top['line'], 'stack' => $stack,
+                'exception' => $exception];
+            $this->paused[$session->id] = $paused;
+            ($this->emit)('debug.paused', $paused);
+            return $paused;
+        });
+    }
+
+    /**
+     * The variables of a frame of the stack (0: where it stopped): locals (context 0), or the superglobals (1), or
+     * the constants (2). Each one: name, type, class, value, and whether it has children (property()).
+     */
+    public function variables(int $id, int $depth = 0, int $context = 0): Deferred
+    {
+        return $this->session($id)->command('context_get', ['d' => $depth, 'c' => $context])
+            ->then(fn (XmlNode $r) => array_map($this->property(...), $r->children('property')));
+    }
+
+    /** The children of a variable (its fullname from variables(): $hero->weapon, $list[3]...). */
+    public function children(int $id, string $fullname, int $depth = 0, int $page = 0): Deferred
+    {
+        return $this->session($id)->command('property_get', ['n' => $fullname, 'd' => $depth, 'p' => $page])
+            ->then(fn (XmlNode $r) => ($p = $r->child('property')) !== null ? $this->property($p, true) : null);
+    }
+
+    /** Evaluates PHP in the stopped frame (an expression: $this->score * 2, count($enemies)...). */
+    public function evaluate(int $id, string $expression): Deferred
+    {
+        return $this->session($id)->command('eval', [], $expression)
+            ->then(fn (XmlNode $r) => ($p = $r->child('property')) !== null ? $this->property($p, true) : ['type' => 'null', 'value' => 'null']);
+    }
+
+    /** @return array<string, mixed> */
+    private function property(XmlNode $p, bool $withChildren = false): array
+    {
+        $value = $p->text;
+        if ($p->attr('encoding', '') === 'base64') {
+            $value = (string)base64_decode(trim($value));
+        }
+        $type = (string)$p->attr('type', '');
+        $children = (int)$p->attr('numchildren', '0');
+        $out = ['name' => (string)$p->attr('name', ''), 'fullname' => (string)$p->attr('fullname', ''), 'type' => $type, 'class' => $p->attr('classname'),
+            'value' => match ($type) {
+                'array' => "array($children)",
+                'object' => (string)$p->attr('classname', 'object'),
+                'null', 'uninitialized' => $type,
+                'bool' => trim($value) === '1' ? 'true' : 'false',
+                'string' => mb_strimwidth($value, 0, 400, '…'),
+                default => $value,
+            },
+            'children' => $children > 0 || $p->attr('children', '0') === '1'];
+        if ($withChildren && $p->children('property')) {
+            $out['items'] = array_map(fn (XmlNode $c) => $this->property($c), $p->children('property'));
+        }
+        return $out;
+    }
+
+    private function session(int $id): Session
+    {
+        if ($id === 0 && $this->paused) {
+            $id = (int)array_key_first($this->paused);
+        }
+        return $this->sessions[$id] ?? throw new \RuntimeException('no program being debugged' . ($id ? " (session $id)" : '') . ': run one with the debugger first');
+    }
+
+    private function state(): void
+    {
+        ($this->emit)('debug.state', $this->status());
+    }
+
+    // paths --------------------------------------------------------------------------------------------------------
+
+    /** A path of the project (relative), from one of Xdebug's file URIs. Null: outside the project. */
+    public function fromUri(string $uri): ?string
+    {
+        $path = rawurldecode((string)preg_replace('#^file://#', '', $uri));
+        $path = str_replace('\\', '/', (string)preg_replace('#^/([A-Za-z]:)#', '$1', $path));
+        foreach ([self::CONTAINER_ROOT, $this->root] as $root) {
+            if (str_starts_with($path, "$root/")) {
+                return substr($path, strlen($root) + 1);
+            }
+        }
+        return null;
+    }
+
+    /** The file URI Xdebug knows a path of the project by (inside Docker: /workspace/...; Windows: file:///C:/...). */
+    public function fileUri(string $path, string $root = self::CONTAINER_ROOT): string
+    {
+        $full = $root . '/' . implode('/', array_map('rawurlencode', explode('/', $this->projectPath($path))));
+        return 'file://' . (preg_match('#^[A-Za-z]:#', $full) ? '/' : '') . $full;
+    }
+
+    private function projectPath(string $path): string
+    {
+        $path = str_replace('\\', '/', $path);
+        if (str_starts_with($path, $this->root . '/')) {
+            $path = substr($path, strlen($this->root) + 1);
+        }
+        return ltrim((string)preg_replace('#^\./#', '', $path), '/');
+    }
+}

@@ -33,12 +33,33 @@ $manifest = [
     'lang' => $config['lang'],
     'net_url' => $config['net_url'],
     'touch' => $config['touch'] ?? null,
+    'view' => $config['view'] ?? 'fixed',
     'double_click_fullscreen' => (bool)($config['double_click_fullscreen'] ?? true),
     'thumbnail' => is_file("$game/assets/thumbnail.png") ? 'thumbnail.png' : null,
     'controls' => $config['controls'] ?? null,
     'engine' => ['name' => 'JumPHP', 'php' => $engineInfo['php'] ?? '8.3', 'network' => $engineInfo['network'] ?? null],
     'built' => gmdate('c'),
 ];
+if (($config['ui'] ?? null) === 'webview') {
+    // a desktop app in the browser (docs/tauri.md "In the browser"): its pages in app/, each with the bridge first
+    $manifest['ui'] = 'webview';
+    $pages = $game . '/' . trim((string)($config['app']['pages'] ?? 'ui'), '/');
+    if (is_dir($pages)) {
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($pages, FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            $rel = substr($file->getPathname(), strlen($pages) + 1);
+            $to = "$out/app/$rel";
+            @mkdir(dirname($to), 0777, true);
+            $body = (string)file_get_contents($file->getPathname());
+            if (preg_match('/\.html?$/i', $rel)) {
+                $up = str_repeat('../', substr_count($rel, '/') + 1);
+                $tag = '<script src="' . $up . 'jumphp-app-frame.js"></script>';
+                $body = preg_match('/<head[^>]*>/i', $body) ? (string)preg_replace('/<head[^>]*>/i', "$0\n$tag", $body, 1) : $tag . $body;
+            }
+            file_put_contents($to, $body);
+        }
+    }
+}
 if (is_array($config['pwa'] ?? false) || ($config['pwa'] ?? false) === true) {
     $manifest['pwa'] = true;
 }

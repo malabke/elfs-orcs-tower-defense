@@ -18,4 +18,7 @@ interface NativeRuntime
     public function send(array $command): void;
 
     public function version(): string;
+
+    /** The embedded game's newest picture (a BMP; ui: hybrid with app.embed), shown by its page. */
+    public function picture(string $bmp): void;
 }
