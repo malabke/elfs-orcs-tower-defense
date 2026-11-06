@@ -24,7 +24,6 @@ final class OptionsScene extends AbstractScene
     private const ROW_H = 30.0;
     private const BUTTON_W = 96.0;
     private const BUTTON_H = 24.0;
-    private const LABELS = ['sound' => 'SOUND', 'language' => 'LANGUAGE', 'fullscreen' => 'FULLSCREEN'];
 
     /** pushed over the side screen (not over the pause menu): it has QUIT on the desktop */
     private bool $overSides = false;
@@ -237,7 +236,12 @@ final class OptionsScene extends AbstractScene
             if ($i === $this->selected) {
                 Paint::round($r, $x, $y + 2, $w, $h - 4, 6, [255, 236, 190, 26]);
             }
-            $label = Lang::t(self::LABELS[$setting]);
+            // literal keys: tests/TranslationsTest.php finds them in the code
+            $label = match ($setting) {
+                'sound' => Lang::t('SOUND'),
+                'language' => Lang::t('LANGUAGE'),
+                default => Lang::t('FULLSCREEN'),
+            };
             [$from] = $this->control($i);
             $ls = Text::fitScale($font, $label, $from - $x - 18, 1);
             $font->draw($r, $label, $x + 8, $y + $h / 2 - $font->height($ls) / 2, $ls, $i === $this->selected ? [255, 228, 150] : Paint::CREAM, 'left', [16, 20, 36]);
@@ -249,7 +253,7 @@ final class OptionsScene extends AbstractScene
             $hover = $mouse->x >= $bx && $mouse->x < $bx + $bw && $mouse->y >= $by && $mouse->y < $by + $bh;
             $chosen = $this->selected === count($this->settings()) + $i;
             Paint::button($r, $bx, $by, $bw, $bh, true, $hover, $chosen);
-            $text = Lang::t($button === 'back' ? 'BACK' : 'QUIT');
+            $text = $button === 'back' ? Lang::t('BACK') : Lang::t('QUIT');
             $bs = Text::fitScale($font, $text, $bw - 12, 1);
             $font->draw($r, $text, $bx + $bw / 2, $by + $bh / 2 - $font->height($bs) / 2, $bs, [255, 242, 214], 'center', [40, 22, 12]);
         }

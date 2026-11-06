@@ -1188,8 +1188,11 @@ cmd_test() {
     local only="${2#"$dir"/}"
     [ -f "$ROOT/$dir/$only" ] || die "no test file $dir/$only"
     ensure_engine_tools
-    say "$dir: phpunit $only"
-    php_run "$dir" -e SDL_VIDEODRIVER=dummy -e SDL_AUDIODRIVER=dummy -- /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox "$only"
+    # a game that draws with OpenGL gets its tests on the virtual X display too (Mesa), so that its 3D tests run
+    local glf; glf="$(gl_flags "$dir")"
+    say "$dir: phpunit $only$([ -n "$glf" ] && echo ' (OpenGL on Xvfb)')"
+    # shellcheck disable=SC2086
+    php_run "$dir" ${glf:--e SDL_VIDEODRIVER=dummy} -e SDL_AUDIODRIVER=dummy -- $(gl_wrap "$dir") /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox "$only"
     return
   fi
   [ -d "$ROOT/$dir/tests" ] && ensure_engine_tools
@@ -1200,8 +1203,11 @@ cmd_test() {
     php_run "$dir" -- /workspace/engine/vendor/bin/phpstan analyse --no-progress --memory-limit=1G
   fi
   if [ -d "$ROOT/$dir/tests" ] && [ -x "$ROOT/engine/vendor/bin/phpunit" ]; then
-    say "$dir: phpunit"
-    php_run "$dir" -e SDL_VIDEODRIVER=dummy -e SDL_AUDIODRIVER=dummy -- /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox tests
+    # a game that draws with OpenGL gets its tests on the virtual X display too (Mesa), so that its 3D tests run
+    local glf; glf="$(gl_flags "$dir")"
+    say "$dir: phpunit$([ -n "$glf" ] && echo ' (OpenGL on Xvfb)')"
+    # shellcheck disable=SC2086
+    php_run "$dir" ${glf:--e SDL_VIDEODRIVER=dummy} -e SDL_AUDIODRIVER=dummy -- $(gl_wrap "$dir") /workspace/engine/vendor/bin/phpunit --bootstrap vendor/autoload.php --testdox tests
   fi
   say "$dir: headless smoke test (${JUMPHP_MAX_FRAMES:-600} frames$([ -n "$(gl_flags "$dir")" ] && echo ', OpenGL on Xvfb'))"
   # shellcheck disable=SC2046
